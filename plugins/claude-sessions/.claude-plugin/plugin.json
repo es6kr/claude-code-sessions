@@ -1,0 +1,9 @@
+{
+  "name": "claude-sessions",
+  "version": "0.1.2",
+  "description": "Claude Code session management plugin - list, view, and manage sessions",
+  "author": {
+    "name": "es6.kr",
+    "email": "drumrobot43@gmail.com"
+  }
+}

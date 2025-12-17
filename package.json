@@ -1,0 +1,69 @@
+{
+  "name": "claude-code-sessions",
+  "version": "0.1.3",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@9.15.9",
+  "description": "Claude Code session management tools",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/es6kr/claude-code-sessions"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @claude-sessions/web dev",
+    "dev:mcp": "pnpm --filter claude-sessions-mcp dev",
+    "build": "pnpm -r build",
+    "build:core": "pnpm --filter @claude-sessions/core build",
+    "build:mcp": "pnpm --filter claude-sessions-mcp build",
+    "build:web": "pnpm --filter @claude-sessions/web build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "editorconfig-checker": "^6.1.1",
+    "eslint": "^9.0.0",
+    "prettier-plugin-svelte": "^3.3.3",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.49.0"
+  },
+  "lint-staged": {
+    "*.svelte": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{js,ts}": [
+      "prettier --write",
+      "eslint --fix",
+      "editorconfig-checker"
+    ],
+    "*.{json,md,css,html,yaml,yml}": [
+      "prettier --write",
+      "editorconfig-checker"
+    ]
+  },
+  "prettier": {
+    "printWidth": 100,
+    "semi": false,
+    "singleQuote": true,
+    "tabWidth": 2,
+    "trailingComma": "es5",
+    "plugins": [
+      "prettier-plugin-svelte"
+    ],
+    "overrides": [
+      {
+        "files": "*.svelte",
+        "options": {
+          "parser": "svelte"
+        }
+      }
+    ]
+  }
+}

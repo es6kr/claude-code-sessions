@@ -1,0 +1,124 @@
+@import 'tailwindcss';
+
+/* GitHub Dark theme custom colors */
+@theme {
+  --color-gh-bg: #0d1117;
+  --color-gh-bg-secondary: #161b22;
+  --color-gh-border: #30363d;
+  --color-gh-border-subtle: #21262d;
+  --color-gh-text: #c9d1d9;
+  --color-gh-text-secondary: #8b949e;
+  --color-gh-accent: #1f6feb;
+  --color-gh-accent-subtle: #1f6feb33;
+  --color-gh-green: #238636;
+  --color-gh-red: #f85149;
+}
+
+/* Markdown content styles */
+.message-content {
+  word-break: break-word;
+
+  p {
+    margin: 0.5em 0;
+  }
+
+  p:first-child {
+    margin-top: 0;
+  }
+
+  p:last-child {
+    margin-bottom: 0;
+  }
+
+  code {
+    background: var(--color-gh-border-subtle);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  }
+
+  pre {
+    background: var(--color-gh-bg);
+    border: 1px solid var(--color-gh-border);
+    border-radius: 6px;
+    padding: 1em;
+    overflow-x: auto;
+    margin: 0.75em 0;
+  }
+
+  pre code {
+    background: none;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  ul,
+  ol {
+    margin: 0.5em 0;
+    padding-left: 1.5em;
+  }
+
+  li {
+    margin: 0.25em 0;
+  }
+
+  blockquote {
+    border-left: 3px solid var(--color-gh-border);
+    margin: 0.5em 0;
+    padding-left: 1em;
+    color: var(--color-gh-text-secondary);
+  }
+
+  a {
+    color: var(--color-gh-accent);
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  strong {
+    font-weight: 600;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: 600;
+    margin: 0.75em 0 0.5em;
+  }
+
+  h1:first-child,
+  h2:first-child,
+  h3:first-child {
+    margin-top: 0;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--color-gh-border);
+    margin: 1em 0;
+  }
+
+  table {
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    width: 100%;
+  }
+
+  th,
+  td {
+    border: 1px solid var(--color-gh-border);
+    padding: 0.5em;
+  }
+
+  th {
+    background: var(--color-gh-bg-secondary);
+    font-weight: 600;
+  }
+}

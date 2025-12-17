@@ -1,0 +1,48 @@
+{
+  "name": "claude-sessions-mcp",
+  "version": "0.4.0",
+  "description": "MCP server for managing Claude Code conversation sessions",
+  "type": "module",
+  "license": "MIT",
+  "author": "es6.kr <drumrobot43@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/es6kr/claude-code-sessions",
+    "directory": "packages/mcp"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "mcp",
+    "mcp-server",
+    "session-manager"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "bin": {
+    "claude-sessions-mcp": "./dist/index.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "@claude-sessions/core": "^0.1.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "effect": "^3.12.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

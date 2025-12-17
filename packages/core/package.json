@@ -1,0 +1,39 @@
+{
+  "name": "@claude-sessions/core",
+  "version": "0.1.4",
+  "description": "Core library for Claude Code session management",
+  "type": "module",
+  "license": "MIT",
+  "author": "es6.kr <drumrobot43@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/es6kr/claude-code-sessions",
+    "directory": "packages/core"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src"
+  },
+  "dependencies": {
+    "effect": "^3.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsup": "^8.3.0",
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.16"
+  }
+}
