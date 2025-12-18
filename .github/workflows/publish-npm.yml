@@ -53,14 +53,14 @@ jobs:
       - name: Publish @claude-sessions/core
         if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'core' || github.event_name == 'push' }}
         working-directory: packages/core
-        run: npm publish --provenance --access public
+        run: pnpm publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @claude-sessions/web
         if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'web' || github.event_name == 'push' }}
         working-directory: packages/web
-        run: npm publish --provenance --access public
+        run: pnpm publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
