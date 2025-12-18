@@ -126,12 +126,10 @@ export class SessionTreeProvider
       )
 
       return sessionsWithMeta.map(
-        ({ session: s, hasTodos, hasAgents }) =>
+        ({ session: s }) =>
           new SessionTreeItem(
             s.title || s.id,
-            hasTodos || hasAgents
-              ? vscode.TreeItemCollapsibleState.Collapsed
-              : vscode.TreeItemCollapsibleState.None,
+            vscode.TreeItemCollapsibleState.Collapsed,
             'session',
             element.projectName,
             s.id,
