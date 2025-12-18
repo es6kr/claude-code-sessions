@@ -61,6 +61,10 @@
     name: string
     input: Record<string, unknown>
   }
+  interface ThinkingBlock {
+    type: 'thinking'
+    thinking: string
+  }
   const FILE_TOOLS = ['Read', 'Write', 'Edit'] as const
   const toolUseData = $derived.by(() => {
     if (!isAssistant) return null
@@ -81,13 +85,24 @@
     }
   })
 
+  // Parse thinking blocks from assistant messages
+  const thinkingBlocks = $derived.by(() => {
+    if (!isAssistant) return []
+    const m = msg.message as { content?: unknown[] } | undefined
+    if (!Array.isArray(m?.content)) return []
+    return m.content.filter(
+      (item): item is ThinkingBlock =>
+        typeof item === 'object' && item !== null && (item as ThinkingBlock).type === 'thinking'
+    )
+  })
+
   // Get custom title
   const customTitle = $derived((msg as Message & { customTitle?: string }).customTitle ?? '')
 
   // Get message ID (uuid or messageId for file-history-snapshot)
   const messageId = $derived(msg.uuid || (msg as unknown as { messageId?: string }).messageId || '')
 
-  // Check if message has displayable content
+  // Check if message has displayable content (excluding thinking blocks)
   const hasContent = $derived.by(() => {
     // Queue operations have no displayable content but are valid
     if (isQueueOperation) return false
@@ -97,13 +112,16 @@
     const content = getMessageContent(msg)
     if (content.trim().length > 0) return true
 
-    // Warn for messages without content
+    // Warn for messages without content (unless it's thinking-only)
     if (msg.type === 'user' || msg.type === 'human') {
       const label = isToolResult ? 'Tool result' : 'User message'
       console.warn(`${label} without content:`, $state.snapshot(msg))
     }
     return false
   })
+
+  // Check if message has any displayable content (including thinking blocks)
+  const hasAnyContent = $derived(hasContent || thinkingBlocks.length > 0)
 
   // CSS classes for message type
   const messageClass = $derived.by(() => {
@@ -245,10 +263,10 @@
       {/if}
     {/if}
   </div>
-{:else}
+{:else if hasAnyContent}
   <!-- Standard message (human, assistant, custom-title, etc.) -->
   <div
-    class="p-4 rounded-lg group relative {messageClass} flex flex-col {hasContent ? 'gap-2' : ''}"
+    class="p-4 rounded-lg group relative {messageClass} flex flex-col {hasAnyContent ? 'gap-2' : ''}"
   >
     <div class="flex justify-between text-xs text-gh-text-secondary">
       <span class="uppercase font-semibold">{isToolResult ? 'OUT' : msg.type}</span>
@@ -270,6 +288,20 @@
         {@render deleteButton()}
       </div>
     </div>
+    {#if thinkingBlocks.length > 0}
+      <div class="message-content text-sm">
+        {#each thinkingBlocks as block, i}
+          <details class="bg-pink-500/10 rounded-md border border-pink-500/30">
+            <summary class="px-3 py-2 cursor-pointer text-xs text-pink-400 font-medium hover:bg-pink-500/15 select-none">
+              💭 Thinking {thinkingBlocks.length > 1 ? `(${i + 1}/${thinkingBlocks.length})` : ''}
+            </summary>
+            <div class="px-3 py-2 text-gh-text-secondary whitespace-pre-wrap border-t border-pink-500/20">
+              {block.thinking}
+            </div>
+          </details>
+        {/each}
+      </div>
+    {/if}
     {#if hasContent}
       <div class="message-content text-sm">
         {#if isCustomTitle}

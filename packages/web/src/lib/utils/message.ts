@@ -17,6 +17,11 @@ const extractText = (content: Content): string => {
   // Single ContentItem
   if (content.type === 'text') return content.text ?? ''
 
+  // thinking type - skip (displayed separately in MessageItem)
+  if (content.type === 'thinking') {
+    return ''
+  }
+
   // tool_result - extract inner content
   if (content.type === 'tool_result') {
     return content.content ? extractText(content.content) : '0'
