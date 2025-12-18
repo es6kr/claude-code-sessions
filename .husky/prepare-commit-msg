@@ -1,0 +1,21 @@
+#!/bin/sh
+# Add Signed-off-by trailer if not present
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Skip for merge, squash, or amend
+if [ "$COMMIT_SOURCE" = "merge" ] || [ "$COMMIT_SOURCE" = "squash" ]; then
+  exit 0
+fi
+
+# Get user info
+NAME=$(git config user.name)
+EMAIL=$(git config user.email)
+SOB="Signed-off-by: $NAME <$EMAIL>"
+
+# Add sign-off if not already present
+if ! grep -qs "^Signed-off-by: $NAME" "$COMMIT_MSG_FILE"; then
+  echo "" >> "$COMMIT_MSG_FILE"
+  echo "$SOB" >> "$COMMIT_MSG_FILE"
+fi
