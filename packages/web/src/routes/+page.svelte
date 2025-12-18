@@ -2,12 +2,13 @@
   import { onMount } from 'svelte'
   import { browser } from '$app/environment'
   import * as api from '$lib/api'
-  import type { Project, SessionMeta, Message } from '$lib/api'
+  import type { Project, SessionMeta, SessionData, Message } from '$lib/api'
   import { ProjectTree, MessageList } from '$lib/components'
 
   // State
   let projects = $state<Project[]>([])
   let projectSessions = $state<Map<string, SessionMeta[]>>(new Map())
+  let projectSessionData = $state<Map<string, Map<string, SessionData>>>(new Map())
   let expandedProjects = $state<Set<string>>(new Set())
   let selectedSession = $state<SessionMeta | null>(null)
   let messages = $state<Message[]>([])
@@ -53,9 +54,29 @@
 
     loadingProject = projectName
     try {
-      const sessions = await api.listSessions(projectName)
+      // Use expandProject to load full session data with agents, todos, summaries
+      const sessionDataList = await api.expandProject(projectName)
+
+      // Build session metadata list and data map
+      const sessions: SessionMeta[] = []
+      const dataMap = new Map<string, SessionData>()
+
+      for (const data of sessionDataList) {
+        sessions.push({
+          id: data.id,
+          projectName,
+          title: data.title,
+          messageCount: data.messageCount,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt,
+        })
+        dataMap.set(data.id, data)
+      }
+
       projectSessions.set(projectName, sessions)
       projectSessions = new Map(projectSessions)
+      projectSessionData.set(projectName, dataMap)
+      projectSessionData = new Map(projectSessionData)
     } catch (e) {
       error = String(e)
     } finally {
@@ -297,6 +318,7 @@
   <ProjectTree
     {projects}
     {projectSessions}
+    {projectSessionData}
     {expandedProjects}
     {selectedSession}
     {loadingProject}

@@ -49,6 +49,7 @@ export interface Message {
   timestamp?: string
   toolUseResult?: Content | ToolResultObject
   summary?: string
+  leafUuid?: string // For summary type - references the leaf message
 }
 
 export interface CleanupPreview {
@@ -222,3 +223,29 @@ export const searchSessions = (
   if (options?.searchContent) params.set('content', 'true')
   return get<SearchResult[]>(`/search?${params}`)
 }
+
+// Summary info for session tree
+export interface SummaryInfo {
+  uuid: string
+  summary: string
+  leafUuid?: string
+  timestamp?: string
+  sessionId: string
+}
+
+// Extended session data with agents, todos, summaries
+export interface SessionData {
+  id: string
+  title?: string
+  messageCount: number
+  createdAt?: string
+  updatedAt?: string
+  agents: string[]
+  todos: string[]
+  summaries: SummaryInfo[]
+  lastSummary?: SummaryInfo
+}
+
+// Expand project - loads all session data including agents, todos, summaries
+export const expandProject = (projectName: string) =>
+  get<SessionData[]>(`/project/expand?project=${encodeURIComponent(projectName)}`)

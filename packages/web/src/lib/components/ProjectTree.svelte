@@ -1,10 +1,11 @@
 <script lang="ts">
-  import type { Project, SessionMeta } from '$lib/api'
+  import type { Project, SessionMeta, SessionData } from '$lib/api'
   import { formatProjectName } from '$lib/utils'
 
   interface Props {
     projects: Project[]
     projectSessions: Map<string, SessionMeta[]>
+    projectSessionData: Map<string, Map<string, SessionData>>
     expandedProjects: Set<string>
     selectedSession: SessionMeta | null
     loadingProject: string | null
@@ -18,6 +19,7 @@
   let {
     projects,
     projectSessions,
+    projectSessionData,
     expandedProjects,
     selectedSession,
     loadingProject,
@@ -27,6 +29,41 @@
     onDeleteSession,
     onMoveSession,
   }: Props = $props()
+
+  // Get session data with summary info
+  const getSessionData = (projectName: string, sessionId: string): SessionData | undefined => {
+    return projectSessionData.get(projectName)?.get(sessionId)
+  }
+
+  // Get display title: custom title or fallback to lastSummary
+  const getDisplayTitle = (session: SessionMeta): string => {
+    if (session.title) return session.title
+    const data = getSessionData(session.projectName, session.id)
+    if (data?.lastSummary?.summary) {
+      // Truncate summary for display
+      const summary = data.lastSummary.summary
+      return summary.length > 60 ? summary.slice(0, 57) + '...' : summary
+    }
+    return 'Untitled'
+  }
+
+  // Get tooltip text: show summary if available
+  const getTooltipText = (session: SessionMeta): string => {
+    const data = getSessionData(session.projectName, session.id)
+    if (data?.lastSummary?.summary) {
+      return data.lastSummary.summary
+    }
+    return session.title ?? 'No summary available'
+  }
+
+  // Check if session has agents or todos
+  const hasAgentsOrTodos = (session: SessionMeta): { agents: number; todos: number } => {
+    const data = getSessionData(session.projectName, session.id)
+    return {
+      agents: data?.agents.length ?? 0,
+      todos: data?.todos.length ?? 0,
+    }
+  }
 
   // Filter out empty projects
   const nonEmptyProjects = $derived(projects.filter((p) => p.sessionCount > 0))
@@ -114,6 +151,10 @@
               {#each projectSessions.get(project.name) ?? [] as session}
                 {@const isSelected = selectedSession?.id === session.id}
                 {@const isDragging = draggedSession?.id === session.id}
+                {@const sessionInfo = hasAgentsOrTodos(session)}
+                {@const displayTitle = getDisplayTitle(session)}
+                {@const tooltipText = getTooltipText(session)}
+                {@const isSummaryFallback = !session.title && displayTitle !== 'Untitled'}
                 <li
                   class="flex items-center border-t border-gh-border-subtle group {isSelected
                     ? 'bg-gh-accent/20 border-l-3 border-l-gh-accent'
@@ -127,10 +168,21 @@
                       ? 'pl-[calc(2rem-3px)]'
                       : 'pl-8'}"
                     onclick={() => onSelectSession(session)}
+                    title={tooltipText}
                   >
-                    <span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
-                      {session.title ?? 'Untitled'}
+                    <span
+                      class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap {isSummaryFallback
+                        ? 'italic text-gh-text-secondary'
+                        : ''}"
+                    >
+                      {displayTitle}
                     </span>
+                    {#if sessionInfo.agents > 0}
+                      <span class="flex-shrink-0 text-xs" title="{sessionInfo.agents} agent(s)">🤖</span>
+                    {/if}
+                    {#if sessionInfo.todos > 0}
+                      <span class="flex-shrink-0 text-xs" title="{sessionInfo.todos} todo(s)">📋</span>
+                    {/if}
                     <span
                       class="flex-shrink-0 text-xs text-gh-text-secondary bg-gh-border
                              px-1.5 py-px rounded-lg"
