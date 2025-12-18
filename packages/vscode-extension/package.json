@@ -22,6 +22,7 @@
     "session",
     "ai"
   ],
+  "icon": "resources/marketplace.png",
   "extensionDependencies": [
     "Anthropic.claude-code"
   ],
@@ -33,7 +34,7 @@
         {
           "id": "claude-sessions",
           "title": "Claude Code Sessions",
-          "icon": "resources/icon.svg"
+          "icon": "resources/activity-bar.svg"
         }
       ]
     },
