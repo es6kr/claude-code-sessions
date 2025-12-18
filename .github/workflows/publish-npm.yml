@@ -1,0 +1,76 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to publish (core, web, or all)'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - core
+          - web
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm run build
+
+      - name: Get package versions
+        id: versions
+        run: |
+          CORE_VERSION=$(node -p "require('./packages/core/package.json').version")
+          WEB_VERSION=$(node -p "require('./packages/web/package.json').version")
+          echo "core=$CORE_VERSION" >> $GITHUB_OUTPUT
+          echo "web=$WEB_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Publish @claude-sessions/core
+        if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'core' || github.event_name == 'push' }}
+        working-directory: packages/core
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @claude-sessions/web
+        if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'web' || github.event_name == 'push' }}
+        working-directory: packages/web
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        run: |
+          echo "## Published packages" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ github.event.inputs.package }}" == "all" || "${{ github.event.inputs.package }}" == "core" || "${{ github.event_name }}" == "push" ]]; then
+            echo "- @claude-sessions/core@${{ steps.versions.outputs.core }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [[ "${{ github.event.inputs.package }}" == "all" || "${{ github.event.inputs.package }}" == "web" || "${{ github.event_name }}" == "push" ]]; then
+            echo "- @claude-sessions/web@${{ steps.versions.outputs.web }}" >> $GITHUB_STEP_SUMMARY
+          fi
