@@ -2,10 +2,33 @@
   import '../app.css'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
+  import { page } from '$app/state'
   import type { Snippet } from 'svelte'
   import * as api from '$lib/api'
 
   let { children }: { children: Snippet } = $props()
+
+  // Check if we're on a session page for search context
+  const isSessionPage = $derived(page.url.pathname.startsWith('/session/'))
+
+  // Convert project name to display path (e.g., "-Users-david-works--vscode" -> "~/works/.vscode")
+  const formatProjectPath = (projectName: string): string => {
+    // Replace -- with a placeholder, then - with /, then restore .
+    let path = projectName
+      .replace(/--/g, '\x00') // Double dash -> placeholder for dot
+      .replace(/-/g, '/') // Single dash -> slash
+      .replace(/\x00/g, '/.') // Restore dots (add slash before)
+    // Convert /Users/username/... to ~/...
+    const homeMatch = path.match(/^\/Users\/[^/]+\/(.+)$/)
+    if (homeMatch) return `~/${homeMatch[1]}`
+    return path
+  }
+  const currentSessionInfo = $derived.by(() => {
+    if (!isSessionPage) return null
+    const match = page.url.pathname.match(/^\/session\/([^/]+)\/([^/]+)/)
+    if (!match) return null
+    return { projectName: decodeURIComponent(match[1]), sessionId: decodeURIComponent(match[2]) }
+  })
 
   let version = $state('')
   let cleaning = $state(false)
@@ -128,29 +151,60 @@
     searchDebounceTimer = setTimeout(() => performSearch(query), 300)
   }
 
+  // Sort results to prioritize current session when on session page
+  const sortResultsWithCurrentSession = (results: api.SearchResult[]): api.SearchResult[] => {
+    const sessionInfo = currentSessionInfo
+    if (!sessionInfo) return results
+
+    return [...results].sort((a, b) => {
+      const aIsCurrent = a.projectName === sessionInfo.projectName && a.sessionId === sessionInfo.sessionId
+      const bIsCurrent = b.projectName === sessionInfo.projectName && b.sessionId === sessionInfo.sessionId
+      if (aIsCurrent && !bIsCurrent) return -1
+      if (!aIsCurrent && bIsCurrent) return 1
+      return 0
+    })
+  }
+
   const performSearch = async (query: string) => {
     if (!query.trim()) return
 
-    // Phase 1: Title search (fast)
+    const sessionInfo = currentSessionInfo
+
+    // Phase 1: Title search (fast) - prioritize current session's project
     searchingTitle = true
     showSearchDropdown = true
     try {
-      const titleResults = await api.searchSessions(query, { searchContent: false })
-      searchResults = titleResults
+      const titleResults = await api.searchSessions(query, {
+        searchContent: false,
+        project: sessionInfo?.projectName,
+      })
+      searchResults = sortResultsWithCurrentSession(titleResults)
     } catch (e) {
       console.error('Title search error:', e)
     } finally {
       searchingTitle = false
     }
 
-    // Phase 2: Content search (slow, runs in background)
+    // Phase 2: Content search (slow, runs in background) - search current session's project first
     searchingContent = true
     try {
+      // If on session page, search current project first for faster results
+      if (sessionInfo) {
+        const projectResults = await api.searchSessions(query, {
+          searchContent: true,
+          project: sessionInfo.projectName,
+        })
+        const titleIds = new Set(searchResults.map((r) => `${r.projectName}:${r.sessionId}`))
+        const contentOnly = projectResults.filter((r) => !titleIds.has(`${r.projectName}:${r.sessionId}`))
+        searchResults = sortResultsWithCurrentSession([...searchResults, ...contentOnly])
+      }
+
+      // Then search all projects
       const allResults = await api.searchSessions(query, { searchContent: true })
       // Merge results, keeping title matches first
-      const titleIds = new Set(searchResults.map((r) => `${r.projectName}:${r.sessionId}`))
-      const contentOnly = allResults.filter((r) => !titleIds.has(`${r.projectName}:${r.sessionId}`))
-      searchResults = [...searchResults, ...contentOnly]
+      const existingIds = new Set(searchResults.map((r) => `${r.projectName}:${r.sessionId}`))
+      const newResults = allResults.filter((r) => !existingIds.has(`${r.projectName}:${r.sessionId}`))
+      searchResults = sortResultsWithCurrentSession([...searchResults, ...newResults])
     } catch (e) {
       console.error('Content search error:', e)
     } finally {
@@ -174,17 +228,23 @@
 </script>
 
 <svelte:head>
-  <title>Claude Session Manager</title>
+  <title>Claude Sessions</title>
 </svelte:head>
 
 <div class="min-h-screen flex flex-col bg-gh-bg text-gh-text">
-  <header
-    class="bg-gh-bg-secondary border-b border-gh-border px-8 py-4 flex justify-between items-center"
-  >
+    <header
+      class="bg-gh-bg-secondary border-b border-gh-border px-8 py-4 flex justify-between items-center"
+    >
     <div class="flex items-center gap-3">
-      <a href="/" class="text-2xl font-semibold hover:text-gh-accent">Claude Session Manager</a>
+      <a href="/" class="flex items-center gap-2 hover:text-gh-accent" title="Claude Sessions">
+        <!-- Terminal/Session icon -->
+        <svg class="w-6 h-6 text-gh-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+        </svg>
+        <span class="text-2xl font-semibold hidden sm:inline">Claude Sessions</span>
+      </a>
       {#if version}
-        <span class="text-xs text-gh-text-secondary bg-gh-border px-2 py-0.5 rounded"
+        <span class="text-xs text-gh-text-secondary bg-gh-border px-2 py-0.5 rounded hidden sm:inline"
           >v{version}</span
         >
       {/if}
@@ -227,10 +287,8 @@
                   <span class="text-xs px-1.5 py-0.5 rounded {result.matchType === 'title' ? 'bg-gh-green/20 text-gh-green' : 'bg-gh-accent/20 text-gh-accent'}">
                     {result.matchType === 'title' ? 'Title' : 'Content'}
                   </span>
+                  <span class="text-xs text-gh-text-secondary truncate flex-shrink-0 max-w-[120px]">{formatProjectPath(result.projectName)}</span>
                   <span class="text-sm font-medium truncate">{result.title}</span>
-                </div>
-                <div class="text-xs text-gh-text-secondary mt-0.5 truncate">
-                  {result.projectName.split('-').slice(-2).join('/')}
                 </div>
                 {#if result.snippet}
                   <div class="text-xs text-gh-text-secondary mt-1 line-clamp-2">{result.snippet}</div>
@@ -265,7 +323,7 @@
     </div>
   </header>
 
-  <main class="flex-1 p-8 max-w-7xl mx-auto w-full">
+  <main class="flex-1 {isSessionPage ? '' : 'p-8 max-w-7xl mx-auto'} w-full overflow-y-auto">
     {@render children()}
   </main>
 </div>

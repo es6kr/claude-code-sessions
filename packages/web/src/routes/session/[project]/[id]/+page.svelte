@@ -108,11 +108,11 @@
   <title>{session?.title ?? 'Session'} - Claude Sessions</title>
 </svelte:head>
 
-<div class="h-screen flex flex-col bg-gh-bg">
+<div class="min-h-screen flex flex-col bg-gh-bg">
   <!-- Header -->
   <header class="flex-shrink-0 p-4 border-b border-gh-border bg-gh-canvas">
     <div class="flex items-center gap-4">
-      <a href="/" class="text-gh-muted hover:text-gh-fg">
+      <a href="/" class="text-gh-muted hover:text-gh-fg" title="Back to home">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
         </svg>
@@ -125,7 +125,7 @@
   </header>
 
   <!-- Messages -->
-  <div class="flex-1 overflow-hidden">
+  <div class="flex-1 overflow-y-auto">
     {#if loading}
       <div class="flex items-center justify-center h-full">
         <div class="text-gh-muted">Loading...</div>
@@ -141,6 +141,7 @@
         onDeleteMessage={handleDeleteMessage}
         onEditTitle={handleEditTitle}
         onSplitSession={handleSplitSession}
+        showHeader={false}
       />
     {/if}
   </div>
