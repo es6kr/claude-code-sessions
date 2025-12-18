@@ -17,6 +17,9 @@
 
   let { msg, sessionId, isFirst = false, onDelete, onEditTitle, onSplit }: Props = $props()
 
+  // Data attribute for scroll targeting
+  const msgId = $derived(msg.uuid ?? '')
+
   // Type guards for different message types
   const isAssistant = $derived(msg.type === 'assistant')
   const isCustomTitle = $derived(msg.type === 'custom-title')
@@ -158,7 +161,10 @@
   <!-- Queue operations are internal system messages, don't render -->
 {:else if isFileSnapshot && snapshotData}
   <!-- File history snapshot -->
-  <div class="p-4 rounded-lg bg-amber-500/10 border-l-3 border-l-amber-500 group relative">
+  <div
+    data-msg-id={msgId}
+    class="p-4 rounded-lg bg-amber-500/10 border-l-3 border-l-amber-500 group relative"
+  >
     <div class="flex justify-between mb-2 text-xs text-gh-text-secondary">
       <span class="uppercase font-semibold text-amber-400">
         📁 File Backups ({snapshotData.files.length})
@@ -190,7 +196,10 @@
   </div>
 {:else if isLocalCommand && commandData}
   <!-- Local command message -->
-  <div class="p-3 rounded-lg bg-cyan-500/10 border-l-3 border-l-cyan-500 group relative">
+  <div
+    data-msg-id={msgId}
+    class="p-3 rounded-lg bg-cyan-500/10 border-l-3 border-l-cyan-500 group relative"
+  >
     <div class="flex justify-between items-center text-xs text-gh-text-secondary">
       <span class="font-semibold text-cyan-400">⚡ {commandData.name || 'Command'}</span>
       <div class="flex items-center gap-2">
@@ -205,7 +214,10 @@
   </div>
 {:else if toolUseData}
   <!-- Tool use message -->
-  <div class="p-3 rounded-lg bg-violet-500/10 border-l-3 border-l-violet-500 group relative">
+  <div
+    data-msg-id={msgId}
+    class="p-3 rounded-lg bg-violet-500/10 border-l-3 border-l-violet-500 group relative"
+  >
     <div class="flex justify-between items-center text-xs text-gh-text-secondary">
       <span class="font-semibold text-violet-400">🔧 {toolUseData.name}</span>
       <div class="flex items-center gap-2">
@@ -266,6 +278,7 @@
 {:else if hasAnyContent}
   <!-- Standard message (human, assistant, custom-title, etc.) -->
   <div
+    data-msg-id={msgId}
     class="p-4 rounded-lg group relative {messageClass} flex flex-col {hasAnyContent
       ? 'gap-2'
       : ''}"

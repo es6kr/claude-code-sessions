@@ -14,7 +14,15 @@
     enableScroll?: boolean
   }
 
-  let { session, messages, onDeleteMessage, onEditTitle, onSplitSession, showHeader = true, enableScroll = true }: Props = $props()
+  let {
+    session,
+    messages,
+    onDeleteMessage,
+    onEditTitle,
+    onSplitSession,
+    showHeader = true,
+    enableScroll = true,
+  }: Props = $props()
 
   const openSessionFile = async () => {
     if (!session) return
@@ -31,6 +39,16 @@
     messages.findIndex((m) => m.type === 'user' || m.type === 'assistant' || m.type === 'human')
   )
 
+  // Find last compact summary (context continuation point)
+  const lastCompactIndex = $derived.by(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if ((messages[i] as Message & { isCompactSummary?: boolean }).isCompactSummary) {
+        return i
+      }
+    }
+    return -1
+  })
+
   // Scroll container reference for navigation
   let scrollContainer: HTMLDivElement | undefined = $state()
 
@@ -43,6 +61,15 @@
   const scrollToBottom = () => {
     if (scrollContainer) {
       scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' })
+    }
+  }
+
+  const scrollToCompact = () => {
+    if (lastCompactIndex < 0 || !scrollContainer) return
+    const msgId = messages[lastCompactIndex].uuid ?? `idx-${lastCompactIndex}`
+    const element = scrollContainer.querySelector(`[data-msg-id="${msgId}"]`)
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
 </script>
@@ -80,6 +107,16 @@
           >
             ↑ Top
           </button>
+          {#if lastCompactIndex >= 0}
+            <button
+              class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
+                     text-gh-text-secondary hover:text-gh-text transition-colors"
+              onclick={scrollToCompact}
+              title="Go to last context continuation point"
+            >
+              📍 Compact
+            </button>
+          {/if}
           <button
             class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
                    text-gh-text-secondary hover:text-gh-text transition-colors"
@@ -95,7 +132,10 @@
 
   <!-- Messages -->
   {#if session}
-    <div bind:this={scrollContainer} class="{enableScroll ? 'overflow-y-auto' : ''} flex-1 p-4 flex flex-col gap-4">
+    <div
+      bind:this={scrollContainer}
+      class="{enableScroll ? 'overflow-y-auto' : ''} flex-1 p-4 flex flex-col gap-4"
+    >
       {#each messages as msg, i (msg.uuid ?? `idx-${i}`)}
         <MessageItem
           {msg}
