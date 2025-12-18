@@ -12,9 +12,26 @@ export const getSessionsDir = (): string => path.join(os.homedir(), '.claude', '
 export const getTodosDir = (): string => path.join(os.homedir(), '.claude', 'todos')
 
 // Convert project folder name to display path
-// e.g., -home-user-projects -> /home/user/projects
+// Unix: -home-user-projects -> /home/user/projects
+// Windows: C--Users-david -> C:\Users\david
 // Handle dot-prefixed folders: --claude -> /.claude, -projects--vscode -> /projects/.vscode
 export const folderNameToDisplayPath = (folderName: string): string => {
+  // Check if Windows path (starts with drive letter pattern like "C--")
+  const windowsDriveMatch = folderName.match(/^([A-Za-z])--/)
+  if (windowsDriveMatch) {
+    // Windows path: C--Users-david -> C:\Users\david
+    const driveLetter = windowsDriveMatch[1]
+    const rest = folderName.slice(3) // Remove "C--"
+    return (
+      driveLetter +
+      ':\\' +
+      rest
+        .replace(/--/g, '\\.') // double dash means dot-prefixed folder
+        .replace(/-/g, '\\')
+    )
+  }
+
+  // Unix path
   return folderName
     .replace(/^-/, '/')
     .replace(/--/g, '/.') // double dash means dot-prefixed folder
@@ -23,6 +40,22 @@ export const folderNameToDisplayPath = (folderName: string): string => {
 
 // Convert display path to folder name (reverse of above)
 export const displayPathToFolderName = (displayPath: string): string => {
+  // Check if Windows path (contains backslash or starts with drive letter)
+  const windowsDriveMatch = displayPath.match(/^([A-Za-z]):[/\\]/)
+  if (windowsDriveMatch) {
+    // Windows path: C:\Users\david -> C--Users-david
+    const driveLetter = windowsDriveMatch[1]
+    const rest = displayPath.slice(3) // Remove "C:\"
+    return (
+      driveLetter +
+      '--' +
+      rest
+        .replace(/[/\\]\./g, '--') // dot-prefixed folder becomes double dash
+        .replace(/[/\\]/g, '-')
+    )
+  }
+
+  // Unix path
   return displayPath
     .replace(/^\//g, '-')
     .replace(/\/\./g, '--') // dot-prefixed folder becomes double dash
@@ -30,9 +63,27 @@ export const displayPathToFolderName = (displayPath: string): string => {
 }
 
 // Convert absolute path to project folder name
-// e.g., /home/user/projects/.vscode -> -home-user-projects--vscode
-// e.g., /home/user/example.com -> -home-user-example-com
+// Unix: /home/user/projects/.vscode -> -home-user-projects--vscode
+// Unix: /home/user/example.com -> -home-user-example-com
+// Windows: C:\Users\david\.vscode -> C--Users-david--vscode
 export const pathToFolderName = (absolutePath: string): string => {
+  // Check if Windows path
+  const windowsDriveMatch = absolutePath.match(/^([A-Za-z]):[/\\]/)
+  if (windowsDriveMatch) {
+    // Windows path: C:\Users\david -> C--Users-david
+    const driveLetter = windowsDriveMatch[1]
+    const rest = absolutePath.slice(3) // Remove "C:\"
+    return (
+      driveLetter +
+      '--' +
+      rest
+        .replace(/[/\\]\./g, '--') // dot-prefixed folder becomes double dash
+        .replace(/[/\\]/g, '-')
+        .replace(/\./g, '-') // dots in filenames become single dash
+    )
+  }
+
+  // Unix path
   return absolutePath
     .replace(/^\//g, '-')
     .replace(/\/\./g, '--') // dot-prefixed folder becomes double dash
@@ -48,8 +99,11 @@ export const folderNameToPath = (folderName: string): string => {
   const realPath = getRealPathFromSession(folderName)
   if (realPath) {
     const home = os.homedir()
-    if (realPath.startsWith(home)) {
-      return '~' + realPath.slice(home.length)
+    // Normalize path separators for comparison
+    const normalizedPath = realPath.replace(/\\/g, '/')
+    const normalizedHome = home.replace(/\\/g, '/')
+    if (normalizedPath.startsWith(normalizedHome)) {
+      return '~' + normalizedPath.slice(normalizedHome.length)
     }
     return realPath
   }
@@ -58,8 +112,11 @@ export const folderNameToPath = (folderName: string): string => {
   const absolutePath = folderNameToDisplayPath(folderName)
   const home = os.homedir()
 
-  if (absolutePath.startsWith(home)) {
-    return '~' + absolutePath.slice(home.length)
+  // Normalize path separators for comparison
+  const normalizedPath = absolutePath.replace(/\\/g, '/')
+  const normalizedHome = home.replace(/\\/g, '/')
+  if (normalizedPath.startsWith(normalizedHome)) {
+    return '~' + normalizedPath.slice(normalizedHome.length)
   }
   return absolutePath
 }
