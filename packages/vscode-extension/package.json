@@ -1,8 +1,8 @@
 {
-  "name": "claude-sessions-vscode",
+  "name": "claude-sessions",
   "displayName": "Claude Sessions",
   "description": "Manage Claude Code sessions from VS Code sidebar",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "es6kr",
   "license": "MIT",
   "repository": {
