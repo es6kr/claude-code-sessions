@@ -156,7 +156,7 @@
                 {@const tooltipText = getTooltipText(session)}
                 {@const isSummaryFallback = !session.title && displayTitle !== 'Untitled'}
                 <li
-                  class="flex items-center border-t border-gh-border-subtle group {isSelected
+                  class="relative flex items-center border-t border-gh-border-subtle group {isSelected
                     ? 'bg-gh-accent/20 border-l-3 border-l-gh-accent'
                     : ''} {isDragging ? 'opacity-50' : ''}"
                   draggable="true"
@@ -164,7 +164,7 @@
                   ondragend={handleDragEnd}
                 >
                   <button
-                    class="flex-1 min-w-0 py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm hover:bg-gh-border-subtle {isSelected
+                    class="w-full min-w-0 py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm hover:bg-gh-border-subtle {isSelected
                       ? 'pl-[calc(2rem-3px)]'
                       : 'pl-8'}"
                     onclick={() => onSelectSession(session)}
@@ -177,23 +177,28 @@
                     >
                       {displayTitle}
                     </span>
-                    {#if sessionInfo.agents > 0}
-                      <span class="flex-shrink-0 text-xs" title="{sessionInfo.agents} agent(s)">🤖</span>
-                    {/if}
-                    {#if sessionInfo.todos > 0}
-                      <span class="flex-shrink-0 text-xs" title="{sessionInfo.todos} todo(s)">📋</span>
-                    {/if}
-                    <span
-                      class="flex-shrink-0 text-xs text-gh-text-secondary bg-gh-border
-                             px-1.5 py-px rounded-lg"
-                    >
-                      {session.messageCount}
+                    <span class="flex-shrink-0 flex items-center gap-2 text-xs text-gh-text-secondary">
+                      <span class="flex items-center gap-0.5" title="{session.messageCount} messages">
+                        <span>💬</span><span>{session.messageCount}</span>
+                      </span>
+                      {#if sessionInfo.agents > 0}
+                        <span class="flex items-center gap-0.5" title="{sessionInfo.agents} agent(s)">
+                          <span>🤖</span><span>{sessionInfo.agents}</span>
+                        </span>
+                      {/if}
+                      {#if sessionInfo.todos > 0}
+                        <span class="flex items-center gap-0.5" title="{sessionInfo.todos} todo(s)">
+                          <span>📋</span><span>{sessionInfo.todos}</span>
+                        </span>
+                      {/if}
                     </span>
                   </button>
 
                   <!-- Session Actions -->
                   <div
-                    class="flex gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                    class="absolute right-0 top-1/2 -translate-y-1/2 flex gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity pl-4 {isSelected
+                      ? 'bg-gradient-to-l from-[color-mix(in_srgb,var(--color-gh-accent)_20%,var(--color-gh-bg))] from-80% to-transparent'
+                      : 'bg-gradient-to-l from-gh-bg from-80% to-transparent'}"
                   >
                     <button
                       class="bg-transparent border-none cursor-pointer p-1 rounded
