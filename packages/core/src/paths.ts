@@ -66,7 +66,14 @@ export const displayPathToFolderName = (displayPath: string): string => {
 // Unix: /home/user/projects/.vscode -> -home-user-projects--vscode
 // Unix: /home/user/example.com -> -home-user-example-com
 // Windows: C:\Users\david\.vscode -> C--Users-david--vscode
+// Non-ASCII characters (Korean, Japanese, Chinese, emoji) are converted to '-' per character
 export const pathToFolderName = (absolutePath: string): string => {
+  // Helper to convert non-ASCII characters to dashes (one dash per character)
+  const convertNonAscii = (str: string): string => {
+    // Check if character is ASCII (code point 0-127)
+    return [...str].map((char) => (char.charCodeAt(0) <= 127 ? char : '-')).join('')
+  }
+
   // Check if Windows path
   const windowsDriveMatch = absolutePath.match(/^([A-Za-z]):[/\\]/)
   if (windowsDriveMatch) {
@@ -76,7 +83,7 @@ export const pathToFolderName = (absolutePath: string): string => {
     return (
       driveLetter +
       '--' +
-      rest
+      convertNonAscii(rest)
         .replace(/[/\\]\./g, '--') // dot-prefixed folder becomes double dash
         .replace(/[/\\]/g, '-')
         .replace(/\./g, '-') // dots in filenames become single dash
@@ -84,7 +91,7 @@ export const pathToFolderName = (absolutePath: string): string => {
   }
 
   // Unix path
-  return absolutePath
+  return convertNonAscii(absolutePath)
     .replace(/^\//g, '-')
     .replace(/\/\./g, '--') // dot-prefixed folder becomes double dash
     .replace(/\//g, '-')
