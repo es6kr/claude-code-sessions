@@ -1,0 +1,139 @@
+name: Release VSCode Extension
+
+on:
+  push:
+    tags:
+      - 'vscode-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.1.5)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.extension.outputs.version }}
+      name: ${{ steps.extension.outputs.name }}
+      filename: ${{ steps.extension.outputs.filename }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install VSCE
+        run: npm install -g @vscode/vsce
+
+      - name: Build packages
+        run: pnpm run build
+
+      - name: Package extension
+        working-directory: packages/vscode-extension
+        run: vsce package --no-dependencies --out out
+
+      - name: Get extension info
+        id: extension
+        working-directory: packages/vscode-extension
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./package.json').name")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "name=$NAME" >> $GITHUB_OUTPUT
+          echo "filename=$NAME-$VERSION.vsix" >> $GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix-package
+          path: 'packages/vscode-extension/out/*.vsix'
+          retention-days: 30
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vsix-package
+          path: out
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install VSCE
+        run: npm install -g @vscode/vsce
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: vscode-v${{ needs.build.outputs.version }}
+          name: VSCode Extension v${{ needs.build.outputs.version }}
+          body: |
+            ## Claude Sessions VSCode Extension v${{ needs.build.outputs.version }}
+
+            ### Installation
+            Download the `.vsix` file and install it in VSCode:
+            1. Open VSCode
+            2. Go to Extensions (Ctrl+Shift+X)
+            3. Click on the "..." menu
+            4. Select "Install from VSIX..."
+            5. Select the downloaded file
+
+            ### Features
+            - Browse Claude Code sessions by project
+            - View session messages with syntax highlighting
+            - Drag and drop sessions between projects
+            - View todos and agents per session
+
+          files: out/${{ needs.build.outputs.filename }}
+          draft: false
+          prerelease: false
+
+      - name: Publish to VS Code Marketplace
+        if: ${{ !github.event.inputs.version || github.event_name == 'push' }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -n "$VSCE_PAT" ]; then
+            vsce publish --packagePath out/${{ needs.build.outputs.filename }} --pat $VSCE_PAT
+            echo "✅ Published to VS Code Marketplace"
+          else
+            echo "⚠️ VSCE_PAT not set, skipping marketplace publish"
+          fi
+
+      - name: Publish to Open VSX Registry
+        if: ${{ !github.event.inputs.version || github.event_name == 'push' }}
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -n "$OVSX_PAT" ]; then
+            npx ovsx publish out/${{ needs.build.outputs.filename }} -p $OVSX_PAT
+            echo "✅ Published to Open VSX Registry"
+          else
+            echo "⚠️ OVSX_PAT not set, skipping Open VSX publish"
+          fi
