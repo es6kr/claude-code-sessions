@@ -8,7 +8,8 @@ import { getSessionsDir, getTodosDir } from './paths.js'
 import type { TodoItem, SessionTodos } from './types.js'
 
 // Find linked todo files for a session and its agents
-export const findLinkedTodos = (sessionId: string, agentIds: string[]) =>
+// Scans todos directory for files matching session pattern
+export const findLinkedTodos = (sessionId: string, agentIds: string[] = []) =>
   Effect.gen(function* () {
     const todosDir = getTodosDir()
 
@@ -49,11 +50,24 @@ export const findLinkedTodos = (sessionId: string, agentIds: string[]) =>
       }
     }
 
+    // Scan todos directory for agent todo files matching this session
+    const allFiles = yield* Effect.tryPromise(() => fs.readdir(todosDir))
+    const agentTodoPattern = new RegExp(`^${sessionId}-agent-([a-f0-9-]+)\\.json$`)
+
+    // Collect agent IDs from both provided list and directory scan
+    const discoveredAgentIds = new Set<string>(agentIds)
+    for (const file of allFiles) {
+      const match = file.match(agentTodoPattern)
+      if (match) {
+        discoveredAgentIds.add(`agent-${match[1]}`)
+      }
+    }
+
     // Read agent todo files
     const agentTodos: { agentId: string; todos: TodoItem[] }[] = []
 
-    for (const agentId of agentIds) {
-      // Agent todo files are named: {sessionId}-{agentId}.json
+    for (const agentId of discoveredAgentIds) {
+      // Agent todo files are named: {sessionId}-agent-{shortAgentId}.json
       const shortAgentId = agentId.replace('agent-', '')
       const agentTodoPath = path.join(todosDir, `${sessionId}-agent-${shortAgentId}.json`)
 
@@ -68,7 +82,9 @@ export const findLinkedTodos = (sessionId: string, agentIds: string[]) =>
         const content = yield* Effect.tryPromise(() => fs.readFile(agentTodoPath, 'utf-8'))
         try {
           const todos = JSON.parse(content) as TodoItem[]
-          agentTodos.push({ agentId, todos })
+          if (todos.length > 0) {
+            agentTodos.push({ agentId, todos })
+          }
         } catch {
           // Invalid JSON, skip
         }
@@ -86,7 +102,8 @@ export const findLinkedTodos = (sessionId: string, agentIds: string[]) =>
   })
 
 // Check if session has any todos (quick check)
-export const sessionHasTodos = (sessionId: string, agentIds: string[]) =>
+// Scans todos directory for files matching session pattern
+export const sessionHasTodos = (sessionId: string, agentIds: string[] = []) =>
   Effect.gen(function* () {
     const todosDir = getTodosDir()
 
@@ -119,8 +136,21 @@ export const sessionHasTodos = (sessionId: string, agentIds: string[]) =>
       }
     }
 
+    // Scan todos directory for agent todo files matching this session
+    const allFiles = yield* Effect.tryPromise(() => fs.readdir(todosDir))
+    const agentTodoPattern = new RegExp(`^${sessionId}-agent-([a-f0-9-]+)\\.json$`)
+
+    // Collect agent IDs from both provided list and directory scan
+    const discoveredAgentIds = new Set<string>(agentIds)
+    for (const file of allFiles) {
+      const match = file.match(agentTodoPattern)
+      if (match) {
+        discoveredAgentIds.add(`agent-${match[1]}`)
+      }
+    }
+
     // Check agent todo files
-    for (const agentId of agentIds) {
+    for (const agentId of discoveredAgentIds) {
       const shortAgentId = agentId.replace('agent-', '')
       const agentTodoPath = path.join(todosDir, `${sessionId}-agent-${shortAgentId}.json`)
 
