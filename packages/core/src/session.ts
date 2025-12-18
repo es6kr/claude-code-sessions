@@ -5,7 +5,12 @@ import { Effect, pipe, Array as A, Option as O } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir, folderNameToPath } from './paths.js'
-import { extractTextContent, extractTitle, isInvalidApiKeyMessage, isContinuationSummary } from './utils.js'
+import {
+  extractTextContent,
+  extractTitle,
+  isInvalidApiKeyMessage,
+  isContinuationSummary,
+} from './utils.js'
 import { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from './agents.js'
 import { deleteLinkedTodos, sessionHasTodos, findOrphanTodos, deleteOrphanTodos } from './todos.js'
 import type {
@@ -229,8 +234,13 @@ export const deleteSession = (projectName: string, sessionId: string) =>
     } satisfies DeleteSessionResult
   })
 
-// Rename session by adding title prefix
-export const renameSession = (projectName: string, sessionId: string, newTitle: string) =>
+// Rename session by adding title prefix and optionally updating summary
+export const renameSession = (
+  projectName: string,
+  sessionId: string,
+  newTitle: string,
+  newSummary?: string
+) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
     const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
@@ -240,7 +250,7 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
       return { success: false, error: 'Empty session' } satisfies RenameSessionResult
     }
 
-    const messages = lines.map((line) => JSON.parse(line) as Message)
+    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
 
     // Find first user message
     const firstUserIdx = messages.findIndex((m) => m.type === 'user')
@@ -248,7 +258,7 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
       return { success: false, error: 'No user message found' } satisfies RenameSessionResult
     }
 
-    const firstMsg = messages[firstUserIdx]
+    const firstMsg = messages[firstUserIdx] as unknown as Message
     if (firstMsg?.message?.content && Array.isArray(firstMsg.message.content)) {
       // Find first non-IDE text content
       const textIdx = firstMsg.message.content.findIndex(
@@ -264,6 +274,23 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
         // Remove existing title pattern (first line ending with \n\n)
         const cleanedText = oldText.replace(/^[^\n]+\n\n/, '')
         item.text = `${newTitle}\n\n${cleanedText}`
+      }
+    }
+
+    // Update or add summary message if newSummary is provided
+    if (newSummary !== undefined) {
+      const summaryIdx = messages.findIndex((m) => m.type === 'summary')
+      if (summaryIdx >= 0) {
+        // Update existing summary
+        messages[summaryIdx] = { ...messages[summaryIdx], summary: newSummary }
+      } else {
+        // Add new summary message at the beginning
+        const summaryMsg = {
+          type: 'summary',
+          summary: newSummary,
+          leafUuid: firstMsg.uuid,
+        }
+        messages.unshift(summaryMsg)
       }
     }
 
@@ -434,6 +461,9 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
     // Generate new session ID
     const newSessionId = crypto.randomUUID()
 
+    // Find summary message to clone to new session
+    const summaryMessage = allMessages.find((m) => m.type === 'summary')
+
     // Check if the split message is a continuation summary
     const splitMessage = allMessages[splitIndex]
     const shouldDuplicate = isContinuationSummary(splitMessage)
@@ -463,6 +493,15 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
       }
       return updated
     })
+
+    // Clone summary message to new session if exists
+    if (summaryMessage) {
+      const clonedSummary: Record<string, unknown> = {
+        ...summaryMessage,
+        leafUuid: updatedMovedMessages[0]?.uuid ?? null,
+      }
+      updatedMovedMessages.unshift(clonedSummary)
+    }
 
     // Write remaining messages to original file
     const remainingContent = remainingMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
@@ -799,7 +838,9 @@ export const searchSessions = (
                 results.push({
                   sessionId,
                   projectName: project.name,
-                  title: extractTitle(extractTextContent(msg.message)) || `Session ${sessionId.slice(0, 8)}`,
+                  title:
+                    extractTitle(extractTextContent(msg.message)) ||
+                    `Session ${sessionId.slice(0, 8)}`,
                   matchType: 'content',
                   snippet,
                   messageUuid: msg.uuid,
