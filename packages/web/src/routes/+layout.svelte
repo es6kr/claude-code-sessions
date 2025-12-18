@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../app.css'
   import { onMount } from 'svelte'
+  import { goto } from '$app/navigation'
   import type { Snippet } from 'svelte'
   import * as api from '$lib/api'
 
@@ -18,6 +19,14 @@
     deletedOrphanAgentCount: number
     deletedOrphanTodoCount: number
   } | null>(null)
+
+  // Search state
+  let searchQuery = $state('')
+  let searchResults = $state<api.SearchResult[]>([])
+  let searchingTitle = $state(false)
+  let searchingContent = $state(false)
+  let showSearchDropdown = $state(false)
+  let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
 
   // Cleanup options
   let clearEmpty = $state(true)
@@ -101,6 +110,67 @@
       cleaning = false
     }
   }
+
+  // Search functions
+  const handleSearchInput = (e: Event) => {
+    const query = (e.target as HTMLInputElement).value
+    searchQuery = query
+
+    if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+
+    if (!query.trim()) {
+      searchResults = []
+      showSearchDropdown = false
+      return
+    }
+
+    // Debounce: search after 300ms of no typing
+    searchDebounceTimer = setTimeout(() => performSearch(query), 300)
+  }
+
+  const performSearch = async (query: string) => {
+    if (!query.trim()) return
+
+    // Phase 1: Title search (fast)
+    searchingTitle = true
+    showSearchDropdown = true
+    try {
+      const titleResults = await api.searchSessions(query, { searchContent: false })
+      searchResults = titleResults
+    } catch (e) {
+      console.error('Title search error:', e)
+    } finally {
+      searchingTitle = false
+    }
+
+    // Phase 2: Content search (slow, runs in background)
+    searchingContent = true
+    try {
+      const allResults = await api.searchSessions(query, { searchContent: true })
+      // Merge results, keeping title matches first
+      const titleIds = new Set(searchResults.map((r) => `${r.projectName}:${r.sessionId}`))
+      const contentOnly = allResults.filter((r) => !titleIds.has(`${r.projectName}:${r.sessionId}`))
+      searchResults = [...searchResults, ...contentOnly]
+    } catch (e) {
+      console.error('Content search error:', e)
+    } finally {
+      searchingContent = false
+    }
+  }
+
+  const selectSearchResult = (result: api.SearchResult) => {
+    searchQuery = ''
+    searchResults = []
+    showSearchDropdown = false
+    goto(`/#project=${encodeURIComponent(result.projectName)}&session=${encodeURIComponent(result.sessionId)}`)
+  }
+
+  const closeSearchDropdown = () => {
+    // Delay to allow click on result
+    setTimeout(() => {
+      showSearchDropdown = false
+    }, 200)
+  }
 </script>
 
 <svelte:head>
@@ -112,13 +182,71 @@
     class="bg-gh-bg-secondary border-b border-gh-border px-8 py-4 flex justify-between items-center"
   >
     <div class="flex items-center gap-3">
-      <h1 class="text-2xl font-semibold">Claude Session Manager</h1>
+      <a href="/" class="text-2xl font-semibold hover:text-gh-accent">Claude Session Manager</a>
       {#if version}
         <span class="text-xs text-gh-text-secondary bg-gh-border px-2 py-0.5 rounded"
           >v{version}</span
         >
       {/if}
     </div>
+
+    <!-- Search -->
+    <div class="relative flex-1 max-w-md mx-8">
+      <input
+        type="text"
+        placeholder="Search sessions..."
+        value={searchQuery}
+        oninput={handleSearchInput}
+        onfocus={() => searchQuery && (showSearchDropdown = true)}
+        onblur={closeSearchDropdown}
+        class="w-full px-4 py-2 bg-gh-bg border border-gh-border rounded-md text-sm focus:outline-none focus:border-gh-accent"
+      />
+      {#if searchingTitle || searchingContent}
+        <div class="absolute right-3 top-1/2 -translate-y-1/2">
+          <svg class="animate-spin h-4 w-4 text-gh-text-secondary" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+          </svg>
+        </div>
+      {/if}
+
+      <!-- Search Dropdown -->
+      {#if showSearchDropdown && (searchResults.length > 0 || searchingTitle)}
+        <div class="absolute top-full left-0 right-0 mt-1 bg-gh-bg-secondary border border-gh-border rounded-md shadow-lg max-h-80 overflow-y-auto z-50">
+          {#if searchResults.length === 0 && searchingTitle}
+            <div class="px-4 py-3 text-sm text-gh-text-secondary">Searching...</div>
+          {:else if searchResults.length === 0}
+            <div class="px-4 py-3 text-sm text-gh-text-secondary">No results found</div>
+          {:else}
+            {#each searchResults as result}
+              <button
+                class="w-full text-left px-4 py-2 hover:bg-gh-border-subtle border-b border-gh-border last:border-b-0"
+                onclick={() => selectSearchResult(result)}
+              >
+                <div class="flex items-center gap-2">
+                  <span class="text-xs px-1.5 py-0.5 rounded {result.matchType === 'title' ? 'bg-gh-green/20 text-gh-green' : 'bg-gh-accent/20 text-gh-accent'}">
+                    {result.matchType === 'title' ? 'Title' : 'Content'}
+                  </span>
+                  <span class="text-sm font-medium truncate">{result.title}</span>
+                </div>
+                <div class="text-xs text-gh-text-secondary mt-0.5 truncate">
+                  {result.projectName.split('-').slice(-2).join('/')}
+                </div>
+                {#if result.snippet}
+                  <div class="text-xs text-gh-text-secondary mt-1 line-clamp-2">{result.snippet}</div>
+                {/if}
+              </button>
+            {/each}
+            {#if searchingContent}
+              <div class="px-4 py-2 text-xs text-gh-text-secondary border-t border-gh-border">
+                Searching content...
+              </div>
+            {/if}
+          {/if}
+        </div>
+      {/if}
+    </div>
+
     <div class="flex gap-2">
       <button
         class="bg-gh-border-subtle border border-gh-border text-gh-text px-4 py-2 rounded-md text-sm transition-colors hover:bg-gh-border hover:border-gh-text-secondary disabled:opacity-50 disabled:cursor-not-allowed"

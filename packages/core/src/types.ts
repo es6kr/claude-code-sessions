@@ -26,6 +26,7 @@ export interface Message {
   sessionId?: string
   isCompactSummary?: boolean
   customTitle?: string
+  summary?: string
 }
 
 // Session metadata
@@ -117,4 +118,15 @@ export interface CleanupPreview {
   emptyWithTodosCount?: number
   orphanAgentCount?: number
   orphanTodoCount?: number
+}
+
+// Search result
+export interface SearchResult {
+  sessionId: string
+  projectName: string
+  title: string
+  matchType: 'title' | 'content'
+  snippet?: string
+  messageUuid?: string
+  timestamp?: string
 }

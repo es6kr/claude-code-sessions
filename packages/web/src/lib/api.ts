@@ -48,6 +48,7 @@ export interface Message {
   message?: unknown
   timestamp?: string
   toolUseResult?: Content | ToolResultObject
+  summary?: string
 }
 
 export interface CleanupPreview {
@@ -198,4 +199,26 @@ export const checkFileExists = async (filePath: string): Promise<boolean> => {
   } catch {
     return false
   }
+}
+
+// Search types
+export interface SearchResult {
+  sessionId: string
+  projectName: string
+  title: string
+  matchType: 'title' | 'content'
+  snippet?: string
+  messageUuid?: string
+  timestamp?: string
+}
+
+// Search sessions - returns title matches first, then content matches
+export const searchSessions = (
+  query: string,
+  options?: { project?: string; searchContent?: boolean }
+) => {
+  const params = new URLSearchParams({ q: query })
+  if (options?.project) params.set('project', options.project)
+  if (options?.searchContent) params.set('content', 'true')
+  return get<SearchResult[]>(`/search?${params}`)
 }

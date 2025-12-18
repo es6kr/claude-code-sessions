@@ -31,9 +31,23 @@ const extractText = (content: Content): string => {
  * Extract displayable content from message
  */
 export const getMessageContent = (msg: Message): string => {
+  // Check msg.summary for summary type messages
+  if (msg.summary) {
+    return msg.summary
+  }
+
+  // Check msg.content (for system messages)
+  if (msg.content) {
+    return extractText(msg.content)
+  }
+
+  // Check msg.message.content (for user/assistant messages)
   const m = msg.message as { content?: Content } | undefined
-  if (!m?.content) return ''
-  return extractText(m.content)
+  if (m?.content) {
+    return extractText(m.content)
+  }
+
+  return ''
 }
 
 /**

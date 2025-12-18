@@ -20,6 +20,7 @@ export type {
   MoveSessionResult,
   ClearSessionsResult,
   CleanupPreview,
+  SearchResult,
 } from './types.js'
 
 // Path utilities
@@ -61,4 +62,5 @@ export {
   splitSession,
   previewCleanup,
   clearSessions,
+  searchSessions,
 } from './session.js'
