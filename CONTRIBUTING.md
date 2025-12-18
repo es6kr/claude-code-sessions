@@ -33,13 +33,13 @@ claude-code-sessions/
 │   │       ├── agents.ts  # Agent management
 │   │       ├── todos.ts   # Todo management
 │   │       └── session.ts # Session operations
-│   ├── mcp/               # claude-sessions-mcp - MCP server
+│   ├── web/               # @claude-sessions/web - SvelteKit UI
 │   │   └── src/
-│   │       └── index.ts   # MCP server entrypoint
-│   └── web/               # @claude-sessions/web - SvelteKit UI
+│   │       ├── lib/       # Components and utilities
+│   │       └── routes/    # SvelteKit routes
+│   └── mcp/               # claude-sessions-mcp - MCP server
 │       └── src/
-│           ├── lib/       # Components and utilities
-│           └── routes/    # SvelteKit routes
+│           └── index.ts   # MCP server entrypoint
 ├── .editorconfig
 ├── eslint.config.js
 ├── package.json
@@ -168,9 +168,9 @@ pnpm build
 ```
 @claude-sessions/core (no dependencies)
         ↓
-claude-sessions-mcp (depends on core)
-        ↓
 @claude-sessions/web (depends on core)
+        ↓
+claude-sessions-mcp (depends on core)
 ```
 
 When modifying `@claude-sessions/core`, rebuild dependent packages:
