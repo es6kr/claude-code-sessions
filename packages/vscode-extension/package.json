@@ -1,7 +1,7 @@
 {
-  "name": "claude-sessions",
-  "displayName": "Claude Sessions",
-  "description": "Manage Claude Code sessions from VS Code sidebar",
+  "name": "claude-sessions-vscode",
+  "displayName": "[DEPRECATED] Claude Sessions",
+  "description": "[DEPRECATED - Use es6kr.claude-sessions instead] Manage Claude Code sessions from VS Code sidebar",
   "version": "0.1.5",
   "publisher": "es6kr",
   "license": "MIT",
