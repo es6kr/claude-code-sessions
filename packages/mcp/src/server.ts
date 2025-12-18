@@ -27,7 +27,7 @@ export async function startWebServer(
         stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env },
       })
-    : spawn('npx', ['@claude-sessions/web', '--port', String(port)], {
+    : spawn('npx', ['@claude-sessions/web@latest', '--port', String(port)], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env },
       })
