@@ -266,7 +266,9 @@
 {:else if hasAnyContent}
   <!-- Standard message (human, assistant, custom-title, etc.) -->
   <div
-    class="p-4 rounded-lg group relative {messageClass} flex flex-col {hasAnyContent ? 'gap-2' : ''}"
+    class="p-4 rounded-lg group relative {messageClass} flex flex-col {hasAnyContent
+      ? 'gap-2'
+      : ''}"
   >
     <div class="flex justify-between text-xs text-gh-text-secondary">
       <span class="uppercase font-semibold">{isToolResult ? 'OUT' : msg.type}</span>
@@ -291,13 +293,11 @@
     {#if thinkingBlocks.length > 0}
       <div class="message-content text-sm">
         {#each thinkingBlocks as block, i}
-          <details class="bg-pink-500/10 rounded-md border border-pink-500/30">
-            <summary class="px-3 py-2 cursor-pointer text-xs text-pink-400 font-medium hover:bg-pink-500/15 select-none">
+          <details class="text-gh-text-secondary">
+            <summary class="cursor-pointer text-xs italic hover:text-gh-text select-none">
               💭 Thinking {thinkingBlocks.length > 1 ? `(${i + 1}/${thinkingBlocks.length})` : ''}
             </summary>
-            <div class="px-3 py-2 text-gh-text-secondary whitespace-pre-wrap border-t border-pink-500/20">
-              {block.thinking}
-            </div>
+            <p class="mt-1 whitespace-pre-wrap italic opacity-70">{block.thinking}</p>
           </details>
         {/each}
       </div>

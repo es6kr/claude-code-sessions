@@ -165,8 +165,8 @@
                 >
                   <button
                     class="w-full min-w-0 py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm hover:bg-gh-border-subtle {isSelected
-                      ? 'pl-[calc(2rem-3px)]'
-                      : 'pl-8'}"
+                      ? 'pl-[calc(2em-3px)]'
+                      : 'pl-[2em]'}"
                     onclick={() => onSelectSession(session)}
                     title={tooltipText}
                   >
@@ -177,12 +177,20 @@
                     >
                       {displayTitle}
                     </span>
-                    <span class="flex-shrink-0 flex items-center gap-2 text-xs text-gh-text-secondary">
-                      <span class="flex items-center gap-0.5" title="{session.messageCount} messages">
+                    <span
+                      class="flex-shrink-0 flex items-center gap-2 text-xs text-gh-text-secondary"
+                    >
+                      <span
+                        class="flex items-center gap-0.5"
+                        title="{session.messageCount} messages"
+                      >
                         <span>💬</span><span>{session.messageCount}</span>
                       </span>
                       {#if sessionInfo.agents > 0}
-                        <span class="flex items-center gap-0.5" title="{sessionInfo.agents} agent(s)">
+                        <span
+                          class="flex items-center gap-0.5"
+                          title="{sessionInfo.agents} agent(s)"
+                        >
                           <span>🤖</span><span>{sessionInfo.agents}</span>
                         </span>
                       {/if}
