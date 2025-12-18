@@ -1,4 +1,4 @@
-# Claude Sessions for VS Code
+# Claude Code Sessions for VS Code
 
 Manage Claude Code sessions directly from VS Code sidebar.
 
@@ -27,11 +27,11 @@ code --install-extension claude-sessions-vscode-0.1.0.vsix
 
 ### From Marketplace (Coming Soon)
 
-Search for "Claude Sessions" in VS Code Extensions.
+Search for "Claude Code Sessions" in VS Code Extensions.
 
 ## Usage
 
-1. Click the Claude Sessions icon in the Activity Bar (left sidebar)
+1. Click the Claude Code Sessions icon in the Activity Bar (left sidebar)
 2. Browse your projects and sessions
 3. Click a session to view its messages
 4. Right-click for rename/delete options
@@ -39,11 +39,11 @@ Search for "Claude Sessions" in VS Code Extensions.
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `Claude Sessions: Refresh` | Refresh the session tree |
-| `Claude Sessions: Open Web UI` | Open the web interface |
-| `Claude Sessions: Cleanup` | Remove empty/invalid sessions |
+| Command                             | Description                   |
+| ----------------------------------- | ----------------------------- |
+| `Claude Code Sessions: Refresh`     | Refresh the session tree      |
+| `Claude Code Sessions: Open Web UI` | Open the web interface        |
+| `Claude Code Sessions: Cleanup`     | Remove empty/invalid sessions |
 
 ## Requirements
 

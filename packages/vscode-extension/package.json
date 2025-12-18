@@ -1,8 +1,8 @@
 {
-  "name": "claude-sessions-vscode",
-  "displayName": "Claude Sessions",
+  "name": "claude-sessions",
+  "displayName": "Claude Code Sessions",
   "description": "Manage Claude Code sessions from VS Code sidebar",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "publisher": "es6kr",
   "license": "MIT",
   "repository": {
@@ -32,7 +32,7 @@
       "activitybar": [
         {
           "id": "claude-sessions",
-          "title": "Claude Sessions",
+          "title": "Claude Code Sessions",
           "icon": "resources/icon.svg"
         }
       ]
@@ -42,7 +42,7 @@
         {
           "id": "claudeSessions",
           "name": "Sessions",
-          "contextualTitle": "Claude Sessions"
+          "contextualTitle": "Claude Code Sessions"
         }
       ]
     },
@@ -154,7 +154,7 @@
       ]
     },
     "configuration": {
-      "title": "Claude Sessions",
+      "title": "Claude Code Sessions",
       "properties": {
         "claudeSessions.port": {
           "type": "number",
