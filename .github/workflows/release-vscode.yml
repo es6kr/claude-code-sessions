@@ -42,10 +42,6 @@ jobs:
       - name: Build packages
         run: pnpm run build
 
-      - name: Package extension
-        working-directory: packages/vscode-extension
-        run: vsce package --no-dependencies --out out
-
       - name: Get extension info
         id: extension
         working-directory: packages/vscode-extension
@@ -56,11 +52,17 @@ jobs:
           echo "name=$NAME" >> $GITHUB_OUTPUT
           echo "filename=$NAME-$VERSION.vsix" >> $GITHUB_OUTPUT
 
+      - name: Package extension
+        working-directory: packages/vscode-extension
+        run: |
+          mkdir -p out
+          vsce package --no-dependencies -o out/${{ steps.extension.outputs.filename }}
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: vsix-package
-          path: 'packages/vscode-extension/out/*.vsix'
+          path: packages/vscode-extension/out/${{ steps.extension.outputs.filename }}
           retention-days: 30
 
   release:
