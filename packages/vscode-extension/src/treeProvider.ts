@@ -1,11 +1,18 @@
 import * as vscode from 'vscode'
 import * as session from '@claude-sessions/core'
+import type { TodoItem } from '@claude-sessions/core'
 import { Effect } from 'effect'
 
 const MIME_TYPE = 'application/vnd.code.tree.claudesessions'
 
-export class SessionTreeProvider implements vscode.TreeDataProvider<SessionTreeItem>, vscode.TreeDragAndDropController<SessionTreeItem> {
-  private _onDidChangeTreeData = new vscode.EventEmitter<SessionTreeItem | undefined | null | void>()
+export class SessionTreeProvider
+  implements
+    vscode.TreeDataProvider<SessionTreeItem>,
+    vscode.TreeDragAndDropController<SessionTreeItem>
+{
+  private _onDidChangeTreeData = new vscode.EventEmitter<
+    SessionTreeItem | undefined | null | void
+  >()
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event
 
   // Drag and drop
@@ -21,13 +28,16 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<SessionTreeI
   }
 
   handleDrag(source: readonly SessionTreeItem[], dataTransfer: vscode.DataTransfer): void {
-    const sessions = source.filter(item => item.type === 'session')
+    const sessions = source.filter((item) => item.type === 'session')
     if (sessions.length > 0) {
       dataTransfer.set(MIME_TYPE, new vscode.DataTransferItem(sessions))
     }
   }
 
-  async handleDrop(target: SessionTreeItem | undefined, dataTransfer: vscode.DataTransfer): Promise<void> {
+  async handleDrop(
+    target: SessionTreeItem | undefined,
+    dataTransfer: vscode.DataTransfer
+  ): Promise<void> {
     if (!target || target.type !== 'project') return
 
     const transferItem = dataTransfer.get(MIME_TYPE)
@@ -91,11 +101,37 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<SessionTreeI
     if (element.type === 'project') {
       // Show sessions under project
       const sessions = await Effect.runPromise(session.listSessions(element.projectName))
-      return sessions.map(
-        (s) =>
+
+      // Check which sessions have todos or agents
+      const sessionsWithMeta = await Promise.all(
+        sessions.map(async (s) => {
+          try {
+            const messages = await Effect.runPromise(session.readSession(element.projectName, s.id))
+            const agentIds = [
+              ...new Set(
+                messages
+                  .filter(
+                    (m): m is typeof m & { agentId: string } =>
+                      m.type === 'agent' && typeof (m as { agentId?: string }).agentId === 'string'
+                  )
+                  .map((m) => m.agentId)
+              ),
+            ]
+            const hasTodos = await Effect.runPromise(session.sessionHasTodos(s.id, agentIds))
+            return { session: s, hasTodos, hasAgents: agentIds.length > 0 }
+          } catch {
+            return { session: s, hasTodos: false, hasAgents: false }
+          }
+        })
+      )
+
+      return sessionsWithMeta.map(
+        ({ session: s, hasTodos, hasAgents }) =>
           new SessionTreeItem(
             s.title || s.id,
-            vscode.TreeItemCollapsibleState.None,
+            hasTodos || hasAgents
+              ? vscode.TreeItemCollapsibleState.Collapsed
+              : vscode.TreeItemCollapsibleState.None,
             'session',
             element.projectName,
             s.id,
@@ -105,19 +141,171 @@ export class SessionTreeProvider implements vscode.TreeDataProvider<SessionTreeI
       )
     }
 
+    if (element.type === 'session') {
+      // Show "Todos" and "Agents" groups under session
+      const messages = await Effect.runPromise(
+        session.readSession(element.projectName, element.sessionId)
+      )
+      const agentIds = [
+        ...new Set(
+          messages
+            .filter(
+              (m): m is typeof m & { agentId: string } =>
+                m.type === 'agent' && typeof (m as { agentId?: string }).agentId === 'string'
+            )
+            .map((m) => m.agentId)
+        ),
+      ]
+
+      const todosResult = await Effect.runPromise(
+        session.findLinkedTodos(element.sessionId, agentIds)
+      )
+      const totalTodos =
+        todosResult.sessionTodos.length +
+        todosResult.agentTodos.reduce((sum, a) => sum + a.todos.length, 0)
+
+      const items: SessionTreeItem[] = []
+
+      // Todos group
+      if (totalTodos > 0) {
+        items.push(
+          new SessionTreeItem(
+            'Todos',
+            vscode.TreeItemCollapsibleState.Collapsed,
+            'todos-group',
+            element.projectName,
+            element.sessionId,
+            totalTodos
+          )
+        )
+      }
+
+      // Agents group
+      if (agentIds.length > 0) {
+        items.push(
+          new SessionTreeItem(
+            'Agents',
+            vscode.TreeItemCollapsibleState.Collapsed,
+            'agents-group',
+            element.projectName,
+            element.sessionId,
+            agentIds.length
+          )
+        )
+      }
+
+      return items
+    }
+
+    if (element.type === 'todos-group') {
+      // Show todos under "Todos" group
+      const messages = await Effect.runPromise(
+        session.readSession(element.projectName, element.sessionId)
+      )
+      const agentIds = [
+        ...new Set(
+          messages
+            .filter(
+              (m): m is typeof m & { agentId: string } =>
+                m.type === 'agent' && typeof (m as { agentId?: string }).agentId === 'string'
+            )
+            .map((m) => m.agentId)
+        ),
+      ]
+
+      const todosResult = await Effect.runPromise(
+        session.findLinkedTodos(element.sessionId, agentIds)
+      )
+
+      const items: SessionTreeItem[] = []
+
+      // Session todos
+      for (const todo of todosResult.sessionTodos) {
+        items.push(
+          new SessionTreeItem(
+            todo.content,
+            vscode.TreeItemCollapsibleState.None,
+            'todo',
+            element.projectName,
+            element.sessionId,
+            undefined,
+            undefined,
+            todo
+          )
+        )
+      }
+
+      // Agent todos
+      for (const agentTodo of todosResult.agentTodos) {
+        for (const todo of agentTodo.todos) {
+          items.push(
+            new SessionTreeItem(
+              todo.content,
+              vscode.TreeItemCollapsibleState.None,
+              'todo',
+              element.projectName,
+              element.sessionId,
+              undefined,
+              undefined,
+              todo,
+              agentTodo.agentId
+            )
+          )
+        }
+      }
+
+      return items
+    }
+
+    if (element.type === 'agents-group') {
+      // Show agents under "Agents" group
+      const messages = await Effect.runPromise(
+        session.readSession(element.projectName, element.sessionId)
+      )
+      const agentIds = [
+        ...new Set(
+          messages
+            .filter(
+              (m): m is typeof m & { agentId: string } =>
+                m.type === 'agent' && typeof (m as { agentId?: string }).agentId === 'string'
+            )
+            .map((m) => m.agentId)
+        ),
+      ]
+
+      return agentIds.map(
+        (agentId) =>
+          new SessionTreeItem(
+            agentId.slice(0, 8),
+            vscode.TreeItemCollapsibleState.None,
+            'agent',
+            element.projectName,
+            element.sessionId,
+            undefined,
+            undefined,
+            undefined,
+            agentId
+          )
+      )
+    }
+
     return []
   }
 }
+
+type TreeItemType = 'project' | 'session' | 'todos-group' | 'agents-group' | 'todo' | 'agent'
 
 export class SessionTreeItem extends vscode.TreeItem {
   constructor(
     public readonly label: string,
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly type: 'project' | 'session',
+    public readonly type: TreeItemType,
     public readonly projectName: string,
     public readonly sessionId: string,
     public readonly count?: number,
-    public readonly updatedAt?: string
+    public readonly updatedAt?: string,
+    public readonly todo?: TodoItem,
+    public readonly agentId?: string
   ) {
     super(label, collapsibleState)
 
@@ -126,7 +314,7 @@ export class SessionTreeItem extends vscode.TreeItem {
     if (type === 'project') {
       this.iconPath = new vscode.ThemeIcon('folder')
       this.description = `${count ?? 0} sessions`
-    } else {
+    } else if (type === 'session') {
       this.iconPath = new vscode.ThemeIcon('comment-discussion')
       this.description = updatedAt
         ? `${count ?? 0} msgs · ${formatDate(updatedAt)}`
@@ -136,6 +324,25 @@ export class SessionTreeItem extends vscode.TreeItem {
         title: 'Open Session',
         arguments: [this],
       }
+    } else if (type === 'todos-group') {
+      this.iconPath = new vscode.ThemeIcon('checklist')
+      this.description = `${count ?? 0}`
+    } else if (type === 'agents-group') {
+      this.iconPath = new vscode.ThemeIcon('hubot')
+      this.description = `${count ?? 0}`
+    } else if (type === 'todo') {
+      const status = todo?.status ?? 'pending'
+      if (status === 'completed') {
+        this.iconPath = new vscode.ThemeIcon('pass-filled', new vscode.ThemeColor('charts.green'))
+      } else if (status === 'in_progress') {
+        this.iconPath = new vscode.ThemeIcon('sync~spin', new vscode.ThemeColor('charts.yellow'))
+      } else {
+        this.iconPath = new vscode.ThemeIcon('circle-outline')
+      }
+      this.description = agentId ? `🤖 ${agentId.slice(0, 8)}` : undefined
+    } else if (type === 'agent') {
+      this.iconPath = new vscode.ThemeIcon('hubot')
+      this.tooltip = agentId
     }
   }
 }
