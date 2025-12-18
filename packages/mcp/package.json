@@ -1,6 +1,6 @@
 {
   "name": "claude-sessions-mcp",
-  "version": "0.4.0",
+  "version": "0.1.8",
   "description": "MCP server for managing Claude Code conversation sessions",
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,9 @@
   "bin": {
     "claude-sessions-mcp": "./dist/index.js"
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsup",
     "dev": "tsx watch src/index.ts",
