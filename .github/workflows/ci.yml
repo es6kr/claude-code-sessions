@@ -20,7 +20,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -29,8 +29,11 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Typecheck
-        run: pnpm typecheck
+      - name: Typecheck (core)
+        run: pnpm --filter @claude-sessions/core typecheck
+
+      - name: Typecheck (mcp)
+        run: pnpm --filter claude-sessions-mcp typecheck
 
       - name: Lint
         run: pnpm lint

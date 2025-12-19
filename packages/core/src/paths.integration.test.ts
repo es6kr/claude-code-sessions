@@ -34,7 +34,9 @@ describe('getRealPathFromSession (mocked)', () => {
     const folderName = '-home-user-example-com'
     const sessionContent = JSON.stringify({ cwd: mockCwd, type: 'user' })
 
-    vi.mocked(fs.readdirSync).mockReturnValue(['session1.jsonl'] as unknown as fs.Dirent[])
+    vi.mocked(fs.readdirSync).mockReturnValue(['session1.jsonl'] as unknown as ReturnType<
+      typeof fs.readdirSync
+    >)
     vi.mocked(fs.readFileSync).mockReturnValue(sessionContent)
 
     const { getRealPathFromSession } = await import('./paths.js')
@@ -49,7 +51,9 @@ describe('getRealPathFromSession (mocked)', () => {
     const folderName = '-home-user-example-com'
     const sessionContent = JSON.stringify({ cwd: mockCwd, type: 'user' })
 
-    vi.mocked(fs.readdirSync).mockReturnValue(['session1.jsonl'] as unknown as fs.Dirent[])
+    vi.mocked(fs.readdirSync).mockReturnValue(['session1.jsonl'] as unknown as ReturnType<
+      typeof fs.readdirSync
+    >)
     vi.mocked(fs.readFileSync).mockReturnValue(sessionContent)
 
     const { getRealPathFromSession } = await import('./paths.js')
@@ -85,7 +89,9 @@ describe('folderNameToPath (mocked)', () => {
     const folderName = '-home-user-example-com'
     const sessionContent = JSON.stringify({ cwd: mockCwd, type: 'user' })
 
-    vi.mocked(fs.readdirSync).mockReturnValue(['session1.jsonl'] as unknown as fs.Dirent[])
+    vi.mocked(fs.readdirSync).mockReturnValue(['session1.jsonl'] as unknown as ReturnType<
+      typeof fs.readdirSync
+    >)
     vi.mocked(fs.readFileSync).mockReturnValue(sessionContent)
 
     const { folderNameToPath } = await import('./paths.js')
