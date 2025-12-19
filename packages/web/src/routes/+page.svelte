@@ -326,9 +326,8 @@
   }
 
   // Lifecycle
-  onMount(async () => {
-    await loadProjects()
-    await restoreFromHash()
+  onMount(() => {
+    loadProjects().then(() => restoreFromHash())
 
     window.addEventListener('hashchange', restoreFromHash)
     return () => window.removeEventListener('hashchange', restoreFromHash)

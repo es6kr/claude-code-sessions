@@ -27,9 +27,13 @@
   const isHuman = $derived(msg.type === 'human' || msg.type === 'user')
   const isLocalCommand = $derived(msg.type === 'system' && msg.subtype === 'local_command')
   const isQueueOperation = $derived(msg.type === 'queue-operation')
-  const isToolResult = $derived(
-    msg.type === 'user' && msg.message?.content?.[0]?.type === 'tool_result'
-  )
+  const isToolResult = $derived.by(() => {
+    if (msg.type !== 'user') return false
+    const m = msg.message as { content?: unknown[] } | undefined
+    if (!Array.isArray(m?.content)) return false
+    const first = m.content[0] as { type?: string } | undefined
+    return first?.type === 'tool_result'
+  })
 
   // Parse file snapshot data
   const snapshotData = $derived.by(() => {
@@ -53,8 +57,9 @@
   // Parse command data
   const commandData = $derived.by(() => {
     if (!isLocalCommand) return null
-    const name = msg.content?.match(/<command-name>([^<]+)<\/command-name>/)?.[1] ?? ''
-    const message = msg.content?.match(/<command-message>([^<]+)<\/command-message>/)?.[1] ?? ''
+    const content = typeof msg.content === 'string' ? msg.content : ''
+    const name = content.match(/<command-name>([^<]+)<\/command-name>/)?.[1] ?? ''
+    const message = content.match(/<command-message>([^<]+)<\/command-message>/)?.[1] ?? ''
     return { name, message }
   })
 

@@ -8,3 +8,4 @@ build/
 .npmrc.local
 *.log
 .DS_Store
+packages/web/test-results/

@@ -12,8 +12,8 @@
   let error = $state<string | null>(null)
 
   // Get params from URL
-  const projectName = $derived(decodeURIComponent(page.params.project))
-  const sessionId = $derived(decodeURIComponent(page.params.id))
+  const projectName = $derived(decodeURIComponent(page.params.project ?? ''))
+  const sessionId = $derived(decodeURIComponent(page.params.id ?? ''))
 
   // Load session data
   const loadSession = async () => {
@@ -114,7 +114,12 @@
     <div class="flex items-center gap-4">
       <a href="/" class="text-gh-muted hover:text-gh-fg" title="Back to home">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M10 19l-7-7m0 0l7-7m-7 7h18"
+          />
         </svg>
       </a>
       <div>
