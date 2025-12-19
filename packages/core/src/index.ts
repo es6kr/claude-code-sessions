@@ -21,6 +21,10 @@ export type {
   ClearSessionsResult,
   CleanupPreview,
   SearchResult,
+  SummaryInfo,
+  AgentInfo,
+  SessionTreeData,
+  ProjectTreeData,
 } from './types.js'
 
 // Path utilities
@@ -68,6 +72,9 @@ export {
   previewCleanup,
   clearSessions,
   searchSessions,
+  loadSessionTreeData,
+  loadProjectTreeData,
+  updateSessionSummary,
 } from './session.js'
 
 // Logger

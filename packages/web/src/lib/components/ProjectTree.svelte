@@ -35,38 +35,70 @@
     return projectSessionData.get(projectName)?.get(sessionId)
   }
 
-  // Get display title: custom title or fallback to lastSummary
+  // Get display title: customTitle > lastSummary > title > 'Untitled'
   const getDisplayTitle = (session: SessionMeta): string => {
-    if (session.title) return session.title
     const data = getSessionData(session.projectName, session.id)
-    if (data?.lastSummary?.summary) {
-      // Truncate summary for display
-      const summary = data.lastSummary.summary
+    // 1. Custom title from session data (user-set)
+    if (data?.customTitle) return data.customTitle
+    // 2. Last summary as fallback title
+    if (data?.lastSummary) {
+      const summary = data.lastSummary
       return summary.length > 60 ? summary.slice(0, 57) + '...' : summary
     }
+    // 3. Title from session metadata
+    if (session.title && session.title !== 'Untitled') return session.title
     return 'Untitled'
   }
 
-  // Get tooltip text: show summary if available
+  // Get tooltip text based on what's displayed as title
   const getTooltipText = (session: SessionMeta): string => {
     const data = getSessionData(session.projectName, session.id)
-    if (data?.lastSummary?.summary) {
-      return data.lastSummary.summary
+    // If customTitle is displayed, show lastSummary in tooltip
+    if (data?.customTitle && data?.lastSummary) {
+      return data.lastSummary
+    }
+    // If lastSummary is displayed as title, show original title in tooltip
+    if (data?.lastSummary && session.title && session.title !== 'Untitled') {
+      return session.title
+    }
+    // If title is displayed, show lastSummary if available
+    if (data?.lastSummary) {
+      return data.lastSummary
     }
     return session.title ?? 'No summary available'
   }
 
   // Check if session has agents or todos
-  const hasAgentsOrTodos = (session: SessionMeta): { agents: number; todos: number } => {
+  const getSessionInfo = (
+    session: SessionMeta
+  ): { agents: number; todos: number; summaries: number } => {
     const data = getSessionData(session.projectName, session.id)
+    const todoCount = data?.todos
+      ? data.todos.sessionTodos.length +
+        data.todos.agentTodos.reduce((acc, at) => acc + at.todos.length, 0)
+      : 0
     return {
       agents: data?.agents.length ?? 0,
-      todos: data?.todos.length ?? 0,
+      todos: todoCount,
+      summaries: data?.summaries.length ?? 0,
     }
   }
 
   // Filter out empty projects
   const nonEmptyProjects = $derived(projects.filter((p) => p.sessionCount > 0))
+
+  // Expanded sessions state (for showing summaries, todos, agents sublist)
+  let expandedSessions = $state<Set<string>>(new Set())
+
+  const toggleSessionExpand = (e: Event, sessionId: string) => {
+    e.stopPropagation()
+    if (expandedSessions.has(sessionId)) {
+      expandedSessions.delete(sessionId)
+    } else {
+      expandedSessions.add(sessionId)
+    }
+    expandedSessions = new Set(expandedSessions)
+  }
 
   // Drag and drop state
   let draggedSession = $state<SessionMeta | null>(null)
@@ -151,80 +183,157 @@
               {#each projectSessions.get(project.name) ?? [] as session}
                 {@const isSelected = selectedSession?.id === session.id}
                 {@const isDragging = draggedSession?.id === session.id}
-                {@const sessionInfo = hasAgentsOrTodos(session)}
+                {@const sessionInfo = getSessionInfo(session)}
                 {@const displayTitle = getDisplayTitle(session)}
                 {@const tooltipText = getTooltipText(session)}
-                {@const isSummaryFallback = !session.title && displayTitle !== 'Untitled'}
+                {@const data = getSessionData(session.projectName, session.id)}
+                {@const isSummaryFallback = !data?.customTitle && data?.lastSummary}
+                {@const isExpanded = expandedSessions.has(session.id)}
+                {@const hasSubItems =
+                  sessionInfo.summaries > 0 || sessionInfo.agents > 0 || sessionInfo.todos > 0}
                 <li
-                  class="relative flex items-center border-t border-gh-border-subtle group {isSelected
+                  class="relative border-t border-gh-border-subtle group {isSelected
                     ? 'bg-gh-accent/20 border-l-3 border-l-gh-accent'
                     : ''} {isDragging ? 'opacity-50' : ''}"
                   draggable="true"
                   ondragstart={(e) => handleDragStart(e, session)}
                   ondragend={handleDragEnd}
                 >
-                  <button
-                    class="w-full min-w-0 py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm hover:bg-gh-border-subtle {isSelected
-                      ? 'pl-[calc(2em-3px)]'
-                      : 'pl-[2em]'}"
-                    onclick={() => onSelectSession(session)}
-                    title={tooltipText}
-                  >
-                    <span
-                      class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap {isSummaryFallback
-                        ? 'italic text-gh-text-secondary'
-                        : ''}"
-                    >
-                      {displayTitle}
-                    </span>
-                    <span
-                      class="flex-shrink-0 flex items-center gap-2 text-xs text-gh-text-secondary"
+                  <!-- Session Row -->
+                  <div class="flex items-center">
+                    {#if hasSubItems}
+                      <button
+                        class="flex-shrink-0 w-5 h-8 flex items-center justify-center bg-transparent border-none cursor-pointer text-gh-text-secondary hover:text-gh-text text-xs ml-1"
+                        onclick={(e) => toggleSessionExpand(e, session.id)}
+                        title={isExpanded ? 'Collapse' : 'Expand'}
+                      >
+                        {isExpanded ? '▼' : '▶'}
+                      </button>
+                    {:else}
+                      <span class="w-5 ml-1"></span>
+                    {/if}
+                    <button
+                      class="flex-1 min-w-0 py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm hover:bg-gh-border-subtle"
+                      onclick={() => onSelectSession(session)}
+                      title={tooltipText}
                     >
                       <span
-                        class="flex items-center gap-0.5"
-                        title="{session.messageCount} messages"
+                        class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap {isSummaryFallback
+                          ? 'italic text-gh-text-secondary'
+                          : ''}"
                       >
-                        <span>💬</span><span>{session.messageCount}</span>
+                        {displayTitle}
                       </span>
-                      {#if sessionInfo.agents > 0}
+                      <span
+                        class="flex-shrink-0 flex items-center gap-2 text-xs text-gh-text-secondary"
+                      >
                         <span
                           class="flex items-center gap-0.5"
-                          title="{sessionInfo.agents} agent(s)"
+                          title="{session.messageCount} messages"
                         >
-                          <span>🤖</span><span>{sessionInfo.agents}</span>
+                          <span>💬</span><span>{session.messageCount}</span>
                         </span>
-                      {/if}
-                      {#if sessionInfo.todos > 0}
-                        <span class="flex items-center gap-0.5" title="{sessionInfo.todos} todo(s)">
-                          <span>📋</span><span>{sessionInfo.todos}</span>
-                        </span>
-                      {/if}
-                    </span>
-                  </button>
+                        {#if sessionInfo.agents > 0}
+                          <span
+                            class="flex items-center gap-0.5"
+                            title="{sessionInfo.agents} agent(s)"
+                          >
+                            <span>🤖</span><span>{sessionInfo.agents}</span>
+                          </span>
+                        {/if}
+                        {#if sessionInfo.todos > 0}
+                          <span
+                            class="flex items-center gap-0.5"
+                            title="{sessionInfo.todos} todo(s)"
+                          >
+                            <span>📋</span><span>{sessionInfo.todos}</span>
+                          </span>
+                        {/if}
+                      </span>
+                    </button>
 
-                  <!-- Session Actions -->
-                  <div
-                    class="absolute right-0 top-1/2 -translate-y-1/2 flex gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity pl-4 {isSelected
-                      ? 'bg-gradient-to-l from-[color-mix(in_srgb,var(--color-gh-accent)_20%,var(--color-gh-bg))] from-80% to-transparent'
-                      : 'bg-gradient-to-l from-gh-bg from-80% to-transparent'}"
-                  >
-                    <button
-                      class="bg-transparent border-none cursor-pointer p-1 rounded
-                             hover:bg-gh-border text-xs"
-                      onclick={(e) => onRenameSession(e, session)}
-                      title="Rename"
+                    <!-- Session Actions -->
+                    <div
+                      class="absolute right-0 top-2 flex gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity pl-4 {isSelected
+                        ? 'bg-gradient-to-l from-[color-mix(in_srgb,var(--color-gh-accent)_20%,var(--color-gh-bg))] from-80% to-transparent'
+                        : 'bg-gradient-to-l from-gh-bg from-80% to-transparent'}"
                     >
-                      ✏️
-                    </button>
-                    <button
-                      class="bg-transparent border-none cursor-pointer p-1 rounded
-                             hover:bg-gh-red/20 text-xs"
-                      onclick={(e) => onDeleteSession(e, session)}
-                      title="Delete"
-                    >
-                      🗑️
-                    </button>
+                      <button
+                        class="bg-transparent border-none cursor-pointer p-1 rounded
+                               hover:bg-gh-border text-xs"
+                        onclick={(e) => onRenameSession(e, session)}
+                        title="Rename"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        class="bg-transparent border-none cursor-pointer p-1 rounded
+                               hover:bg-gh-red/20 text-xs"
+                        onclick={(e) => onDeleteSession(e, session)}
+                        title="Delete"
+                      >
+                        🗑️
+                      </button>
+                    </div>
                   </div>
+
+                  <!-- Session Sub Items (Summaries, Todos, Agents) -->
+                  {#if isExpanded && hasSubItems}
+                    <ul class="bg-gh-bg-secondary/50 border-t border-gh-border-subtle text-xs">
+                      <!-- Summaries (newest first) -->
+                      {#if data?.summaries && data.summaries.length > 0}
+                        {#each data.summaries as summary, idx}
+                          <li
+                            class="py-1.5 px-4 pl-8 text-gh-text-secondary hover:bg-gh-border-subtle/50 flex items-start gap-2"
+                            title={summary.summary}
+                          >
+                            <span class="flex-shrink-0">📝</span>
+                            <span class="overflow-hidden text-ellipsis line-clamp-2">
+                              {#if idx === 0}
+                                <span class="text-gh-accent font-medium">[Last]</span>
+                              {/if}
+                              {summary.summary.length > 100
+                                ? summary.summary.slice(0, 97) + '...'
+                                : summary.summary}
+                            </span>
+                          </li>
+                        {/each}
+                      {/if}
+                      <!-- Todos -->
+                      {#if data?.todos?.sessionTodos && data.todos.sessionTodos.length > 0}
+                        <li
+                          class="py-1.5 px-4 pl-8 text-gh-text-secondary hover:bg-gh-border-subtle/50 flex items-start gap-2"
+                        >
+                          <span class="flex-shrink-0">📋</span>
+                          <span>Session Todos ({data.todos.sessionTodos.length})</span>
+                        </li>
+                      {/if}
+                      {#if data?.todos?.agentTodos}
+                        {#each data.todos.agentTodos as agentTodo}
+                          <li
+                            class="py-1.5 px-4 pl-8 text-gh-text-secondary hover:bg-gh-border-subtle/50 flex items-start gap-2"
+                          >
+                            <span class="flex-shrink-0">📋</span>
+                            <span>Agent Todos ({agentTodo.todos.length})</span>
+                          </li>
+                        {/each}
+                      {/if}
+                      <!-- Agents -->
+                      {#if data?.agents && data.agents.length > 0}
+                        {#each data.agents as agent}
+                          <li
+                            class="py-1.5 px-4 pl-8 text-gh-text-secondary hover:bg-gh-border-subtle/50 flex items-start gap-2"
+                            title={agent.name ?? agent.id}
+                          >
+                            <span class="flex-shrink-0">🤖</span>
+                            <span class="overflow-hidden text-ellipsis whitespace-nowrap">
+                              {agent.name ?? agent.id.slice(0, 12) + '...'} ({agent.messageCount} msgs)
+                            </span>
+                          </li>
+                        {/each}
+                      {/if}
+                    </ul>
+                  {/if}
                 </li>
               {/each}
             {/if}

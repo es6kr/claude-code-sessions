@@ -226,26 +226,57 @@ export const searchSessions = (
 
 // Summary info for session tree
 export interface SummaryInfo {
-  uuid: string
   summary: string
   leafUuid?: string
   timestamp?: string
-  sessionId: string
 }
 
-// Extended session data with agents, todos, summaries
+// Todo item
+export interface TodoItem {
+  content: string
+  status: 'pending' | 'in_progress' | 'completed'
+  activeForm?: string
+}
+
+// Session todos
+export interface SessionTodos {
+  sessionId: string
+  sessionTodos: TodoItem[]
+  agentTodos: { agentId: string; todos: TodoItem[] }[]
+  hasTodos: boolean
+}
+
+// Agent info for tree display
+export interface AgentInfo {
+  id: string
+  name?: string
+  messageCount: number
+}
+
+// Extended session data with agents, todos, summaries (from core.SessionTreeData)
 export interface SessionData {
   id: string
-  title?: string
+  projectName: string
+  title: string
+  customTitle?: string
+  lastSummary?: string
   messageCount: number
   createdAt?: string
   updatedAt?: string
-  agents: string[]
-  todos: string[]
   summaries: SummaryInfo[]
-  lastSummary?: SummaryInfo
+  agents: AgentInfo[]
+  todos: SessionTodos
+  lastCompactBoundaryUuid?: string
 }
 
 // Expand project - loads all session data including agents, todos, summaries
 export const expandProject = (projectName: string) =>
   get<SessionData[]>(`/project/expand?project=${encodeURIComponent(projectName)}`)
+
+// Rename session with optional summary update
+export const renameSessionWithSummary = (
+  project: string,
+  id: string,
+  title: string,
+  summary?: string
+) => post<{ success: boolean }>('/session/rename', { project, id, title, summary })

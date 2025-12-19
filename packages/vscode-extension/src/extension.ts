@@ -53,27 +53,56 @@ async function ensureWebServer(): Promise<number> {
   outputChannel.appendLine(`Command: npx @claude-sessions/web --port ${port}`)
 
   return new Promise((resolve, reject) => {
-    const child = spawn('npx', ['@claude-sessions/web', '--port', String(port)], {
+    const child = spawn('npx', ['-y', '@claude-sessions/web', '--port', String(port)], {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
     })
 
     webServerProcess = child
+    let waitingForReady = false
 
     const timeout = setTimeout(() => {
       outputChannel.appendLine('ERROR: Server startup timeout')
       reject(new Error('Server startup timeout'))
     }, 30000)
 
+    // Wait for server to be ready with health check
+    const waitForReady = async () => {
+      if (waitingForReady) return // Prevent duplicate calls
+      waitingForReady = true
+      clearTimeout(timeout)
+      outputChannel.appendLine(`Server output indicates ready, verifying with health check...`)
+
+      // Retry health check up to 20 times with 300ms delay
+      for (let i = 0; i < 20; i++) {
+        outputChannel.appendLine(`Health check attempt ${i + 1}/20...`)
+        try {
+          const response = await fetch(`http://localhost:${port}/api/version`)
+          if (response.ok) {
+            // Wait for SvelteKit to fully initialize
+            outputChannel.appendLine(`Health check passed, waiting 1s for SvelteKit...`)
+            await new Promise((r) => setTimeout(r, 1000))
+            outputChannel.appendLine(`Server ready on port ${port}`)
+            resolve(port)
+            return
+          }
+          outputChannel.appendLine(`Health check returned ${response.status}`)
+        } catch (e) {
+          outputChannel.appendLine(`Health check failed: ${e}`)
+        }
+        await new Promise((r) => setTimeout(r, 300))
+      }
+      reject(new Error('Server health check failed'))
+    }
+
     child.stdout?.on('data', (data: Buffer) => {
       const output = data.toString().trim()
       if (output) {
         outputChannel.appendLine(`[stdout] ${output}`)
       }
-      if (output.includes('Listening on') || output.includes('localhost')) {
-        clearTimeout(timeout)
-        outputChannel.appendLine(`Server started on port ${port}`)
-        resolve(port)
+      // Only trigger on actual "Listening on" message
+      if (output.includes('Listening on')) {
+        waitForReady()
       }
     })
 
@@ -82,10 +111,9 @@ async function ensureWebServer(): Promise<number> {
       if (output) {
         outputChannel.appendLine(`[stderr] ${output}`)
       }
-      if (output.includes('Listening on') || output.includes('localhost')) {
-        clearTimeout(timeout)
-        outputChannel.appendLine(`Server started on port ${port}`)
-        resolve(port)
+      // Only trigger on actual "Listening on" message
+      if (output.includes('Listening on')) {
+        waitForReady()
       }
     })
 

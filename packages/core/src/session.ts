@@ -12,7 +12,13 @@ import {
   isContinuationSummary,
 } from './utils.js'
 import { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from './agents.js'
-import { deleteLinkedTodos, sessionHasTodos, findOrphanTodos, deleteOrphanTodos } from './todos.js'
+import {
+  findLinkedTodos,
+  deleteLinkedTodos,
+  sessionHasTodos,
+  findOrphanTodos,
+  deleteOrphanTodos,
+} from './todos.js'
 import type {
   Message,
   SessionMeta,
@@ -27,6 +33,10 @@ import type {
   CleanupPreview,
   ContentItem,
   SearchResult,
+  SessionTreeData,
+  SummaryInfo,
+  AgentInfo,
+  ProjectTreeData,
 } from './types.js'
 
 // List all project directories
@@ -461,8 +471,11 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
     // Generate new session ID
     const newSessionId = crypto.randomUUID()
 
-    // Find summary message to clone to new session
-    const summaryMessage = allMessages.find((m) => m.type === 'summary')
+    // Find all summary messages and get the last (most recent) one
+    // Summaries are typically at the beginning, but we want the most recent one
+    const summaryMessages = allMessages.filter((m) => m.type === 'summary')
+    const summaryMessage =
+      summaryMessages.length > 0 ? summaryMessages[summaryMessages.length - 1] : null
 
     // Check if the split message is a continuation summary
     const splitMessage = allMessages[splitIndex]
@@ -862,4 +875,308 @@ export const searchSessions = (
       const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0
       return dateB - dateA
     })
+  })
+
+// Internal version that accepts summaries targeting this session
+const loadSessionTreeDataInternal = (
+  projectName: string,
+  sessionId: string,
+  summariesByTargetSession?: Map<string, SummaryInfo[]>
+) =>
+  Effect.gen(function* () {
+    const projectPath = path.join(getSessionsDir(), projectName)
+    const filePath = path.join(projectPath, `${sessionId}.jsonl`)
+    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const lines = content.trim().split('\n').filter(Boolean)
+    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+
+    // Get summaries that TARGET this session (by leafUuid pointing to messages in this session)
+    let summaries: SummaryInfo[]
+    if (summariesByTargetSession) {
+      // Project-wide loading: use pre-computed summaries targeting this session
+      summaries = [...(summariesByTargetSession.get(sessionId) ?? [])]
+    } else {
+      // Single session loading: need to search the entire project for summaries targeting this session
+      summaries = []
+      // Build uuid set for this session's messages
+      const sessionUuids = new Set<string>()
+      for (const msg of messages) {
+        if (msg.uuid && typeof msg.uuid === 'string') {
+          sessionUuids.add(msg.uuid)
+        }
+      }
+      // Search all session files in the project for summaries with leafUuid pointing to this session
+      const projectFiles = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+      const allJsonlFiles = projectFiles.filter((f) => f.endsWith('.jsonl'))
+      for (const file of allJsonlFiles) {
+        try {
+          const otherFilePath = path.join(projectPath, file)
+          const otherContent = yield* Effect.tryPromise(() => fs.readFile(otherFilePath, 'utf-8'))
+          const otherLines = otherContent.trim().split('\n').filter(Boolean)
+          for (const line of otherLines) {
+            try {
+              const msg = JSON.parse(line) as Record<string, unknown>
+              if (
+                msg.type === 'summary' &&
+                typeof msg.summary === 'string' &&
+                typeof msg.leafUuid === 'string' &&
+                sessionUuids.has(msg.leafUuid)
+              ) {
+                // This summary's leafUuid points to a message in THIS session
+                const targetMsg = messages.find((m) => m.uuid === msg.leafUuid)
+                summaries.push({
+                  summary: msg.summary as string,
+                  leafUuid: msg.leafUuid,
+                  timestamp:
+                    (targetMsg?.timestamp as string) ?? (msg.timestamp as string | undefined),
+                })
+              }
+            } catch {
+              // Skip invalid JSON
+            }
+          }
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    }
+    // Reverse to get newest first
+    summaries.reverse()
+
+    // Find last compact_boundary
+    let lastCompactBoundaryUuid: string | undefined
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i]
+      if (msg.type === 'system' && msg.subtype === 'compact_boundary') {
+        lastCompactBoundaryUuid = msg.uuid as string
+        break
+      }
+    }
+
+    // customTitle is only set when user explicitly edits the title via UI
+    // It should be stored separately in session file (not extracted from message)
+    // For now, customTitle is undefined until we implement title editing feature
+    const customTitle: string | undefined = undefined
+
+    // Get title from first user message
+    const firstUserMsgForTitle = messages.find((m) => m.type === 'user') as Message | undefined
+    const title = firstUserMsgForTitle
+      ? extractTitle(extractTextContent(firstUserMsgForTitle.message))
+      : summaries.length > 0
+        ? '[Summary Only]'
+        : `Session ${sessionId.slice(0, 8)}`
+
+    // Count user/assistant messages
+    const userAssistantMessages = messages.filter(
+      (m) => m.type === 'user' || m.type === 'assistant'
+    )
+    const firstMessage = userAssistantMessages[0]
+    const lastMessage = userAssistantMessages[userAssistantMessages.length - 1]
+
+    // Find linked agents
+    const linkedAgentIds = yield* findLinkedAgents(projectName, sessionId)
+
+    // Load agent info (message counts)
+    const agents: AgentInfo[] = []
+    for (const agentId of linkedAgentIds) {
+      const agentPath = path.join(projectPath, `${agentId}.jsonl`)
+      try {
+        const agentContent = yield* Effect.tryPromise(() => fs.readFile(agentPath, 'utf-8'))
+        const agentLines = agentContent.trim().split('\n').filter(Boolean)
+        const agentMsgs = agentLines.map((l) => JSON.parse(l) as Record<string, unknown>)
+        const agentUserAssistant = agentMsgs.filter(
+          (m) => m.type === 'user' || m.type === 'assistant'
+        )
+
+        // Try to extract agent name from first message
+        let agentName: string | undefined
+        const firstAgentMsg = agentMsgs.find((m) => m.type === 'user')
+        if (firstAgentMsg) {
+          const text = extractTextContent(firstAgentMsg.message as Message['message'])
+          if (text) {
+            agentName = extractTitle(text)
+          }
+        }
+
+        agents.push({
+          id: agentId,
+          name: agentName,
+          messageCount: agentUserAssistant.length,
+        })
+      } catch {
+        // Agent file might not exist or be readable
+        agents.push({
+          id: agentId,
+          messageCount: 0,
+        })
+      }
+    }
+
+    // Load todos
+    const todos = yield* findLinkedTodos(sessionId, linkedAgentIds)
+
+    return {
+      id: sessionId,
+      projectName,
+      title,
+      customTitle,
+      lastSummary: summaries[0]?.summary,
+      messageCount:
+        userAssistantMessages.length > 0
+          ? userAssistantMessages.length
+          : summaries.length > 0
+            ? 1
+            : 0,
+      createdAt: (firstMessage?.timestamp as string) ?? undefined,
+      updatedAt: (lastMessage?.timestamp as string) ?? undefined,
+      summaries,
+      agents,
+      todos,
+      lastCompactBoundaryUuid,
+    } satisfies SessionTreeData
+  })
+
+// Public wrapper for single session (without global uuid map, leafUuid lookup is limited)
+export const loadSessionTreeData = (projectName: string, sessionId: string) =>
+  loadSessionTreeDataInternal(projectName, sessionId, undefined)
+
+// Load all sessions tree data for a project
+export const loadProjectTreeData = (projectName: string) =>
+  Effect.gen(function* () {
+    const project = (yield* listProjects).find((p) => p.name === projectName)
+    if (!project) {
+      return null
+    }
+
+    const projectPath = path.join(getSessionsDir(), projectName)
+    const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+    const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+
+    // Phase 1: Build global uuid map + collect all summaries from ALL sessions
+    // This is needed because leafUuid can reference messages in other sessions
+    const globalUuidMap = new Map<string, { sessionId: string; timestamp?: string }>()
+    const allSummaries: Array<{ summary: string; leafUuid?: string; timestamp?: string }> = []
+
+    // Read all .jsonl files (sessions + agents) to build uuid map and collect summaries
+    const allJsonlFiles = files.filter((f) => f.endsWith('.jsonl'))
+    yield* Effect.all(
+      allJsonlFiles.map((file) =>
+        Effect.gen(function* () {
+          const filePath = path.join(projectPath, file)
+          const fileSessionId = file.replace('.jsonl', '')
+          try {
+            const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+            const lines = content.trim().split('\n').filter(Boolean)
+            for (const line of lines) {
+              try {
+                const msg = JSON.parse(line) as Record<string, unknown>
+                if (msg.uuid && typeof msg.uuid === 'string') {
+                  globalUuidMap.set(msg.uuid, {
+                    sessionId: fileSessionId,
+                    timestamp: msg.timestamp as string | undefined,
+                  })
+                }
+                // Also check messageId for file-history-snapshot type
+                if (msg.messageId && typeof msg.messageId === 'string') {
+                  globalUuidMap.set(msg.messageId, {
+                    sessionId: fileSessionId,
+                    timestamp: (msg.snapshot as Record<string, unknown> | undefined)?.timestamp as
+                      | string
+                      | undefined,
+                  })
+                }
+                // Collect summaries
+                if (msg.type === 'summary' && typeof msg.summary === 'string') {
+                  allSummaries.push({
+                    summary: msg.summary as string,
+                    leafUuid: msg.leafUuid as string | undefined,
+                    timestamp: msg.timestamp as string | undefined,
+                  })
+                }
+              } catch {
+                // Skip invalid JSON lines
+              }
+            }
+          } catch {
+            // Skip unreadable files
+          }
+        })
+      ),
+      { concurrency: 20 }
+    )
+
+    // Phase 1.5: Build summariesByTargetSession map
+    // Each summary's leafUuid points to a message in some session - that's the TARGET session
+    const summariesByTargetSession = new Map<string, SummaryInfo[]>()
+    for (const summaryData of allSummaries) {
+      if (summaryData.leafUuid) {
+        const targetInfo = globalUuidMap.get(summaryData.leafUuid)
+        if (targetInfo) {
+          const targetSessionId = targetInfo.sessionId
+          if (!summariesByTargetSession.has(targetSessionId)) {
+            summariesByTargetSession.set(targetSessionId, [])
+          }
+          summariesByTargetSession.get(targetSessionId)!.push({
+            summary: summaryData.summary,
+            leafUuid: summaryData.leafUuid,
+            timestamp: targetInfo.timestamp ?? summaryData.timestamp,
+          })
+        }
+      }
+    }
+
+    // Phase 2: Load session tree data with summaries targeting each session
+    const sessions = yield* Effect.all(
+      sessionFiles.map((file) => {
+        const sessionId = file.replace('.jsonl', '')
+        return loadSessionTreeDataInternal(projectName, sessionId, summariesByTargetSession)
+      }),
+      { concurrency: 10 }
+    )
+
+    // Sort by newest first
+    const sortedSessions = sessions.sort((a, b) => {
+      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+      return dateB - dateA
+    })
+
+    return {
+      name: project.name,
+      displayName: project.displayName,
+      path: project.path,
+      sessionCount: sessions.length,
+      sessions: sortedSessions,
+    } satisfies ProjectTreeData
+  })
+
+// Update summary message in session
+export const updateSessionSummary = (projectName: string, sessionId: string, newSummary: string) =>
+  Effect.gen(function* () {
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const lines = content.trim().split('\n').filter(Boolean)
+    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+
+    // Find existing summary message
+    const summaryIdx = messages.findIndex((m) => m.type === 'summary')
+
+    if (summaryIdx >= 0) {
+      // Update existing summary
+      messages[summaryIdx] = { ...messages[summaryIdx], summary: newSummary }
+    } else {
+      // Add new summary at the beginning
+      const firstUserMsg = messages.find((m) => m.type === 'user')
+      const summaryMsg = {
+        type: 'summary',
+        summary: newSummary,
+        leafUuid: (firstUserMsg as Message | undefined)?.uuid ?? null,
+      }
+      messages.unshift(summaryMsg)
+    }
+
+    const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+
+    return { success: true }
   })

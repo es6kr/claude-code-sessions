@@ -130,3 +130,42 @@ export interface SearchResult {
   messageUuid?: string
   timestamp?: string
 }
+
+// Summary message from session file
+export interface SummaryInfo {
+  summary: string
+  leafUuid?: string
+  timestamp?: string
+}
+
+// Agent info for tree display
+export interface AgentInfo {
+  id: string
+  name?: string
+  messageCount: number
+}
+
+// Session tree node with full data
+export interface SessionTreeData {
+  id: string
+  projectName: string
+  title: string // First user message title
+  customTitle?: string // User-set custom title
+  lastSummary?: string // Last summary text for display/tooltip
+  messageCount: number
+  createdAt?: string
+  updatedAt?: string
+  summaries: SummaryInfo[] // All summaries in reverse order (newest first)
+  agents: AgentInfo[]
+  todos: SessionTodos
+  lastCompactBoundaryUuid?: string // UUID of last compact_boundary
+}
+
+// Project tree node with sessions
+export interface ProjectTreeData {
+  name: string
+  displayName: string
+  path: string
+  sessionCount: number
+  sessions: SessionTreeData[]
+}

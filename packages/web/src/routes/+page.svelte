@@ -153,13 +153,34 @@
 
   const handleRenameSession = async (e: Event, session: SessionMeta) => {
     e.stopPropagation()
-    const newTitle = prompt('Enter new title:', session.title)
-    if (!newTitle) return
+    const sessionData = projectSessionData.get(session.projectName)?.get(session.id)
+    const currentTitle = sessionData?.customTitle ?? session.title ?? ''
+    const currentSummary = sessionData?.lastSummary ?? ''
+
+    const newTitle = prompt('Enter new title:', currentTitle)
+    if (newTitle === null) return
+
+    // Also prompt for summary update
+    const newSummary = prompt('Enter new summary (optional):', currentSummary)
 
     try {
-      await api.renameSession(session.projectName, session.id, newTitle)
+      await api.renameSessionWithSummary(
+        session.projectName,
+        session.id,
+        newTitle,
+        newSummary !== null ? newSummary : undefined
+      )
+
+      // Update local state
       session.title = newTitle
+      if (sessionData) {
+        sessionData.customTitle = newTitle
+        if (newSummary !== null) {
+          sessionData.lastSummary = newSummary
+        }
+      }
       projectSessions = new Map(projectSessions)
+      projectSessionData = new Map(projectSessionData)
     } catch (e) {
       error = String(e)
     }
