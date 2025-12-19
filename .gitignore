@@ -9,3 +9,4 @@ build/
 *.log
 .DS_Store
 packages/web/test-results/
+.claude/

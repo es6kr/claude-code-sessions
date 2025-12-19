@@ -187,7 +187,7 @@
                 {@const displayTitle = getDisplayTitle(session)}
                 {@const tooltipText = getTooltipText(session)}
                 {@const data = getSessionData(session.projectName, session.id)}
-                {@const isSummaryFallback = !data?.customTitle && data?.lastSummary}
+                {@const isSummaryFallback = !data?.customTitle && !data?.lastSummary}
                 {@const isExpanded = expandedSessions.has(session.id)}
                 {@const hasSubItems =
                   sessionInfo.summaries > 0 || sessionInfo.agents > 0 || sessionInfo.todos > 0}
@@ -203,7 +203,7 @@
                   <div class="flex items-center">
                     {#if hasSubItems}
                       <button
-                        class="flex-shrink-0 w-5 h-8 flex items-center justify-center bg-transparent border-none cursor-pointer text-gh-text-secondary hover:text-gh-text text-xs ml-1"
+                        class="flex-shrink-0 w-5 h-8 flex items-center justify-center bg-transparent border-none cursor-pointer text-gh-text-secondary text-xs ml-1 z-10 relative"
                         onclick={(e) => toggleSessionExpand(e, session.id)}
                         title={isExpanded ? 'Collapse' : 'Expand'}
                       >
@@ -213,7 +213,7 @@
                       <span class="w-5 ml-1"></span>
                     {/if}
                     <button
-                      class="flex-1 min-w-0 py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm hover:bg-gh-border-subtle"
+                      class="flex-1 min-w-0 py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm"
                       onclick={() => onSelectSession(session)}
                       title={tooltipText}
                     >
@@ -252,28 +252,44 @@
                       </span>
                     </button>
 
-                    <!-- Session Actions -->
+                    <!-- Hover overlay: summary on left, actions on right (only covers session row, not nested items) -->
                     <div
-                      class="absolute right-0 top-2 flex gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity pl-4 {isSelected
-                        ? 'bg-gradient-to-l from-[color-mix(in_srgb,var(--color-gh-accent)_20%,var(--color-gh-bg))] from-80% to-transparent'
-                        : 'bg-gradient-to-l from-gh-bg from-80% to-transparent'}"
+                      class="absolute left-0 right-0 top-0 h-8 flex items-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none {isSelected
+                        ? 'bg-gradient-to-r from-[color-mix(in_srgb,var(--color-gh-accent)_20%,var(--color-gh-bg))] via-[color-mix(in_srgb,var(--color-gh-accent)_20%,var(--color-gh-bg))] to-[color-mix(in_srgb,var(--color-gh-accent)_20%,var(--color-gh-bg))]'
+                        : 'bg-gradient-to-r from-gh-bg via-gh-bg to-gh-bg'}"
                     >
-                      <button
-                        class="bg-transparent border-none cursor-pointer p-1 rounded
-                               hover:bg-gh-border text-xs"
-                        onclick={(e) => onRenameSession(e, session)}
-                        title="Rename"
+                      <span
+                        class="flex-1 min-w-0 pl-7 pr-2 text-xs text-gh-text-secondary italic overflow-hidden text-ellipsis whitespace-nowrap"
                       >
-                        ✏️
-                      </button>
-                      <button
-                        class="bg-transparent border-none cursor-pointer p-1 rounded
-                               hover:bg-gh-red/20 text-xs"
-                        onclick={(e) => onDeleteSession(e, session)}
-                        title="Delete"
-                      >
-                        🗑️
-                      </button>
+                        <!-- Left: Summary text on hover -->
+                        {#if data?.lastSummary}
+                          {data.lastSummary.length > 50
+                            ? data.lastSummary.slice(0, 47) + '...'
+                            : data.lastSummary}
+                        {:else}
+                          {displayTitle}
+                        {/if}
+                      </span>
+
+                      <!-- Right: Action buttons -->
+                      <div class="flex-shrink-0 flex gap-0.5 pr-2 pointer-events-auto">
+                        <button
+                          class="bg-transparent border-none cursor-pointer p-1 rounded
+                                 hover:bg-gh-border text-xs"
+                          onclick={(e) => onRenameSession(e, session)}
+                          title="Rename"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          class="bg-transparent border-none cursor-pointer p-1 rounded
+                                 hover:bg-gh-red/20 text-xs"
+                          onclick={(e) => onDeleteSession(e, session)}
+                          title="Delete"
+                        >
+                          🗑️
+                        </button>
+                      </div>
                     </div>
                   </div>
 
