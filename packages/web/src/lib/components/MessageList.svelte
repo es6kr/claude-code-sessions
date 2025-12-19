@@ -112,9 +112,9 @@
               class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
                      text-gh-text-secondary hover:text-gh-text transition-colors"
               onclick={scrollToCompact}
-              title="Go to last context continuation point"
+              title="Jump to last compacted point (context continuation)"
             >
-              📍 Compact
+              📍 Last Compacted
             </button>
           {/if}
           <button
