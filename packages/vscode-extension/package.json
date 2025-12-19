@@ -183,7 +183,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@claude-sessions/core": "^0.1.3",
+    "@claude-sessions/core": "workspace:^",
     "effect": "^3.12.0"
   },
   "devDependencies": {

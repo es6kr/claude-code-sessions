@@ -66,7 +66,8 @@ export class SessionTreeProvider
   private getCurrentProjectName(): string | null {
     const workspaceFolders = vscode.workspace.workspaceFolders
     if (!workspaceFolders || workspaceFolders.length === 0) return null
-    return session.pathToFolderName(workspaceFolders[0].uri.fsPath)
+    const fsPath = workspaceFolders[0].uri.fsPath
+    return session.pathToFolderName(fsPath)
   }
 
   async getChildren(element?: SessionTreeItem): Promise<SessionTreeItem[]> {

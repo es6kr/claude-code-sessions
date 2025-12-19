@@ -35,7 +35,12 @@ export {
 } from './paths.js'
 
 // Message utilities
-export { extractTextContent, extractTitle, isInvalidApiKeyMessage, isContinuationSummary } from './utils.js'
+export {
+  extractTextContent,
+  extractTitle,
+  isInvalidApiKeyMessage,
+  isContinuationSummary,
+} from './utils.js'
 
 // Agent management
 export { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from './agents.js'
@@ -64,3 +69,7 @@ export {
   clearSessions,
   searchSessions,
 } from './session.js'
+
+// Logger
+export type { Logger } from './logger.js'
+export { setLogger, getLogger, createLogger } from './logger.js'

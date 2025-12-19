@@ -6,6 +6,17 @@ import { spawn, type ChildProcess } from 'node:child_process'
 
 let webServerProcess: ChildProcess | null = null
 
+// Global output channel for debugging
+export const outputChannel = vscode.window.createOutputChannel('Claude Sessions')
+
+// Configure core library to use VSCode output channel
+session.setLogger({
+  debug: (msg: string) => outputChannel.appendLine(`[DEBUG] ${msg}`),
+  info: (msg: string) => outputChannel.appendLine(`[INFO] ${msg}`),
+  warn: (msg: string) => outputChannel.appendLine(`[WARN] ${msg}`),
+  error: (msg: string) => outputChannel.appendLine(`[ERROR] ${msg}`),
+})
+
 function getConfig() {
   const config = vscode.workspace.getConfiguration('claudeSessions')
   return {
@@ -27,7 +38,9 @@ async function ensureWebServer(): Promise<number> {
   }
 
   if (!autoStartServer) {
-    throw new Error(`Web server not running on port ${port}. Start it manually or enable autoStartServer.`)
+    throw new Error(
+      `Web server not running on port ${port}. Start it manually or enable autoStartServer.`
+    )
   }
 
   // Start the server
@@ -35,6 +48,9 @@ async function ensureWebServer(): Promise<number> {
     webServerProcess.kill()
     webServerProcess = null
   }
+
+  outputChannel.appendLine('=== Starting Web Server ===')
+  outputChannel.appendLine(`Command: npx @claude-sessions/web --port ${port}`)
 
   return new Promise((resolve, reject) => {
     const child = spawn('npx', ['@claude-sessions/web', '--port', String(port)], {
@@ -45,31 +61,42 @@ async function ensureWebServer(): Promise<number> {
     webServerProcess = child
 
     const timeout = setTimeout(() => {
+      outputChannel.appendLine('ERROR: Server startup timeout')
       reject(new Error('Server startup timeout'))
     }, 30000)
 
     child.stdout?.on('data', (data: Buffer) => {
-      const output = data.toString()
+      const output = data.toString().trim()
+      if (output) {
+        outputChannel.appendLine(`[stdout] ${output}`)
+      }
       if (output.includes('Listening on') || output.includes('localhost')) {
         clearTimeout(timeout)
+        outputChannel.appendLine(`Server started on port ${port}`)
         resolve(port)
       }
     })
 
     child.stderr?.on('data', (data: Buffer) => {
-      const output = data.toString()
+      const output = data.toString().trim()
+      if (output) {
+        outputChannel.appendLine(`[stderr] ${output}`)
+      }
       if (output.includes('Listening on') || output.includes('localhost')) {
         clearTimeout(timeout)
+        outputChannel.appendLine(`Server started on port ${port}`)
         resolve(port)
       }
     })
 
     child.on('error', (err) => {
       clearTimeout(timeout)
+      outputChannel.appendLine(`ERROR: ${err.message}`)
       reject(err)
     })
 
     child.on('exit', (code) => {
+      outputChannel.appendLine(`Server exited with code ${code}`)
       if (code !== 0 && code !== null) {
         clearTimeout(timeout)
         reject(new Error(`Server exited with code ${code}`))
@@ -79,18 +106,22 @@ async function ensureWebServer(): Promise<number> {
 }
 
 async function openOrRevealFolder(absolutePath: string) {
+  // Normalize paths for comparison (lowercase on Windows, forward slashes)
+  const normalize = (p: string) => p.toLowerCase().replace(/\\/g, '/')
+
   const workspaceFolders = vscode.workspace.workspaceFolders
   if (workspaceFolders) {
     for (const folder of workspaceFolders) {
-      if (absolutePath.startsWith(folder.uri.fsPath)) {
+      if (normalize(absolutePath).startsWith(normalize(folder.uri.fsPath))) {
         const uri = vscode.Uri.file(absolutePath)
         await vscode.commands.executeCommand('revealInExplorer', uri)
         return
       }
     }
   }
-  const uri = vscode.Uri.file(absolutePath)
-  await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: true })
+
+  // Open in OS file explorer instead of new VSCode window
+  await vscode.env.openExternal(vscode.Uri.file(absolutePath))
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -129,44 +160,48 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
-    vscode.commands.registerCommand('claudeSessions.renameSession', async (item: SessionTreeItem) => {
-      if (item.type !== 'session') return
+    vscode.commands.registerCommand(
+      'claudeSessions.renameSession',
+      async (item: SessionTreeItem) => {
+        if (item.type !== 'session') return
 
-      const newTitle = await vscode.window.showInputBox({
-        prompt: 'Enter new session title',
-        value: item.label as string,
-      })
+        const newTitle = await vscode.window.showInputBox({
+          prompt: 'Enter new session title',
+          value: item.label as string,
+        })
 
-      if (newTitle) {
-        await Effect.runPromise(
-          session.renameSession(item.projectName, item.sessionId, newTitle)
-        )
-        treeProvider.refresh()
-        vscode.window.showInformationMessage(`Session renamed to "${newTitle}"`)
-      }
-    }),
-
-    vscode.commands.registerCommand('claudeSessions.deleteSession', async (item: SessionTreeItem) => {
-      if (item.type !== 'session') return
-
-      const confirm = await vscode.window.showWarningMessage(
-        `Delete session "${item.label}"?`,
-        { modal: true },
-        'Delete',
-        'Delete & Restart Extension Host'
-      )
-
-      if (confirm === 'Delete' || confirm === 'Delete & Restart Extension Host') {
-        await Effect.runPromise(session.deleteSession(item.projectName, item.sessionId))
-        treeProvider.refresh()
-
-        if (confirm === 'Delete & Restart Extension Host') {
-          await vscode.commands.executeCommand('workbench.action.restartExtensionHost')
-        } else {
-          vscode.window.showInformationMessage('Session deleted')
+        if (newTitle) {
+          await Effect.runPromise(session.renameSession(item.projectName, item.sessionId, newTitle))
+          treeProvider.refresh()
+          vscode.window.showInformationMessage(`Session renamed to "${newTitle}"`)
         }
       }
-    }),
+    ),
+
+    vscode.commands.registerCommand(
+      'claudeSessions.deleteSession',
+      async (item: SessionTreeItem) => {
+        if (item.type !== 'session') return
+
+        const confirm = await vscode.window.showWarningMessage(
+          `Delete session "${item.label}"?`,
+          { modal: true },
+          'Delete',
+          'Delete & Restart Extension Host'
+        )
+
+        if (confirm === 'Delete' || confirm === 'Delete & Restart Extension Host') {
+          await Effect.runPromise(session.deleteSession(item.projectName, item.sessionId))
+          treeProvider.refresh()
+
+          if (confirm === 'Delete & Restart Extension Host') {
+            await vscode.commands.executeCommand('workbench.action.restartExtensionHost')
+          } else {
+            vscode.window.showInformationMessage('Session deleted')
+          }
+        }
+      }
+    ),
 
     vscode.commands.registerCommand('claudeSessions.openWebUI', async () => {
       try {
@@ -177,24 +212,34 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
-    vscode.commands.registerCommand('claudeSessions.openProjectFolder', async (item: SessionTreeItem) => {
-      if (item.type !== 'project') return
+    vscode.commands.registerCommand(
+      'claudeSessions.openProjectFolder',
+      async (item: SessionTreeItem) => {
+        if (item.type !== 'project') return
 
-      const folderPath = session.folderNameToPath(item.projectName)
-      const absolutePath = folderPath.startsWith('~')
-        ? folderPath.replace('~', process.env.HOME || '')
-        : folderPath
+        const folderPath = session.folderNameToPath(item.projectName)
+        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
+        const absolutePath = folderPath.startsWith('~')
+          ? folderPath.replace('~', homeDir)
+          : folderPath
 
-      await openOrRevealFolder(absolutePath)
-    }),
+        await openOrRevealFolder(absolutePath)
+      }
+    ),
 
-    vscode.commands.registerCommand('claudeSessions.openSessionsFolder', async (item: SessionTreeItem) => {
-      if (item?.type !== 'project') return
+    vscode.commands.registerCommand(
+      'claudeSessions.openSessionsFolder',
+      async (item: SessionTreeItem) => {
+        if (item?.type !== 'project') return
 
-      const sessionsDir = session.getSessionsDir()
-      const projectSessionsFolder = `${sessionsDir}/${item.projectName}`
-      await openOrRevealFolder(projectSessionsFolder)
-    }),
+        const sessionsDir = session.getSessionsDir()
+        // Use path.join for cross-platform compatibility
+        const path = await import('node:path')
+        const projectSessionsFolder = path.join(sessionsDir, item.projectName)
+
+        await openOrRevealFolder(projectSessionsFolder)
+      }
+    ),
 
     vscode.commands.registerCommand('claudeSessions.cleanup', async () => {
       const preview = await Effect.runPromise(session.previewCleanup())

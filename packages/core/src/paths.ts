@@ -1,167 +1,248 @@
 /**
  * Path utilities for Claude Code session management
+ *
+ * Architecture:
+ * - Pure Functions: extractCwdFromContent, isSessionFile, toRelativePath (no I/O)
+ * - I/O Functions: tryGetCwdFromFile, getRealPathFromSession (with optional DI for testing)
  */
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
+import { createLogger } from './logger.js'
 
-// Get Claude sessions directory (~/.claude/projects)
+const log = createLogger('paths')
+
+// ============================================
+// Types (for dependency injection)
+// ============================================
+
+export interface Logger {
+  debug: (msg: string) => void
+  warn: (msg: string) => void
+}
+
+export interface FileSystem {
+  readFileSync: (path: string, encoding: 'utf-8') => string
+  readdirSync: (path: string) => string[]
+}
+
+// ============================================
+// Directory Paths
+// ============================================
+
+/** Get Claude sessions directory (~/.claude/projects) */
 export const getSessionsDir = (): string => path.join(os.homedir(), '.claude', 'projects')
 
-// Get Claude todos directory (~/.claude/todos)
+/** Get Claude todos directory (~/.claude/todos) */
 export const getTodosDir = (): string => path.join(os.homedir(), '.claude', 'todos')
 
-// Convert project folder name to display path
-// Unix: -home-user-projects -> /home/user/projects
-// Windows: C--Users-david -> C:\Users\david
-// Handle dot-prefixed folders: --claude -> /.claude, -projects--vscode -> /projects/.vscode
-export const folderNameToDisplayPath = (folderName: string): string => {
-  // Check if Windows path (starts with drive letter pattern like "C--")
-  const windowsDriveMatch = folderName.match(/^([A-Za-z])--/)
-  if (windowsDriveMatch) {
-    // Windows path: C--Users-david -> C:\Users\david
-    const driveLetter = windowsDriveMatch[1]
-    const rest = folderName.slice(3) // Remove "C--"
-    return (
-      driveLetter +
-      ':\\' +
-      rest
-        .replace(/--/g, '\\.') // double dash means dot-prefixed folder
-        .replace(/-/g, '\\')
-    )
-  }
+// ============================================
+// Pure Functions (No I/O)
+// ============================================
 
-  // Unix path
-  return folderName
-    .replace(/^-/, '/')
-    .replace(/--/g, '/.') // double dash means dot-prefixed folder
-    .replace(/-/g, '/')
-}
+/** Extract cwd from file content - pure function for easy testing */
+export const extractCwdFromContent = (content: string): string | null => {
+  const lines = content.split('\n').filter((l) => l.trim())
 
-// Convert display path to folder name (reverse of above)
-export const displayPathToFolderName = (displayPath: string): string => {
-  // Check if Windows path (contains backslash or starts with drive letter)
-  const windowsDriveMatch = displayPath.match(/^([A-Za-z]):[/\\]/)
-  if (windowsDriveMatch) {
-    // Windows path: C:\Users\david -> C--Users-david
-    const driveLetter = windowsDriveMatch[1]
-    const rest = displayPath.slice(3) // Remove "C:\"
-    return (
-      driveLetter +
-      '--' +
-      rest
-        .replace(/[/\\]\./g, '--') // dot-prefixed folder becomes double dash
-        .replace(/[/\\]/g, '-')
-    )
-  }
-
-  // Unix path
-  return displayPath
-    .replace(/^\//g, '-')
-    .replace(/\/\./g, '--') // dot-prefixed folder becomes double dash
-    .replace(/\//g, '-')
-}
-
-// Convert absolute path to project folder name
-// Unix: /home/user/projects/.vscode -> -home-user-projects--vscode
-// Unix: /home/user/example.com -> -home-user-example-com
-// Windows: C:\Users\david\.vscode -> C--Users-david--vscode
-// Non-ASCII characters (Korean, Japanese, Chinese, emoji) are converted to '-' per character
-export const pathToFolderName = (absolutePath: string): string => {
-  // Helper to convert non-ASCII characters to dashes (one dash per character)
-  const convertNonAscii = (str: string): string => {
-    // Check if character is ASCII (code point 0-127)
-    return [...str].map((char) => (char.charCodeAt(0) <= 127 ? char : '-')).join('')
-  }
-
-  // Check if Windows path
-  const windowsDriveMatch = absolutePath.match(/^([A-Za-z]):[/\\]/)
-  if (windowsDriveMatch) {
-    // Windows path: C:\Users\david -> C--Users-david
-    const driveLetter = windowsDriveMatch[1]
-    const rest = absolutePath.slice(3) // Remove "C:\"
-    return (
-      driveLetter +
-      '--' +
-      convertNonAscii(rest)
-        .replace(/[/\\]\./g, '--') // dot-prefixed folder becomes double dash
-        .replace(/[/\\]/g, '-')
-        .replace(/\./g, '-') // dots in filenames become single dash
-    )
-  }
-
-  // Unix path
-  return convertNonAscii(absolutePath)
-    .replace(/^\//g, '-')
-    .replace(/\/\./g, '--') // dot-prefixed folder becomes double dash
-    .replace(/\//g, '-')
-    .replace(/\./g, '-') // dots in filenames become single dash
-}
-
-// Convert folder name to relative or absolute path for display
-// If path is under home directory, show relative (~/...)
-// Otherwise show absolute path
-export const folderNameToPath = (folderName: string): string => {
-  // First try to get real path from session cwd
-  const realPath = getRealPathFromSession(folderName)
-  if (realPath) {
-    const home = os.homedir()
-    // Normalize path separators for comparison
-    const normalizedPath = realPath.replace(/\\/g, '/')
-    const normalizedHome = home.replace(/\\/g, '/')
-    if (normalizedPath.startsWith(normalizedHome)) {
-      return '~' + normalizedPath.slice(normalizedHome.length)
+  for (const line of lines) {
+    try {
+      const parsed = JSON.parse(line)
+      if (parsed?.cwd) {
+        return parsed.cwd
+      }
+    } catch {
+      // Skip invalid JSON lines
     }
-    return realPath
   }
 
-  // Fallback to pattern-based conversion
-  const absolutePath = folderNameToDisplayPath(folderName)
-  const home = os.homedir()
+  return null
+}
 
-  // Normalize path separators for comparison
+/** Check if filename is a session file */
+export const isSessionFile = (filename: string): boolean =>
+  filename.endsWith('.jsonl') && !filename.startsWith('agent-')
+
+/** Convert path to relative form if under home directory */
+export const toRelativePath = (absolutePath: string, homeDir: string): string => {
   const normalizedPath = absolutePath.replace(/\\/g, '/')
-  const normalizedHome = home.replace(/\\/g, '/')
+  const normalizedHome = homeDir.replace(/\\/g, '/')
+
   if (normalizedPath.startsWith(normalizedHome)) {
     return '~' + normalizedPath.slice(normalizedHome.length)
   }
   return absolutePath
 }
 
-// Try to extract cwd from a single session file
-const tryGetCwdFromFile = (filePath: string): string | null => {
+// ============================================
+// Path Conversion (Pure)
+// ============================================
+
+/**
+ * Convert project folder name to display path
+ * Unix: -home-user-projects -> /home/user/projects
+ * Windows: C--Users-david -> C:\Users\david
+ * Handle dot-prefixed folders: --claude -> /.claude
+ */
+export const folderNameToDisplayPath = (folderName: string): string => {
+  // Check if Windows path (starts with drive letter pattern like "C--")
+  const windowsDriveMatch = folderName.match(/^([A-Za-z])--/)
+  if (windowsDriveMatch) {
+    const driveLetter = windowsDriveMatch[1]
+    const rest = folderName.slice(3)
+    return driveLetter + ':\\' + rest.replace(/--/g, '\\.').replace(/-/g, '\\')
+  }
+
+  // Unix path
+  return folderName.replace(/^-/, '/').replace(/--/g, '/.').replace(/-/g, '/')
+}
+
+/** Convert display path to folder name (reverse of above) */
+export const displayPathToFolderName = (displayPath: string): string => {
+  const windowsDriveMatch = displayPath.match(/^([A-Za-z]):[/\\]/)
+  if (windowsDriveMatch) {
+    const driveLetter = windowsDriveMatch[1]
+    const rest = displayPath.slice(3)
+    return driveLetter + '--' + rest.replace(/[/\\]\./g, '--').replace(/[/\\]/g, '-')
+  }
+
+  return displayPath.replace(/^\//g, '-').replace(/\/\./g, '--').replace(/\//g, '-')
+}
+
+/**
+ * Convert absolute path to project folder name
+ * Non-ASCII characters are converted to '-' per character
+ * Windows drive letter is normalized to lowercase (C: -> c--)
+ */
+export const pathToFolderName = (absolutePath: string): string => {
+  const convertNonAscii = (str: string): string =>
+    [...str].map((char) => (char.charCodeAt(0) <= 127 ? char : '-')).join('')
+
+  const windowsDriveMatch = absolutePath.match(/^([A-Za-z]):[/\\]/)
+  if (windowsDriveMatch) {
+    // Normalize drive letter to lowercase (Claude Code uses lowercase)
+    const driveLetter = windowsDriveMatch[1].toLowerCase()
+    const rest = absolutePath.slice(3)
+    return (
+      driveLetter +
+      '--' +
+      convertNonAscii(rest)
+        .replace(/[/\\]\./g, '--')
+        .replace(/[/\\]/g, '-')
+        .replace(/\./g, '-')
+    )
+  }
+
+  return convertNonAscii(absolutePath)
+    .replace(/^\//g, '-')
+    .replace(/\/\./g, '--')
+    .replace(/\//g, '-')
+    .replace(/\./g, '-')
+}
+
+// ============================================
+// I/O Functions (with optional DI for testing)
+// ============================================
+
+/**
+ * Try to extract cwd from a single session file
+ * @param filePath - Path to session file
+ * @param fileSystem - Optional FileSystem for testing
+ * @param logger - Optional Logger for testing
+ */
+export const tryGetCwdFromFile = (
+  filePath: string,
+  fileSystem: FileSystem = fs,
+  logger: Logger = log
+): string | null => {
+  const basename = path.basename(filePath)
+
   try {
-    const content = fs.readFileSync(filePath, 'utf-8')
-    const firstLine = content.split('\n')[0]
-    if (!firstLine) return null
-    const message = JSON.parse(firstLine) as { cwd?: string }
-    return message.cwd ?? null
+    const content = fileSystem.readFileSync(filePath, 'utf-8')
+    const cwd = extractCwdFromContent(content)
+
+    if (cwd === null) {
+      const lines = content.split('\n').filter((l) => l.trim())
+      if (lines.length === 0) {
+        logger.debug(`tryGetCwdFromFile: ${basename} -> empty file`)
+      } else {
+        logger.debug(`tryGetCwdFromFile: ${basename} -> no cwd found in ${lines.length} lines`)
+      }
+      return null
+    }
+
+    logger.debug(`tryGetCwdFromFile: ${basename} -> cwd=${cwd}`)
+    return cwd
+  } catch (e) {
+    logger.warn(`tryGetCwdFromFile: ${basename} -> read error: ${e}`)
+    return null
+  }
+}
+
+/**
+ * Extract real cwd path from session files in a project
+ * @param folderName - Project folder name
+ * @param sessionsDir - Optional sessions directory for testing
+ * @param fileSystem - Optional FileSystem for testing
+ * @param logger - Optional Logger for testing
+ */
+export const getRealPathFromSession = (
+  folderName: string,
+  sessionsDir: string = getSessionsDir(),
+  fileSystem: FileSystem = fs,
+  logger: Logger = log
+): string | null => {
+  const projectDir = path.join(sessionsDir, folderName)
+
+  try {
+    const files = fileSystem.readdirSync(projectDir).filter(isSessionFile)
+
+    const cwdList: string[] = []
+    for (const f of files) {
+      const cwd = tryGetCwdFromFile(path.join(projectDir, f), fileSystem, logger)
+      if (cwd !== null) {
+        cwdList.push(cwd)
+      }
+    }
+
+    // Find cwd that matches folder name
+    const matched = cwdList.find((cwd) => pathToFolderName(cwd) === folderName)
+    if (matched) {
+      logger.debug(`getRealPathFromSession: ${folderName} -> ${matched}`)
+      return matched
+    }
+
+    // Log for debugging
+    if (cwdList.length > 0) {
+      logger.warn(
+        `getRealPathFromSession: ${folderName} -> no match, cwds found: ${cwdList.join(', ')}`
+      )
+    } else {
+      logger.warn(`getRealPathFromSession: ${folderName} -> no valid cwd in any session`)
+    }
+    return null
   } catch {
     return null
   }
 }
 
-// Extract real cwd path from session files in a project
-// This handles edge cases like es~kr -> es.kr (tilde in hostname)
-// Iterates through all session files to find one with matching cwd
-// Returns null if no session has cwd matching the folder name (all sessions moved from other projects)
-export const getRealPathFromSession = (folderName: string): string | null => {
-  const projectDir = path.join(getSessionsDir(), folderName)
+// ============================================
+// Public API
+// ============================================
 
-  try {
-    const files = fs.readdirSync(projectDir)
-    const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+/**
+ * Convert folder name to relative or absolute path for display
+ * If path is under home directory, show relative (~/...)
+ */
+export const folderNameToPath = (folderName: string): string => {
+  const homeDir = os.homedir()
 
-    for (const sessionFile of sessionFiles) {
-      const cwd = tryGetCwdFromFile(path.join(projectDir, sessionFile))
-      // Verify cwd matches the folder name (session wasn't moved from another project)
-      if (cwd && pathToFolderName(cwd) === folderName) {
-        return cwd
-      }
-    }
-
-    return null
-  } catch {
-    return null
+  // First try to get real path from session cwd
+  const realPath = getRealPathFromSession(folderName)
+  if (realPath) {
+    return toRelativePath(realPath, homeDir)
   }
+
+  // Fallback to pattern-based conversion
+  const absolutePath = folderNameToDisplayPath(folderName)
+  return toRelativePath(absolutePath, homeDir)
 }

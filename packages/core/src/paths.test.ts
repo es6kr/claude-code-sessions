@@ -24,19 +24,20 @@ describe('pathToFolderName', () => {
 
   describe('Windows paths', () => {
     it('converts Windows absolute path to folder name', () => {
-      expect(pathToFolderName('C:\\Users\\david\\projects')).toBe('C--Users-david-projects')
+      // Drive letter is normalized to lowercase (Claude Code convention)
+      expect(pathToFolderName('C:\\Users\\david\\projects')).toBe('c--Users-david-projects')
     })
 
     it('handles Windows path with forward slashes', () => {
-      expect(pathToFolderName('C:/Users/david/projects')).toBe('C--Users-david-projects')
+      expect(pathToFolderName('C:/Users/david/projects')).toBe('c--Users-david-projects')
     })
 
     it('handles Windows dot-prefixed folders', () => {
-      expect(pathToFolderName('C:\\Users\\david\\.vscode')).toBe('C--Users-david--vscode')
+      expect(pathToFolderName('C:\\Users\\david\\.vscode')).toBe('c--Users-david--vscode')
     })
 
     it('handles Windows path with domain (example.com)', () => {
-      expect(pathToFolderName('C:\\Users\\david\\example.com')).toBe('C--Users-david-example-com')
+      expect(pathToFolderName('C:\\Users\\david\\example.com')).toBe('c--Users-david-example-com')
     })
   })
 

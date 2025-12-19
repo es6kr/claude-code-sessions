@@ -1,0 +1,25 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_FILE_PATHS\" | grep -qE 'packages/(vscode-extension|core)/'; then touch /tmp/claude-sessions-vsix-rebuild-needed; fi"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f /tmp/claude-sessions-vsix-rebuild-needed ]; then rm /tmp/claude-sessions-vsix-rebuild-needed && cd /Users/david/Sync/AI/projects/claude-code-sessions && pnpm --filter @claude-sessions/core build && pnpm --filter claude-sessions package && code --install-extension packages/vscode-extension/claude-sessions-*.vsix --force 2>/dev/null || true; fi"
+          }
+        ]
+      }
+    ]
+  }
+}
