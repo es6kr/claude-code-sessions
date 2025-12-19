@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { pathToFolderName, folderNameToDisplayPath, displayPathToFolderName } from './paths.js'
+import {
+  pathToFolderName,
+  folderNameToDisplayPath,
+  displayPathToFolderName,
+  toRelativePath,
+} from './paths.js'
 
 describe('pathToFolderName', () => {
   describe('Unix paths', () => {
@@ -132,6 +137,36 @@ describe('displayPathToFolderName', () => {
     it('handles Windows dot-prefixed folders', () => {
       expect(displayPathToFolderName('C:\\Users\\david\\.vscode')).toBe('C--Users-david--vscode')
     })
+  })
+})
+
+describe('toRelativePath', () => {
+  it('converts path under home directory to ~/...', () => {
+    expect(toRelativePath('/Users/david/projects', '/Users/david')).toBe('~/projects')
+  })
+
+  it('only converts current user home, not other users', () => {
+    // Path under different user should NOT be converted to ~
+    expect(toRelativePath('/Users/other/projects', '/Users/david')).toBe('/Users/other/projects')
+  })
+
+  it('handles exact home directory match', () => {
+    expect(toRelativePath('/Users/david', '/Users/david')).toBe('~')
+  })
+
+  it('does not convert partial matches', () => {
+    // /Users/david2 should not match /Users/david
+    expect(toRelativePath('/Users/david2/projects', '/Users/david')).toBe('/Users/david2/projects')
+  })
+
+  it('handles Windows paths', () => {
+    expect(toRelativePath('C:\\Users\\david\\projects', 'C:\\Users\\david')).toBe('~/projects')
+  })
+
+  it('does not convert other Windows user paths', () => {
+    expect(toRelativePath('C:\\Users\\other\\projects', 'C:\\Users\\david')).toBe(
+      'C:\\Users\\other\\projects'
+    )
   })
 })
 

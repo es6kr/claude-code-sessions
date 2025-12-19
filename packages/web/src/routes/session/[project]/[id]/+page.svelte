@@ -10,6 +10,10 @@
   let messages = $state<Message[]>([])
   let loading = $state(true)
   let error = $state<string | null>(null)
+  let projectDisplayName = $state<string>('')
+
+  // Scroll container for MessageList
+  let scrollContainer: HTMLDivElement | undefined = $state()
 
   // Get params from URL
   const projectName = $derived(decodeURIComponent(page.params.project ?? ''))
@@ -20,6 +24,11 @@
     loading = true
     error = null
     try {
+      // Load projects to get displayName (real path)
+      const projects = await api.listProjects()
+      const project = projects.find((p) => p.name === projectName)
+      projectDisplayName = project?.displayName ?? projectName
+
       // Load sessions to get metadata
       const sessions = await api.listSessions(projectName)
       session = sessions.find((s) => s.id === sessionId) ?? {
@@ -109,7 +118,7 @@
 </svelte:head>
 
 <div class="min-h-screen flex flex-col bg-gh-bg">
-  <!-- Header -->
+  <!-- Header with back button -->
   <header class="flex-shrink-0 p-4 border-b border-gh-border bg-gh-canvas">
     <div class="flex items-center gap-4">
       <a href="/" class="text-gh-muted hover:text-gh-fg" title="Back to home">
@@ -122,15 +131,12 @@
           />
         </svg>
       </a>
-      <div>
-        <h1 class="text-lg font-semibold text-gh-fg">{session?.title ?? 'Loading...'}</h1>
-        <p class="text-sm text-gh-muted">{projectName}</p>
-      </div>
+      <p class="text-sm text-gh-muted">{projectDisplayName}</p>
     </div>
   </header>
 
   <!-- Messages -->
-  <div class="flex-1 overflow-y-auto">
+  <div bind:this={scrollContainer} class="flex-1 overflow-y-auto">
     {#if loading}
       <div class="flex items-center justify-center h-full">
         <div class="text-gh-muted">Loading...</div>
@@ -146,7 +152,8 @@
         onDeleteMessage={handleDeleteMessage}
         onEditTitle={handleEditTitle}
         onSplitSession={handleSplitSession}
-        showHeader={false}
+        externalScrollContainer={scrollContainer}
+        enableScroll={false}
       />
     {/if}
   </div>

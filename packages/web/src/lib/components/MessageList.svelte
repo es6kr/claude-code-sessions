@@ -12,6 +12,7 @@
     onSplitSession: (msg: Message) => void
     showHeader?: boolean
     enableScroll?: boolean
+    externalScrollContainer?: HTMLElement | null
   }
 
   let {
@@ -22,6 +23,7 @@
     onSplitSession,
     showHeader = true,
     enableScroll = true,
+    externalScrollContainer = null,
   }: Props = $props()
 
   const openSessionFile = async () => {
@@ -49,19 +51,16 @@
     return -1
   })
 
-  // Scroll container reference for navigation
-  let scrollContainer: HTMLDivElement | undefined = $state()
+  // Scroll container reference for navigation (internal or external)
+  let internalScrollContainer: HTMLDivElement | undefined = $state()
+  const scrollContainer = $derived(externalScrollContainer ?? internalScrollContainer)
 
   const scrollToTop = () => {
-    if (scrollContainer) {
-      scrollContainer.scrollTo({ top: 0, behavior: 'smooth' })
-    }
+    scrollContainer?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const scrollToBottom = () => {
-    if (scrollContainer) {
-      scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' })
-    }
+    scrollContainer?.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' })
   }
 
   const scrollToCompact = () => {
@@ -133,7 +132,7 @@
   <!-- Messages -->
   {#if session}
     <div
-      bind:this={scrollContainer}
+      bind:this={internalScrollContainer}
       class="{enableScroll ? 'overflow-y-auto' : ''} flex-1 p-4 flex flex-col gap-4"
     >
       {#each messages as msg, i (msg.uuid ?? `idx-${i}`)}

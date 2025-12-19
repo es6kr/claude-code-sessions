@@ -67,7 +67,11 @@ export const toRelativePath = (absolutePath: string, homeDir: string): string =>
   const normalizedPath = absolutePath.replace(/\\/g, '/')
   const normalizedHome = homeDir.replace(/\\/g, '/')
 
-  if (normalizedPath.startsWith(normalizedHome)) {
+  // Check for exact match or path with separator after home dir
+  if (normalizedPath === normalizedHome) {
+    return '~'
+  }
+  if (normalizedPath.startsWith(normalizedHome + '/')) {
     return '~' + normalizedPath.slice(normalizedHome.length)
   }
   return absolutePath
