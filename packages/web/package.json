@@ -1,6 +1,6 @@
 {
   "name": "@claude-sessions/web",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Web UI for Claude Code session management",
   "type": "module",
   "license": "MIT",
