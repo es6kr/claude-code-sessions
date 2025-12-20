@@ -32,7 +32,6 @@ import type {
   MoveSessionResult,
   ClearSessionsResult,
   CleanupPreview,
-  TextContent,
   SearchResult,
   SessionTreeData,
   SummaryInfo,
@@ -162,9 +161,9 @@ export const deleteMessage = (projectName: string, sessionId: string, messageUui
     const lines = content.trim().split('\n').filter(Boolean)
     const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
 
-    // Find by uuid or messageId (for file-history-snapshot type)
+    // Find by uuid, messageId (for file-history-snapshot type), or leafUuid (for summary type)
     const targetIndex = messages.findIndex(
-      (m) => m.uuid === messageUuid || m.messageId === messageUuid
+      (m) => m.uuid === messageUuid || m.messageId === messageUuid || m.leafUuid === messageUuid
     )
     if (targetIndex === -1) {
       return { success: false, error: 'Message not found' }
@@ -246,15 +245,13 @@ export const deleteSession = (projectName: string, sessionId: string) =>
     } satisfies DeleteSessionResult
   })
 
-// Rename session by adding title prefix and optionally updating summary
-export const renameSession = (
-  projectName: string,
-  sessionId: string,
-  newTitle: string,
-  newSummary?: string
-) =>
+// Rename session by updating custom-title and first summary
+// custom-title is stored in this session file
+// summary is stored in OTHER session files (where leafUuid points to this session's messages)
+export const renameSession = (projectName: string, sessionId: string, newTitle: string) =>
   Effect.gen(function* () {
-    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const projectPath = path.join(getSessionsDir(), projectName)
+    const filePath = path.join(projectPath, `${sessionId}.jsonl`)
     const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
     const lines = content.trim().split('\n').filter(Boolean)
 
@@ -264,50 +261,111 @@ export const renameSession = (
 
     const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
 
-    // Find first user message
-    const firstUserIdx = messages.findIndex((m) => m.type === 'user')
-    if (firstUserIdx === -1) {
-      return { success: false, error: 'No user message found' } satisfies RenameSessionResult
-    }
-
-    const firstMsg = messages[firstUserIdx] as unknown as Message
-    if (firstMsg?.message?.content && Array.isArray(firstMsg.message.content)) {
-      // Find first non-IDE text content
-      const textIdx = firstMsg.message.content.findIndex(
-        (item): item is TextContent =>
-          typeof item === 'object' &&
-          item?.type === 'text' &&
-          !item.text?.trim().startsWith('<ide_')
-      )
-
-      if (textIdx >= 0) {
-        const item = firstMsg.message.content[textIdx] as TextContent
-        const oldText = item.text ?? ''
-        // Remove existing title pattern (first line ending with \n\n)
-        const cleanedText = oldText.replace(/^[^\n]+\n\n/, '')
-        item.text = `${newTitle}\n\n${cleanedText}`
+    // Build uuid set for this session's messages
+    const sessionUuids = new Set<string>()
+    for (const msg of messages) {
+      if (msg.uuid && typeof msg.uuid === 'string') {
+        sessionUuids.add(msg.uuid)
       }
     }
 
-    // Update or add summary message if newSummary is provided
-    if (newSummary !== undefined) {
-      const summaryIdx = messages.findIndex((m) => m.type === 'summary')
-      if (summaryIdx >= 0) {
-        // Update existing summary
-        messages[summaryIdx] = { ...messages[summaryIdx], summary: newSummary }
-      } else {
-        // Add new summary message at the beginning
-        const summaryMsg = {
-          type: 'summary',
-          summary: newSummary,
-          leafUuid: firstMsg.uuid,
-        }
-        messages.unshift(summaryMsg)
-      }
+    // Update or add custom-title in this session file
+    const customTitleIdx = messages.findIndex((m) => m.type === 'custom-title')
+    const customTitleRecord = {
+      type: 'custom-title',
+      customTitle: newTitle,
+      sessionId,
+    }
+    if (customTitleIdx >= 0) {
+      messages[customTitleIdx] = customTitleRecord
+    } else {
+      messages.unshift(customTitleRecord)
     }
 
     const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
     yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+
+    // Find and update first summary in OTHER session files
+    // Summary's leafUuid points to a message in THIS session
+    const projectFiles = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+    const allJsonlFiles = projectFiles.filter((f) => f.endsWith('.jsonl'))
+
+    // Collect all summaries targeting this session with their file info
+    const summariesTargetingThis: {
+      file: string
+      idx: number
+      timestamp?: string
+    }[] = []
+
+    for (const file of allJsonlFiles) {
+      const otherFilePath = path.join(projectPath, file)
+      try {
+        const otherContent = yield* Effect.tryPromise(() => fs.readFile(otherFilePath, 'utf-8'))
+        const otherLines = otherContent.trim().split('\n').filter(Boolean)
+        const otherMessages = otherLines.map((l) => JSON.parse(l) as Record<string, unknown>)
+
+        for (let i = 0; i < otherMessages.length; i++) {
+          const msg = otherMessages[i]
+          if (
+            msg.type === 'summary' &&
+            typeof msg.leafUuid === 'string' &&
+            sessionUuids.has(msg.leafUuid)
+          ) {
+            // Find target message timestamp
+            const targetMsg = messages.find((m) => m.uuid === msg.leafUuid)
+            summariesTargetingThis.push({
+              file,
+              idx: i,
+              timestamp: (targetMsg?.timestamp as string) ?? (msg.timestamp as string | undefined),
+            })
+          }
+        }
+      } catch {
+        // Skip unreadable files
+      }
+    }
+
+    if (summariesTargetingThis.length > 0) {
+      // Sort by timestamp ascending (oldest first), update the first one
+      summariesTargetingThis.sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
+      const firstSummary = summariesTargetingThis[0]
+
+      const summaryFilePath = path.join(projectPath, firstSummary.file)
+      const summaryContent = yield* Effect.tryPromise(() => fs.readFile(summaryFilePath, 'utf-8'))
+      const summaryLines = summaryContent.trim().split('\n').filter(Boolean)
+      const summaryMessages = summaryLines.map((l) => JSON.parse(l) as Record<string, unknown>)
+
+      summaryMessages[firstSummary.idx] = {
+        ...summaryMessages[firstSummary.idx],
+        summary: newTitle,
+      }
+
+      const newSummaryContent = summaryMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+      yield* Effect.tryPromise(() => fs.writeFile(summaryFilePath, newSummaryContent, 'utf-8'))
+    } else {
+      // No summary exists - add one to the current session file
+      // Find a meaningful message uuid to use as leafUuid (first user or assistant message)
+      const meaningfulMsg = messages.find(
+        (m) => (m.type === 'user' || m.type === 'assistant' || m.type === 'human') && m.uuid
+      )
+      if (meaningfulMsg) {
+        const summaryRecord = {
+          type: 'summary',
+          summary: newTitle,
+          leafUuid: meaningfulMsg.uuid,
+          timestamp: new Date().toISOString(),
+        }
+        // Re-read and update the current session file to add summary after custom-title
+        const currentContent = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+        const currentLines = currentContent.trim().split('\n').filter(Boolean)
+        const currentMessages = currentLines.map((l) => JSON.parse(l) as Record<string, unknown>)
+        // Insert after custom-title (index 0) if it exists, otherwise at the beginning
+        const insertIdx = currentMessages[0]?.type === 'custom-title' ? 1 : 0
+        currentMessages.splice(insertIdx, 0, summaryRecord)
+        const updatedContent = currentMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+        yield* Effect.tryPromise(() => fs.writeFile(filePath, updatedContent, 'utf-8'))
+      }
+    }
 
     return { success: true } satisfies RenameSessionResult
   })
@@ -898,7 +956,10 @@ const loadSessionTreeDataInternal = (
     let summaries: SummaryInfo[]
     if (summariesByTargetSession) {
       // Project-wide loading: use pre-computed summaries targeting this session
-      summaries = [...(summariesByTargetSession.get(sessionId) ?? [])]
+      // Sort by timestamp ascending (oldest first, current/first summary at index 0)
+      summaries = [...(summariesByTargetSession.get(sessionId) ?? [])].sort((a, b) =>
+        (a.timestamp ?? '').localeCompare(b.timestamp ?? '')
+      )
     } else {
       // Single session loading: need to search the entire project for summaries targeting this session
       summaries = []
@@ -944,8 +1005,8 @@ const loadSessionTreeDataInternal = (
         }
       }
     }
-    // Reverse to get newest first
-    summaries.reverse()
+    // Sort by timestamp ascending (oldest first, current/first summary at index 0)
+    summaries.sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
 
     // Find last compact_boundary
     let lastCompactBoundaryUuid: string | undefined
@@ -957,15 +1018,18 @@ const loadSessionTreeDataInternal = (
       }
     }
 
-    // customTitle is only set when user explicitly edits the title via UI
-    // It should be stored separately in session file (not extracted from message)
-    // For now, customTitle is undefined until we implement title editing feature
-    const customTitle: string | undefined = undefined
+    // Get first user message
+    const firstUserMsg = messages.find((m) => m.type === 'user') as Message | undefined
+
+    // customTitle is stored as separate custom-title type line
+    const customTitleMsg = messages.find((m) => m.type === 'custom-title') as
+      | { type: 'custom-title'; customTitle?: string }
+      | undefined
+    const customTitle = customTitleMsg?.customTitle
 
     // Get title from first user message
-    const firstUserMsgForTitle = messages.find((m) => m.type === 'user') as Message | undefined
-    const title = firstUserMsgForTitle
-      ? extractTitle(extractTextContent(firstUserMsgForTitle.message))
+    const title = firstUserMsg
+      ? extractTitle(extractTextContent(firstUserMsg.message))
       : summaries.length > 0
         ? '[Summary Only]'
         : `Session ${sessionId.slice(0, 8)}`
@@ -1024,7 +1088,7 @@ const loadSessionTreeDataInternal = (
       projectName,
       title,
       customTitle,
-      lastSummary: summaries[0]?.summary,
+      currentSummary: summaries[0]?.summary,
       messageCount:
         userAssistantMessages.length > 0
           ? userAssistantMessages.length

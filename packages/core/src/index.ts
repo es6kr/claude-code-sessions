@@ -44,6 +44,7 @@ export {
   extractTitle,
   isInvalidApiKeyMessage,
   isContinuationSummary,
+  getDisplayTitle,
 } from './utils.js'
 
 // Agent management

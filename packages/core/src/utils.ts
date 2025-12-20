@@ -74,6 +74,27 @@ export const isContinuationSummary = (msg: Message): boolean => {
   return text.startsWith('This session is being continued from')
 }
 
+/**
+ * Get display title with fallback logic
+ * Priority: customTitle > currentSummary (truncated) > title > fallback
+ */
+export const getDisplayTitle = (
+  customTitle: string | undefined,
+  currentSummary: string | undefined,
+  title: string | undefined,
+  maxLength = 60,
+  fallback = 'Untitled'
+): string => {
+  if (customTitle) return customTitle
+  if (currentSummary) {
+    return currentSummary.length > maxLength
+      ? currentSummary.slice(0, maxLength - 3) + '...'
+      : currentSummary
+  }
+  if (title && title !== 'Untitled') return title
+  return fallback
+}
+
 // Clean up first message content when splitting session
 // Uses toolUseResult field to extract the actual user message from tool rejection
 export const cleanupSplitFirstMessage = (msg: Message): Message => {

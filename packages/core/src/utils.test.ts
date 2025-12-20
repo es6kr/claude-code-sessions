@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cleanupSplitFirstMessage } from './utils.js'
+import { cleanupSplitFirstMessage, getDisplayTitle } from './utils.js'
 import type { Message } from './types.js'
 
 describe('cleanupSplitFirstMessage', () => {
@@ -100,5 +100,63 @@ describe('cleanupSplitFirstMessage', () => {
     expect(result.timestamp).toBe('2025-01-01T00:00:00Z')
     expect(result.toolUseResult).toBeUndefined()
     expect(result.message?.content).toEqual([{ type: 'text', text: '이건 테스트입니다' }])
+  })
+})
+
+describe('getDisplayTitle', () => {
+  it('should return customTitle when provided', () => {
+    expect(getDisplayTitle('Custom Title', 'Summary', 'Original Title')).toBe('Custom Title')
+  })
+
+  it('should return currentSummary when customTitle is undefined', () => {
+    expect(getDisplayTitle(undefined, 'Summary Text', 'Original Title')).toBe('Summary Text')
+  })
+
+  it('should truncate currentSummary when exceeds maxLength', () => {
+    const longSummary = 'A'.repeat(70) // 70 chars
+    const result = getDisplayTitle(undefined, longSummary, 'Title')
+    expect(result).toBe('A'.repeat(57) + '...')
+    expect(result.length).toBe(60)
+  })
+
+  it('should return title when customTitle and currentSummary are undefined', () => {
+    expect(getDisplayTitle(undefined, undefined, 'Original Title')).toBe('Original Title')
+  })
+
+  it('should return fallback when title is "Untitled"', () => {
+    expect(getDisplayTitle(undefined, undefined, 'Untitled')).toBe('Untitled')
+  })
+
+  it('should return fallback when all are undefined', () => {
+    expect(getDisplayTitle(undefined, undefined, undefined)).toBe('Untitled')
+  })
+
+  it('should use custom fallback when provided', () => {
+    expect(getDisplayTitle(undefined, undefined, undefined, 60, 'No Title')).toBe('No Title')
+  })
+
+  it('should use custom maxLength for truncation', () => {
+    const summary = 'A'.repeat(60) // 60 chars
+    // With maxLength=50, should truncate at 47+...=50
+    const result = getDisplayTitle(undefined, summary, undefined, 50)
+    expect(result).toBe('A'.repeat(47) + '...')
+    expect(result.length).toBe(50)
+  })
+
+  it('should not truncate currentSummary when exactly at maxLength', () => {
+    const summary = 'A'.repeat(60) // Exactly 60 chars
+    const result = getDisplayTitle(undefined, summary, undefined, 60)
+    expect(result).toBe(summary)
+  })
+
+  it('should prefer customTitle over currentSummary even when both are provided', () => {
+    expect(getDisplayTitle('Custom', 'Summary', 'Title')).toBe('Custom')
+  })
+
+  it('should skip empty string values', () => {
+    // Empty string is falsy, so it should fall through to next option
+    expect(getDisplayTitle('', 'Summary', 'Title')).toBe('Summary')
+    expect(getDisplayTitle('', '', 'Title')).toBe('Title')
+    expect(getDisplayTitle('', '', '')).toBe('Untitled')
   })
 })

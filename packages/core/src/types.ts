@@ -270,8 +270,8 @@ export interface SessionTreeData {
   title: string
   /** User-set custom title */
   customTitle?: string
-  /** Last summary text for display/tooltip */
-  lastSummary?: string
+  /** Current (first) summary text for display/tooltip */
+  currentSummary?: string
   messageCount: number
   createdAt?: string
   updatedAt?: string
