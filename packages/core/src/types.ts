@@ -2,34 +2,123 @@
  * Core types for Claude Code session management
  */
 
-// Message content types
-export interface ContentItem {
+// ============================================================================
+// Base Types
+// ============================================================================
+
+/**
+ * Base interface for objects with a type discriminator.
+ * Used as a foundation for message and content types.
+ */
+export interface TypedObject {
   type: string
-  text?: string
-  name?: string
-  input?: unknown
 }
 
+/**
+ * Generic record for JSONL file lines.
+ * Used when parsing session/agent files before type narrowing.
+ */
+export interface JsonlRecord extends TypedObject {
+  [key: string]: unknown
+}
+
+// ============================================================================
+// Message Content Types (Anthropic API format)
+// ============================================================================
+
+/**
+ * Text content block in a message.
+ * @see https://docs.anthropic.com/en/api/messages
+ */
+export interface TextContent {
+  type: 'text'
+  text: string
+}
+
+/**
+ * Tool result content returned after tool execution.
+ * Contains the output from a tool_use request.
+ */
+export interface ToolResultContent {
+  type: 'tool_result'
+  tool_use_id: string
+  content: string
+  is_error?: boolean
+}
+
+/**
+ * Tool use request from the assistant.
+ * Represents a function call with input parameters.
+ */
+export interface ToolUseContent {
+  type: 'tool_use'
+  id: string
+  name: string
+  input: unknown
+}
+
+/**
+ * Union type for all message content blocks.
+ * Includes known types and a fallback for unknown content types.
+ */
+export type ContentItem =
+  | TextContent
+  | ToolResultContent
+  | ToolUseContent
+  | {
+      type: string
+      text?: string
+      name?: string
+      input?: unknown
+      content?: string
+    }
+
+/**
+ * Message payload containing role and content.
+ * Matches Anthropic API message structure.
+ */
 export interface MessagePayload {
   role?: string
   content?: ContentItem[] | string
   model?: string
 }
 
-// Session message
-export interface Message {
+// ============================================================================
+// Session Message Types
+// ============================================================================
+
+/**
+ * A single message in a Claude Code session.
+ * Stored as a line in a JSONL session file.
+ */
+export interface Message extends TypedObject {
+  /** Unique identifier for this message */
   uuid: string
+  /** Parent message UUID for conversation threading */
   parentUuid?: string | null
-  type: string
-  message?: MessagePayload
-  timestamp?: string
+  /** Session ID this message belongs to */
   sessionId?: string
-  isCompactSummary?: boolean
+  /** Timestamp in ISO format */
+  timestamp?: string
+  /** Message content (nested payload structure) */
+  message?: MessagePayload
+  /** Direct content (alternative to message.content) */
+  content?: ContentItem[] | string
+  /** User-defined custom title for this message */
   customTitle?: string
+  /** Summary text for summary-type messages */
   summary?: string
+  /** Flag indicating this is a context continuation summary */
+  isCompactSummary?: boolean
+  /** Tool use result text (for tool_result messages) */
+  toolUseResult?: string
 }
 
-// Session metadata
+// ============================================================================
+// Session & Project Metadata
+// ============================================================================
+
+/** Basic metadata for a session, used in listings and summaries */
 export interface SessionMeta {
   id: string
   projectName: string
@@ -39,7 +128,7 @@ export interface SessionMeta {
   updatedAt?: string
 }
 
-// Project info
+/** Project directory information */
 export interface Project {
   name: string
   displayName: string
@@ -47,13 +136,19 @@ export interface Project {
   sessionCount: number
 }
 
-// Todo item
+// ============================================================================
+// Todo Types
+// ============================================================================
+
+/** A single todo item from TodoWrite tool */
 export interface TodoItem {
   content: string
   status: 'pending' | 'in_progress' | 'completed'
+  /** Active form text shown during execution */
   activeForm?: string
 }
 
+/** Aggregated todos for a session including agent todos */
 export interface SessionTodos {
   sessionId: string
   sessionTodos: TodoItem[]
@@ -61,7 +156,11 @@ export interface SessionTodos {
   hasTodos: boolean
 }
 
-// File change tracking
+// ============================================================================
+// File Change Tracking
+// ============================================================================
+
+/** A file modification recorded during a session */
 export interface FileChange {
   path: string
   action: 'created' | 'modified' | 'deleted'
@@ -69,6 +168,7 @@ export interface FileChange {
   messageUuid?: string
 }
 
+/** Summary of all file changes in a session */
 export interface SessionFilesSummary {
   sessionId: string
   projectName: string
@@ -76,7 +176,11 @@ export interface SessionFilesSummary {
   totalChanges: number
 }
 
-// Operation results
+// ============================================================================
+// Operation Results
+// ============================================================================
+
+/** Result of deleting a session */
 export interface DeleteSessionResult {
   success: boolean
   backupPath?: string
@@ -84,11 +188,13 @@ export interface DeleteSessionResult {
   deletedTodos?: number
 }
 
+/** Result of renaming a session */
 export interface RenameSessionResult {
   success: boolean
   error?: string
 }
 
+/** Result of splitting a session at a message */
 export interface SplitSessionResult {
   success: boolean
   newSessionId?: string
@@ -98,11 +204,13 @@ export interface SplitSessionResult {
   error?: string
 }
 
+/** Result of moving a session to another project */
 export interface MoveSessionResult {
   success: boolean
   error?: string
 }
 
+/** Result of clearing empty/invalid sessions */
 export interface ClearSessionsResult {
   success: boolean
   deletedCount: number
@@ -111,6 +219,7 @@ export interface ClearSessionsResult {
   deletedOrphanTodoCount?: number
 }
 
+/** Preview of sessions that would be cleaned up */
 export interface CleanupPreview {
   project: string
   emptySessions: SessionMeta[]
@@ -120,7 +229,11 @@ export interface CleanupPreview {
   orphanTodoCount?: number
 }
 
-// Search result
+// ============================================================================
+// Search Types
+// ============================================================================
+
+/** A search result matching a session or message */
 export interface SearchResult {
   sessionId: string
   projectName: string
@@ -131,37 +244,46 @@ export interface SearchResult {
   timestamp?: string
 }
 
-// Summary message from session file
+// ============================================================================
+// Tree View Types (for UI rendering)
+// ============================================================================
+
+/** Summary extracted from a session for display */
 export interface SummaryInfo {
   summary: string
   leafUuid?: string
   timestamp?: string
 }
 
-// Agent info for tree display
+/** Agent information for tree display */
 export interface AgentInfo {
   id: string
   name?: string
   messageCount: number
 }
 
-// Session tree node with full data
+/** Full session data for tree view rendering */
 export interface SessionTreeData {
   id: string
   projectName: string
-  title: string // First user message title
-  customTitle?: string // User-set custom title
-  lastSummary?: string // Last summary text for display/tooltip
+  /** First user message title */
+  title: string
+  /** User-set custom title */
+  customTitle?: string
+  /** Last summary text for display/tooltip */
+  lastSummary?: string
   messageCount: number
   createdAt?: string
   updatedAt?: string
-  summaries: SummaryInfo[] // All summaries in reverse order (newest first)
+  /** All summaries in reverse order (newest first) */
+  summaries: SummaryInfo[]
   agents: AgentInfo[]
   todos: SessionTodos
-  lastCompactBoundaryUuid?: string // UUID of last compact_boundary
+  /** UUID of last compact_boundary message */
+  lastCompactBoundaryUuid?: string
 }
 
-// Project tree node with sessions
+/** Project with all sessions for tree view */
 export interface ProjectTreeData {
   name: string
   displayName: string

@@ -10,6 +10,7 @@ import {
   extractTitle,
   isInvalidApiKeyMessage,
   isContinuationSummary,
+  cleanupSplitFirstMessage,
 } from './utils.js'
 import { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from './agents.js'
 import {
@@ -31,12 +32,13 @@ import type {
   MoveSessionResult,
   ClearSessionsResult,
   CleanupPreview,
-  ContentItem,
+  TextContent,
   SearchResult,
   SessionTreeData,
   SummaryInfo,
   AgentInfo,
   ProjectTreeData,
+  JsonlRecord,
 } from './types.js'
 
 // List all project directories
@@ -272,14 +274,14 @@ export const renameSession = (
     if (firstMsg?.message?.content && Array.isArray(firstMsg.message.content)) {
       // Find first non-IDE text content
       const textIdx = firstMsg.message.content.findIndex(
-        (item): item is ContentItem =>
+        (item): item is TextContent =>
           typeof item === 'object' &&
           item?.type === 'text' &&
           !item.text?.trim().startsWith('<ide_')
       )
 
       if (textIdx >= 0) {
-        const item = firstMsg.message.content[textIdx] as ContentItem
+        const item = firstMsg.message.content[textIdx] as TextContent
         const oldText = item.text ?? ''
         // Remove existing title pattern (first line ending with \n\n)
         const cleanedText = oldText.replace(/^[^\n]+\n\n/, '')
@@ -456,7 +458,7 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
     const lines = content.trim().split('\n').filter(Boolean)
 
     // Parse all messages preserving their full structure
-    const allMessages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+    const allMessages = lines.map((line) => JSON.parse(line) as Message)
 
     // Find the split point
     const splitIndex = allMessages.findIndex((m) => m.uuid === splitAtMessageUuid)
@@ -482,12 +484,12 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
     const shouldDuplicate = isContinuationSummary(splitMessage)
 
     // Split messages - if continuation summary, include it in both sessions
-    let remainingMessages: Record<string, unknown>[]
+    let remainingMessages: Message[]
     const movedMessages = allMessages.slice(splitIndex)
 
     if (shouldDuplicate) {
       // Create a copy of the continuation message with new UUID for the original session
-      const duplicatedMessage: Record<string, unknown> = {
+      const duplicatedMessage: Message = {
         ...splitMessage,
         uuid: crypto.randomUUID(),
         sessionId: sessionId, // Keep original session ID
@@ -499,17 +501,19 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
 
     // Update moved messages with new sessionId and fix first message's parentUuid
     const updatedMovedMessages = movedMessages.map((msg, index) => {
-      const updated: Record<string, unknown> = { ...msg, sessionId: newSessionId }
+      let updated: Message = { ...msg, sessionId: newSessionId }
       if (index === 0) {
         // First message of new session should have no parent
         updated.parentUuid = null
+        // Clean up first message content if it's a tool_result rejection
+        updated = cleanupSplitFirstMessage(updated)
       }
       return updated
     })
 
     // Clone summary message to new session if exists
     if (summaryMessage) {
-      const clonedSummary: Record<string, unknown> = {
+      const clonedSummary = {
         ...summaryMessage,
         leafUuid: updatedMovedMessages[0]?.uuid ?? null,
       }
@@ -888,7 +892,7 @@ const loadSessionTreeDataInternal = (
     const filePath = path.join(projectPath, `${sessionId}.jsonl`)
     const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
     const lines = content.trim().split('\n').filter(Boolean)
-    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+    const messages = lines.map((line) => JSON.parse(line) as JsonlRecord)
 
     // Get summaries that TARGET this session (by leafUuid pointing to messages in this session)
     let summaries: SummaryInfo[]
@@ -915,7 +919,7 @@ const loadSessionTreeDataInternal = (
           const otherLines = otherContent.trim().split('\n').filter(Boolean)
           for (const line of otherLines) {
             try {
-              const msg = JSON.parse(line) as Record<string, unknown>
+              const msg = JSON.parse(line) as JsonlRecord
               if (
                 msg.type === 'summary' &&
                 typeof msg.summary === 'string' &&
@@ -983,7 +987,7 @@ const loadSessionTreeDataInternal = (
       try {
         const agentContent = yield* Effect.tryPromise(() => fs.readFile(agentPath, 'utf-8'))
         const agentLines = agentContent.trim().split('\n').filter(Boolean)
-        const agentMsgs = agentLines.map((l) => JSON.parse(l) as Record<string, unknown>)
+        const agentMsgs = agentLines.map((l) => JSON.parse(l) as JsonlRecord)
         const agentUserAssistant = agentMsgs.filter(
           (m) => m.type === 'user' || m.type === 'assistant'
         )
@@ -1069,7 +1073,7 @@ export const loadProjectTreeData = (projectName: string) =>
             const lines = content.trim().split('\n').filter(Boolean)
             for (const line of lines) {
               try {
-                const msg = JSON.parse(line) as Record<string, unknown>
+                const msg = JSON.parse(line) as JsonlRecord
                 if (msg.uuid && typeof msg.uuid === 'string') {
                   globalUuidMap.set(msg.uuid, {
                     sessionId: fileSessionId,

@@ -5,6 +5,7 @@ import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir } from './paths.js'
+import type { Message } from './types.js'
 
 // Find agent files linked to a session
 export const findLinkedAgents = (projectName: string, sessionId: string) =>
@@ -93,4 +94,36 @@ export const deleteOrphanAgents = (projectName: string) =>
     }
 
     return { success: true, deletedAgents, count: deletedAgents.length }
+  })
+
+// Load agent messages from agent session file
+export const loadAgentMessages = (
+  projectName: string,
+  _sessionId: string, // Reserved for future validation
+  agentId: string
+) =>
+  Effect.gen(function* () {
+    const projectPath = path.join(getSessionsDir(), projectName)
+    // Agent files are stored as agent-<agentId>.jsonl in project directory
+    const agentFilePath = path.join(projectPath, `${agentId}.jsonl`)
+
+    const content = yield* Effect.tryPromise(() => fs.readFile(agentFilePath, 'utf-8'))
+
+    const lines = content.split('\n').filter((line) => line.trim())
+    const messages: Message[] = []
+
+    for (const line of lines) {
+      try {
+        const parsed = JSON.parse(line) as Message
+        // Skip header line (contains sessionId)
+        if ('sessionId' in parsed && !('type' in parsed)) {
+          continue
+        }
+        messages.push(parsed)
+      } catch {
+        // Skip invalid JSON lines
+      }
+    }
+
+    return messages
   })

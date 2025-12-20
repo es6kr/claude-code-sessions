@@ -1,7 +1,10 @@
 /**
  * Utility functions for message processing
  */
-import type { ContentItem, Message, MessagePayload } from './types.js'
+import type { Message, MessagePayload, TextContent } from './types.js'
+import { createLogger } from './logger.js'
+
+const logger = createLogger('utils')
 
 // Extract text content from message payload
 export const extractTextContent = (message: MessagePayload | undefined): string => {
@@ -16,8 +19,14 @@ export const extractTextContent = (message: MessagePayload | undefined): string 
   // If content is array, extract text items
   if (Array.isArray(content)) {
     return content
-      .filter((item): item is ContentItem => typeof item === 'object' && item?.type === 'text')
-      .map((item) => item.text ?? '')
+      .filter((item): item is TextContent => typeof item === 'object' && item?.type === 'text')
+      .map((item) => {
+        if (item.text == null) {
+          logger.warn('TextContent item has undefined or null text property')
+          return ''
+        }
+        return item.text
+      })
       .join('')
   }
 
@@ -55,7 +64,7 @@ export const isInvalidApiKeyMessage = (msg: Message): boolean => {
 }
 
 // Check if a message is a continuation summary (from compact)
-export const isContinuationSummary = (msg: Record<string, unknown>): boolean => {
+export const isContinuationSummary = (msg: Message): boolean => {
   // isCompactSummary flag is set by Claude Code for continuation summaries
   if (msg.isCompactSummary === true) return true
 
@@ -63,4 +72,29 @@ export const isContinuationSummary = (msg: Record<string, unknown>): boolean => 
   if (msg.type !== 'user') return false
   const text = extractTextContent(msg.message as MessagePayload | undefined)
   return text.startsWith('This session is being continued from')
+}
+
+// Clean up first message content when splitting session
+// Uses toolUseResult field to extract the actual user message from tool rejection
+export const cleanupSplitFirstMessage = (msg: Message): Message => {
+  const toolUseResult = msg.toolUseResult
+  if (!toolUseResult) return msg
+
+  // Extract rejection reason from toolUseResult
+  const rejectionMarker = 'The user provided the following reason for the rejection:'
+  const rejectionIndex = toolUseResult.indexOf(rejectionMarker)
+  if (rejectionIndex === -1) return msg
+
+  const text = toolUseResult.slice(rejectionIndex + rejectionMarker.length).trim()
+  if (!text) return msg
+
+  // Replace message content with extracted text
+  return {
+    ...msg,
+    message: {
+      ...msg.message,
+      content: [{ type: 'text', text } satisfies TextContent],
+    },
+    toolUseResult: undefined,
+  }
 }

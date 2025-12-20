@@ -174,7 +174,6 @@ export const tryGetCwdFromFile = (
       return null
     }
 
-    logger.debug(`tryGetCwdFromFile: ${basename} -> cwd=${cwd}`)
     return cwd
   } catch (e) {
     logger.warn(`tryGetCwdFromFile: ${basename} -> read error: ${e}`)
@@ -211,7 +210,6 @@ export const getRealPathFromSession = (
     // Find cwd that matches folder name
     const matched = cwdList.find((cwd) => pathToFolderName(cwd) === folderName)
     if (matched) {
-      logger.debug(`getRealPathFromSession: ${folderName} -> ${matched}`)
       return matched
     }
 

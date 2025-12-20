@@ -47,7 +47,12 @@ export {
 } from './utils.js'
 
 // Agent management
-export { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from './agents.js'
+export {
+  findLinkedAgents,
+  findOrphanAgents,
+  deleteOrphanAgents,
+  loadAgentMessages,
+} from './agents.js'
 
 // Todo management
 export {
