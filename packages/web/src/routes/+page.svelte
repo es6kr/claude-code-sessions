@@ -2,8 +2,8 @@
   import { onMount } from 'svelte'
   import { browser } from '$app/environment'
   import * as api from '$lib/api'
-  import type { Project, SessionMeta, SessionData, Message } from '$lib/api'
-  import { ProjectTree, MessageList } from '$lib/components'
+  import type { Project, SessionMeta, SessionData, Message, TodoItem, AgentInfo } from '$lib/api'
+  import { ProjectTree, SessionViewer } from '$lib/components'
 
   // State
   let projects = $state<Project[]>([])
@@ -12,6 +12,8 @@
   let expandedProjects = $state<Set<string>>(new Set())
   let selectedSession = $state<SessionMeta | null>(null)
   let messages = $state<Message[]>([])
+  let todos = $state<TodoItem[]>([])
+  let agents = $state<AgentInfo[]>([])
   let loading = $state(false)
   let loadingProject = $state<string | null>(null)
   let error = $state<string | null>(null)
@@ -119,6 +121,24 @@
     error = null
     try {
       messages = await api.getSession(session.projectName, session.id)
+
+      // Load todos and agents from cached session data or fetch fresh
+      const sessionData = projectSessionData.get(session.projectName)?.get(session.id)
+      if (sessionData) {
+        // Use cached data from expandProject
+        const sessionTodos = sessionData.todos?.sessionTodos ?? []
+        const agentTodoItems = sessionData.todos?.agentTodos?.flatMap((a) => a.todos) ?? []
+        todos = [...sessionTodos, ...agentTodoItems]
+        agents = sessionData.agents ?? []
+      } else {
+        // Fetch fresh data
+        const treeData = await api.getSessionTreeData(session.projectName, session.id)
+        const sessionTodos = treeData.todos?.sessionTodos ?? []
+        const agentTodoItems = treeData.todos?.agentTodos?.flatMap((a) => a.todos) ?? []
+        todos = [...sessionTodos, ...agentTodoItems]
+        agents = treeData.agents ?? []
+      }
+
       if (shouldUpdateHash) updateHash(session.projectName, session.id)
     } catch (e) {
       error = String(e)
@@ -349,9 +369,12 @@
     onMoveSession={handleMoveSession}
   />
 
-  <MessageList
+  <SessionViewer
     session={selectedSession}
     {messages}
+    {todos}
+    {agents}
+    onMessagesChange={(newMessages) => (messages = newMessages)}
     onDeleteMessage={handleDeleteMessage}
     onEditTitle={handleEditCustomTitle}
     onSplitSession={handleSplitSession}

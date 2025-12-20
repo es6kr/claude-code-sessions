@@ -273,6 +273,18 @@ export interface SessionData {
 export const expandProject = (projectName: string) =>
   get<SessionData[]>(`/project/expand?project=${encodeURIComponent(projectName)}`)
 
+// Get session tree data (single session with todos, agents)
+export const getSessionTreeData = (projectName: string, sessionId: string) =>
+  get<SessionData>(
+    `/session/tree-data?project=${encodeURIComponent(projectName)}&id=${encodeURIComponent(sessionId)}`
+  )
+
+// Get agent messages
+export const getAgentMessages = (projectName: string, sessionId: string, agentId: string) =>
+  get<Message[]>(
+    `/agent/messages?project=${encodeURIComponent(projectName)}&session=${encodeURIComponent(sessionId)}&agent=${encodeURIComponent(agentId)}`
+  )
+
 // Rename session with optional summary update
 export const renameSessionWithSummary = (
   project: string,

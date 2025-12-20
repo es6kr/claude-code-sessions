@@ -2,17 +2,19 @@
   import { onMount } from 'svelte'
   import { page } from '$app/state'
   import * as api from '$lib/api'
-  import type { Message, SessionMeta } from '$lib/api'
-  import { MessageList } from '$lib/components'
+  import type { Message, SessionMeta, TodoItem, AgentInfo } from '$lib/api'
+  import { SessionViewer } from '$lib/components'
 
   // State
   let session = $state<SessionMeta | null>(null)
   let messages = $state<Message[]>([])
+  let todos = $state<TodoItem[]>([])
+  let agents = $state<AgentInfo[]>([])
   let loading = $state(true)
   let error = $state<string | null>(null)
   let projectDisplayName = $state<string>('')
 
-  // Scroll container for MessageList
+  // Scroll container for SessionViewer
   let scrollContainer: HTMLDivElement | undefined = $state()
 
   // Get params from URL
@@ -41,6 +43,14 @@
 
       // Load messages
       messages = await api.getSession(projectName, sessionId)
+
+      // Load session tree data for todos and agents
+      const sessionData = await api.getSessionTreeData(projectName, sessionId)
+      // Flatten session todos and agent todos
+      const sessionTodos = sessionData.todos?.sessionTodos ?? []
+      const agentTodoItems = sessionData.todos?.agentTodos?.flatMap((a) => a.todos) ?? []
+      todos = [...sessionTodos, ...agentTodoItems]
+      agents = sessionData.agents ?? []
     } catch (e) {
       error = String(e)
     } finally {
@@ -119,9 +129,13 @@
 
 <div class="min-h-screen flex flex-col bg-gh-bg">
   <!-- Header with back button -->
-  <header class="flex-shrink-0 p-4 border-b border-gh-border bg-gh-canvas">
-    <div class="flex items-center gap-4">
-      <a href="/" class="text-gh-muted hover:text-gh-fg" title="Back to home">
+  <header class="flex-shrink-0 border-b border-gh-border bg-gh-canvas">
+    <div class="flex items-center gap-4 p-4">
+      <a
+        href={`/#project=${encodeURIComponent(projectName)}`}
+        class="text-gh-muted hover:text-gh-fg"
+        title="Back to project"
+      >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
             stroke-linecap="round"
@@ -135,7 +149,7 @@
     </div>
   </header>
 
-  <!-- Messages -->
+  <!-- Content -->
   <div bind:this={scrollContainer} class="flex-1 overflow-y-auto">
     {#if loading}
       <div class="flex items-center justify-center h-full">
@@ -146,14 +160,19 @@
         <div class="text-gh-red">{error}</div>
       </div>
     {:else}
-      <MessageList
+      <SessionViewer
         {session}
         {messages}
+        {agents}
+        {todos}
+        onMessagesChange={(newMessages) => (messages = newMessages)}
         onDeleteMessage={handleDeleteMessage}
         onEditTitle={handleEditTitle}
         onSplitSession={handleSplitSession}
         externalScrollContainer={scrollContainer}
         enableScroll={false}
+        fullWidth={true}
+        showHeader={false}
       />
     {/if}
   </div>

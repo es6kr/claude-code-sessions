@@ -10,3 +10,4 @@ build/
 .DS_Store
 packages/web/test-results/
 .claude/
+.playwright-mcp/

@@ -13,6 +13,7 @@
     showHeader?: boolean
     enableScroll?: boolean
     externalScrollContainer?: HTMLElement | null
+    fullWidth?: boolean
   }
 
   let {
@@ -24,6 +25,7 @@
     showHeader = true,
     enableScroll = true,
     externalScrollContainer = null,
+    fullWidth = false,
   }: Props = $props()
 
   const openSessionFile = async () => {
@@ -74,15 +76,23 @@
 </script>
 
 <section
-  class="bg-gh-bg-secondary border border-gh-border rounded-lg overflow-hidden flex flex-col"
+  class="bg-gh-bg-secondary overflow-hidden flex flex-col {fullWidth
+    ? ''
+    : 'border border-gh-border rounded-lg'}"
 >
   <!-- Header -->
   {#if showHeader}
-    <div class="p-4 border-b border-gh-border bg-gh-bg flex justify-between items-start">
-      <div class="flex-1 min-w-0">
+    <div
+      class="p-4 border-b border-gh-border bg-gh-bg flex flex-wrap justify-between items-start gap-2"
+    >
+      <div class="flex-1 min-w-[340px]">
         {#if session}
-          <h2 class="text-base font-semibold">
-            {truncate(session.title ?? 'Untitled', 50)} ({messages.length} messages)
+          <h2 class="text-base font-semibold flex items-center gap-2">
+            <span>{truncate(session.title ?? 'Untitled', 50)}</span>
+            <span
+              class="text-sm text-gh-text-secondary font-normal"
+              title="{messages.length} messages">💬 {messages.length}</span
+            >
           </h2>
           <button
             class="text-xs text-gh-text-secondary font-mono mt-1 hover:text-gh-accent

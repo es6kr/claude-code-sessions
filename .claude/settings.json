@@ -7,6 +7,20 @@
           {
             "type": "command",
             "command": "if echo \"$CLAUDE_FILE_PATHS\" | grep -qE 'packages/(vscode-extension|core)/'; then touch /tmp/claude-sessions-vsix-rebuild-needed; fi"
+          },
+          {
+            "type": "command",
+            "command": "if echo \"$CLAUDE_FILE_PATHS\" | grep -qE 'packages/web/'; then touch /tmp/claude-sessions-web-modified; fi"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -f /tmp/claude-sessions-web-modified ]; then rm /tmp/claude-sessions-web-modified && echo '[ui-confirm] Web UI가 수정되었습니다. /ui-confirm 으로 확인하세요.'; fi"
           }
         ]
       }

@@ -246,7 +246,13 @@
     class="bg-gh-bg-secondary border-b border-gh-border px-8 py-4 flex justify-between items-center"
   >
     <div class="flex items-center gap-3">
-      <a href="/" class="flex items-center gap-2 hover:text-gh-accent" title="Claude Sessions">
+      <a
+        href={currentSessionInfo
+          ? `/#project=${encodeURIComponent(currentSessionInfo.projectName)}`
+          : '/'}
+        class="flex items-center gap-2 hover:text-gh-accent"
+        title={currentSessionInfo ? 'Back to project' : 'Claude Sessions'}
+      >
         <!-- Terminal/Session icon -->
         <svg class="w-6 h-6 text-gh-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path
