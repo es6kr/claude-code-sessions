@@ -8,13 +8,11 @@ export const POST: RequestHandler = async ({ request }) => {
     project: string
     id: string
     title: string
-    summary?: string
   }
   if (!body.project || !body.id || !body.title) {
     throw error(400, 'project, id, and title required')
   }
-  const result = await Effect.runPromise(
-    session.renameSession(body.project, body.id, body.title, body.summary)
-  )
+  // title is used as the new summary (currentSummary = customTitle)
+  const result = await Effect.runPromise(session.renameSession(body.project, body.id, body.title))
   return json(result)
 }

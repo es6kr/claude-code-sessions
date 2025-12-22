@@ -19,7 +19,7 @@ export interface SessionNode {
   agents: string[] // Agent file names
   todos: string[] // Todo file names
   summaries: SummaryInfo[] // Summary messages from session
-  lastSummary?: SummaryInfo // Most recent summary for quick access
+  currentSummary?: SummaryInfo // Current (first) summary for quick access
   messages?: Message[] // Loaded messages (lazy)
 }
 
@@ -93,7 +93,10 @@ export const findCompactBoundaryIndex = (messages: Message[]): number => {
   for (let i = messages.length - 1; i >= 0; i--) {
     const msg = messages[i]
     // Check for compact_boundary type or isCompactSummary flag
-    if (msg.type === 'compact_boundary' || (msg as Message & { isCompactSummary?: boolean }).isCompactSummary) {
+    if (
+      msg.type === 'compact_boundary' ||
+      (msg as Message & { isCompactSummary?: boolean }).isCompactSummary
+    ) {
       return i
     }
   }
@@ -124,6 +127,6 @@ export const createSessionNode = (meta: SessionMeta): SessionNode => ({
   agents: [],
   todos: [],
   summaries: [],
-  lastSummary: undefined,
+  currentSummary: undefined,
   messages: undefined,
 })

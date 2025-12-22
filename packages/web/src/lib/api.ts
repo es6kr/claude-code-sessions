@@ -259,7 +259,7 @@ export interface SessionData {
   projectName: string
   title: string
   customTitle?: string
-  lastSummary?: string
+  currentSummary?: string
   messageCount: number
   createdAt?: string
   updatedAt?: string
@@ -284,11 +284,3 @@ export const getAgentMessages = (projectName: string, sessionId: string, agentId
   get<Message[]>(
     `/agent/messages?project=${encodeURIComponent(projectName)}&session=${encodeURIComponent(sessionId)}&agent=${encodeURIComponent(agentId)}`
   )
-
-// Rename session with optional summary update
-export const renameSessionWithSummary = (
-  project: string,
-  id: string,
-  title: string,
-  summary?: string
-) => post<{ success: boolean }>('/session/rename', { project, id, title, summary })
