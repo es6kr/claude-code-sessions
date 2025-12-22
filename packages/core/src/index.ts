@@ -70,6 +70,7 @@ export {
   listSessions,
   readSession,
   deleteMessage,
+  restoreMessage,
   deleteSession,
   renameSession,
   getSessionFiles,

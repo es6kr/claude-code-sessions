@@ -48,22 +48,27 @@
   let agentMessages = $state<Message[]>([])
   let loadingAgent = $state(false)
 
-  // Undo delete state - batch of pending deletes with shared countdown
-  interface PendingDelete {
+  // Undo stack - stores already-deleted messages that can be restored
+  interface DeletedMessage {
     msg: Message
     index: number
     isAgent: boolean
+    sessionId: string // The session/agent ID where it was deleted from
   }
-  let pendingDeletes = $state<PendingDelete[]>([])
-  let deleteCountdown = $state(0)
-  let deleteTimeoutId = $state<ReturnType<typeof setTimeout> | null>(null)
+  let undoStack = $state<DeletedMessage[]>([])
+  let undoCountdown = $state(0)
+  let undoTimeoutId = $state<ReturnType<typeof setTimeout> | null>(null)
 
-  // Countdown timer effect
+  // Countdown timer effect for undo availability
   $effect(() => {
-    if (deleteCountdown <= 0) return
+    if (undoCountdown <= 0) return
 
     const intervalId = setInterval(() => {
-      deleteCountdown = Math.max(0, deleteCountdown - 1)
+      undoCountdown = Math.max(0, undoCountdown - 1)
+      if (undoCountdown === 0) {
+        // Time expired, clear undo stack
+        undoStack = []
+      }
     }, 1000)
 
     return () => clearInterval(intervalId)
@@ -99,102 +104,89 @@
     }
   })
 
-  // Execute all pending deletes
-  const executeAllDeletes = async () => {
-    if (!session) return
+  // Undo all deletions - restore messages via API
+  const undoAllDeletes = async () => {
+    if (undoTimeoutId) clearTimeout(undoTimeoutId)
+    if (!session || undoStack.length === 0) return
 
-    for (const pd of pendingDeletes) {
-      // Use uuid, messageId (file-history-snapshot), or leafUuid (summary)
-      const msgId = pd.msg.uuid || pd.msg.messageId || pd.msg.leafUuid
-      if (!msgId) continue
+    // Restore in reverse order (most recent first) to maintain correct indices
+    const toRestore = [...undoStack].reverse()
 
+    for (const item of toRestore) {
       try {
-        if (pd.isAgent && selectedAgentId) {
-          await api.deleteMessage(session.projectName, selectedAgentId, msgId)
-        } else {
-          await api.deleteMessage(session.projectName, session.id, msgId)
-        }
-        onDeleteMessage?.(pd.msg)
-      } catch (e) {
-        console.error('Failed to delete message:', e)
-        // Restore message on error
-        if (pd.isAgent) {
-          agentMessages = [...agentMessages, pd.msg].sort((a, b) =>
-            (a.timestamp ?? '').localeCompare(b.timestamp ?? '')
-          )
+        await api.restoreMessage(
+          session.projectName,
+          item.sessionId,
+          item.msg as unknown as Record<string, unknown>,
+          item.index
+        )
+        // Update UI
+        if (item.isAgent) {
+          const newAgentMessages = [...agentMessages]
+          newAgentMessages.splice(item.index, 0, item.msg)
+          agentMessages = newAgentMessages
         } else {
           const newMessages = [...messages]
-          newMessages.splice(pd.index, 0, pd.msg)
+          newMessages.splice(item.index, 0, item.msg)
           onMessagesChange?.(newMessages)
         }
+      } catch (e) {
+        console.error('Failed to restore message:', e)
       }
     }
-    // Clear all
-    pendingDeletes = []
-    deleteCountdown = 0
-    deleteTimeoutId = null
-  }
 
-  // Undo all deletions - restore all messages at original indices
-  const undoAllDeletes = () => {
-    if (deleteTimeoutId) clearTimeout(deleteTimeoutId)
-
-    // Separate agent and session messages
-    const agentDeletes = pendingDeletes.filter((pd) => pd.isAgent)
-    const sessionDeletes = pendingDeletes.filter((pd) => !pd.isAgent)
-
-    // Restore agent messages (insert at original indices, sorted by index ascending)
-    if (agentDeletes.length > 0) {
-      const sorted = [...agentDeletes].sort((a, b) => a.index - b.index)
-      const newAgentMessages = [...agentMessages]
-      for (const pd of sorted) {
-        newAgentMessages.splice(pd.index, 0, pd.msg)
-      }
-      agentMessages = newAgentMessages
-    }
-
-    // Restore session messages (insert at original indices, sorted by index ascending)
-    if (sessionDeletes.length > 0) {
-      const sorted = [...sessionDeletes].sort((a, b) => a.index - b.index)
-      const newMessages = [...messages]
-      for (const pd of sorted) {
-        newMessages.splice(pd.index, 0, pd.msg)
-      }
-      onMessagesChange?.(newMessages)
-    }
-
-    // Clear all
-    pendingDeletes = []
-    deleteCountdown = 0
-    deleteTimeoutId = null
+    // Clear undo stack
+    undoStack = []
+    undoCountdown = 0
+    undoTimeoutId = null
   }
 
   // Handle message deletion with undo (works for both session and agent messages)
-  const handleMessageDeleteWithUndo = (msg: Message, isAgent: boolean) => {
+  // Deletes immediately via API, stores in undo stack for potential restore
+  const handleMessageDeleteWithUndo = async (msg: Message, isAgent: boolean) => {
     if (!session) return
-    // Use uuid, messageId (file-history-snapshot), or leafUuid (summary)
     const msgId = msg.uuid || msg.messageId || msg.leafUuid
     if (!msgId) return
 
+    const targetSessionId = isAgent && selectedAgentId ? selectedAgentId : session.id
+    let index: number
+
     if (isAgent) {
-      // Find and remove message from agent list (visually)
-      const index = agentMessages.findIndex((m) => (m.uuid || m.messageId || m.leafUuid) === msgId)
+      index = agentMessages.findIndex((m) => (m.uuid || m.messageId || m.leafUuid) === msgId)
       if (index === -1) return
-      agentMessages = agentMessages.filter((m) => (m.uuid || m.messageId || m.leafUuid) !== msgId)
-      pendingDeletes = [...pendingDeletes, { msg, index, isAgent: true }]
     } else {
-      // Find and remove message from session messages (visually)
-      const index = messages.findIndex((m) => (m.uuid || m.messageId || m.leafUuid) === msgId)
+      index = messages.findIndex((m) => (m.uuid || m.messageId || m.leafUuid) === msgId)
       if (index === -1) return
-      const newMessages = messages.filter((m) => (m.uuid || m.messageId || m.leafUuid) !== msgId)
-      onMessagesChange?.(newMessages)
-      pendingDeletes = [...pendingDeletes, { msg, index, isAgent: false }]
     }
 
-    // Reset countdown and timer
-    if (deleteTimeoutId) clearTimeout(deleteTimeoutId)
-    deleteCountdown = 10
-    deleteTimeoutId = setTimeout(() => executeAllDeletes(), 10000)
+    try {
+      // Delete immediately via API
+      await api.deleteMessage(session.projectName, targetSessionId, msgId)
+
+      // Remove from UI
+      if (isAgent) {
+        agentMessages = agentMessages.filter((m) => (m.uuid || m.messageId || m.leafUuid) !== msgId)
+      } else {
+        const newMessages = messages.filter((m) => (m.uuid || m.messageId || m.leafUuid) !== msgId)
+        onMessagesChange?.(newMessages)
+      }
+
+      // Add to undo stack
+      undoStack = [...undoStack, { msg, index, isAgent, sessionId: targetSessionId }]
+
+      // Reset countdown and timer
+      if (undoTimeoutId) clearTimeout(undoTimeoutId)
+      undoCountdown = 10
+      undoTimeoutId = setTimeout(() => {
+        undoStack = []
+        undoCountdown = 0
+        undoTimeoutId = null
+      }, 10000)
+
+      onDeleteMessage?.(msg)
+    } catch (e) {
+      console.error('Failed to delete message:', e)
+    }
   }
 
   // Handle agent message deletion with undo
@@ -432,17 +424,15 @@
   </div>
 
   <!-- Undo Toast -->
-  {#if pendingDeletes.length > 0}
+  {#if undoStack.length > 0}
     <div
       class="fixed bottom-4 left-1/2 -translate-x-1/2 bg-neutral-500/20 border border-neutral-600
              rounded-lg shadow-2xl px-4 py-3 flex items-center gap-4 z-50 backdrop-blur-sm"
     >
       <span class="text-sm text-white">
-        {pendingDeletes.length === 1
-          ? 'Message deleted'
-          : `${pendingDeletes.length} messages deleted`}
+        {undoStack.length === 1 ? 'Message deleted' : `${undoStack.length} messages deleted`}
       </span>
-      <span class="text-xs text-gh-text-secondary tabular-nums">{deleteCountdown}s</span>
+      <span class="text-xs text-gh-text-secondary tabular-nums">{undoCountdown}s</span>
       <button
         onclick={undoAllDeletes}
         class="px-3 py-1 text-sm font-medium text-gh-accent hover:bg-gh-border-subtle rounded transition-colors"
@@ -451,11 +441,12 @@
       </button>
       <button
         onclick={() => {
-          if (deleteTimeoutId) clearTimeout(deleteTimeoutId)
-          executeAllDeletes()
+          if (undoTimeoutId) clearTimeout(undoTimeoutId)
+          undoStack = []
+          undoCountdown = 0
         }}
         class="px-2 py-1 text-sm text-gh-text-secondary hover:text-gh-text hover:bg-gh-border-subtle rounded transition-colors"
-        title="Close and delete immediately"
+        title="Dismiss (already deleted)"
       >
         ✕
       </button>

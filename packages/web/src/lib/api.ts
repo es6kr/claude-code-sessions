@@ -112,8 +112,19 @@ export const renameSession = (project: string, id: string, title: string) =>
   post<{ success: boolean }>('/session/rename', { project, id, title })
 
 export const deleteMessage = (project: string, session: string, uuid: string) =>
-  del<{ success: boolean }>(
+  del<{ success: boolean; deletedMessage?: Message }>(
     `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&uuid=${encodeURIComponent(uuid)}`
+  )
+
+export const restoreMessage = (
+  project: string,
+  session: string,
+  message: Record<string, unknown>,
+  index: number
+) =>
+  post<{ success: boolean }>(
+    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}`,
+    { message, index }
   )
 
 export const updateCustomTitle = (

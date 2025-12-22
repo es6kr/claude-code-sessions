@@ -3,6 +3,24 @@ import { Effect } from 'effect'
 import * as session from '$lib/server/session'
 import type { RequestHandler } from './$types'
 
+// Restore a deleted message
+export const POST: RequestHandler = async ({ url, request }) => {
+  const projectName = url.searchParams.get('project')
+  const sessionId = url.searchParams.get('session')
+  if (!projectName || !sessionId) {
+    throw error(400, 'project and session parameters required')
+  }
+  const body = await request.json()
+  const { message, index } = body as { message: Record<string, unknown>; index: number }
+  if (!message || typeof index !== 'number') {
+    throw error(400, 'message and index are required')
+  }
+  const result = await Effect.runPromise(
+    session.restoreMessage(projectName, sessionId, message, index)
+  )
+  return json(result)
+}
+
 export const DELETE: RequestHandler = async ({ url }) => {
   const projectName = url.searchParams.get('project')
   const sessionId = url.searchParams.get('session')

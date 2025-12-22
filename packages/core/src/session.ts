@@ -188,6 +188,46 @@ export const deleteMessage = (projectName: string, sessionId: string, messageUui
     const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
     yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
 
+    return { success: true, deletedMessage: deletedMsg }
+  })
+
+// Restore a deleted message at a specific index
+export const restoreMessage = (
+  projectName: string,
+  sessionId: string,
+  message: Record<string, unknown>,
+  index: number
+) =>
+  Effect.gen(function* () {
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const lines = content.trim().split('\n').filter(Boolean)
+    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+
+    const msgUuid = message.uuid ?? message.messageId
+    if (!msgUuid) {
+      return { success: false, error: 'Message has no uuid or messageId' }
+    }
+
+    // Find the message that currently has parentUuid pointing to restored message's parent
+    // and update it to point to the restored message instead
+    const restoredParentUuid = message.parentUuid as string | undefined
+    for (const msg of messages) {
+      if (msg.parentUuid === restoredParentUuid) {
+        // This message was previously pointing to the deleted message's parent
+        // Now it should point to the restored message
+        msg.parentUuid = msgUuid
+        break // Only one message should be affected
+      }
+    }
+
+    // Insert message at the specified index (or at end if index is out of bounds)
+    const insertIndex = Math.min(index, messages.length)
+    messages.splice(insertIndex, 0, message)
+
+    const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+
     return { success: true }
   })
 
