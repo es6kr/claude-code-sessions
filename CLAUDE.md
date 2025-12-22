@@ -70,13 +70,7 @@ pnpm build    # Production build
 
 ## VSCode Extension Workflow
 
-**IMPORTANT**: After modifying any files in `packages/core/` or `packages/vscode-extension/`, always rebuild and reinstall the vsix:
-
-```bash
-pnpm --filter @claude-sessions/core build && \
-pnpm --filter claude-sessions package && \
-code --install-extension packages/vscode-extension/claude-sessions-*.vsix --force
-```
+**IMPORTANT**: After modifying any files in `packages/core/` or `packages/vscode-extension/`, use `/vsix` slash command to rebuild and reinstall.
 
 This applies to:
 

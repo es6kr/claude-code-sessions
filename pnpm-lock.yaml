@@ -164,6 +164,9 @@ importers:
       vite:
         specifier: ^6.0.0
         version: 6.4.1(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2)
+      vitest:
+        specifier: ^4.0.16
+        version: 4.0.16(@types/node@22.19.3)(jiti@2.6.1)(lightningcss@1.30.2)(tsx@4.21.0)(yaml@2.8.2)
 
 packages:
   '@azu/format-text@1.0.2':

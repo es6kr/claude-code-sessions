@@ -21,6 +21,10 @@
           {
             "type": "command",
             "command": "if [ -f /tmp/claude-sessions-web-modified ]; then rm /tmp/claude-sessions-web-modified && echo '[ui-confirm] Web UI가 수정되었습니다. /ui-confirm 으로 확인하세요.'; fi"
+          },
+          {
+            "type": "command",
+            "command": "if [ -f /tmp/claude-sessions-vsix-rebuild-needed ]; then echo '[vsix] VSCode 확장이 수정되었습니다. /vsix 로 빌드 및 설치하세요.'; fi"
           }
         ]
       }
