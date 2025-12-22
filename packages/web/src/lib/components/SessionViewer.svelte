@@ -1,8 +1,9 @@
 <script lang="ts">
-  import type { Message, SessionMeta, TodoItem, AgentInfo } from '$lib/api'
-  import { truncate, getDisplayTitle } from '$lib/utils'
-  import MessageItem from './MessageItem.svelte'
+  import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
+  import { getDisplayTitle, truncate } from '$lib/utils'
+  import MessageItem from './MessageItem.svelte'
+  import ScrollButtons from './ScrollButtons.svelte'
 
   // Tab type - messages, todos, or agent:<agentId>
   type TabType = 'messages' | 'todos' | `agent:${string}`
@@ -14,11 +15,12 @@
     agents?: AgentInfo[]
     customTitle?: string
     currentSummary?: string
+    projectDisplayName?: string
+    backUrl?: string // If provided, shows back button header
     onDeleteMessage?: (msg: Message) => void // Called after actual deletion
     onMessagesChange?: (messages: Message[]) => void // Called when messages array changes
     onEditTitle?: (msg: Message) => void
     onSplitSession?: (msg: Message) => void
-    showHeader?: boolean
     enableScroll?: boolean
     externalScrollContainer?: HTMLElement | null
     fullWidth?: boolean
@@ -31,11 +33,11 @@
     agents = [],
     customTitle,
     currentSummary,
+    backUrl,
     onDeleteMessage,
     onMessagesChange,
     onEditTitle,
     onSplitSession,
-    showHeader = true,
     enableScroll = true,
     externalScrollContainer = null,
     fullWidth = false,
@@ -214,97 +216,51 @@
     messages.findIndex((m) => m.type === 'user' || m.type === 'assistant' || m.type === 'human')
   )
 
-  // Find last compact summary (context continuation point)
-  const lastCompactIndex = $derived.by(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if ((messages[i] as Message & { isCompactSummary?: boolean }).isCompactSummary) {
-        return i
-      }
-    }
-    return -1
-  })
-
   // Scroll container reference for navigation (internal or external)
   let internalScrollContainer: HTMLDivElement | undefined = $state()
   const scrollContainer = $derived(externalScrollContainer ?? internalScrollContainer)
-
-  const scrollToTop = () => {
-    scrollContainer?.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  const scrollToBottom = () => {
-    scrollContainer?.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' })
-  }
-
-  const scrollToCompact = () => {
-    if (lastCompactIndex < 0 || !scrollContainer) return
-    const msgId = messages[lastCompactIndex].uuid ?? `idx-${lastCompactIndex}`
-    const element = scrollContainer.querySelector(`[data-msg-id="${msgId}"]`)
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
 </script>
 
 <section
-  class="bg-gh-bg-secondary overflow-hidden flex flex-col {fullWidth
+  class="bg-gh-bg-secondary overflow-hidden flex flex-col h-full {fullWidth
     ? ''
     : 'border border-gh-border rounded-lg'}"
 >
   <!-- Header -->
-  {#if showHeader}
-    <div
-      class="p-4 border-b border-gh-border bg-gh-bg flex flex-wrap justify-between items-start gap-2"
-    >
-      <div class="flex-1 min-w-[200px]">
-        {#if session}
-          <h2 class="text-base font-semibold">
-            {truncate(displayTitle, 50)}
-          </h2>
-          <button
-            class="text-xs text-gh-text-secondary font-mono mt-1 hover:text-gh-accent
+  <div
+    class="p-4 border-b border-gh-border bg-gh-bg flex flex-wrap justify-between items-start gap-2"
+  >
+    <a href={backUrl} class="text-gh-muted hover:text-gh-fg flex-shrink-0" title="Back to project">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M10 19l-7-7m0 0l7-7m-7 7h18"
+        />
+      </svg>
+    </a>
+    <div class="flex-1 min-w-[200px]">
+      {#if session}
+        <h2 class="text-base font-semibold">
+          {truncate(displayTitle, 50)}
+        </h2>
+        <button
+          class="text-xs text-gh-text-secondary font-mono mt-1 hover:text-gh-accent
                    hover:underline cursor-pointer bg-transparent border-none p-0 text-left"
-            onclick={openSessionFile}
-            title="Open session file in VSCode"
-          >
-            {session.id}
-          </button>
-        {:else}
-          <h2 class="text-base font-semibold">Messages</h2>
-        {/if}
-      </div>
-      {#if session && messages.length > 0 && activeTab === 'messages'}
-        <div class="flex gap-1 flex-shrink-0">
-          <button
-            class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
-                   text-gh-text-secondary hover:text-gh-text transition-colors"
-            onclick={scrollToTop}
-            title="Go to top"
-          >
-            ↑ Top
-          </button>
-          {#if lastCompactIndex >= 0}
-            <button
-              class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
-                     text-gh-text-secondary hover:text-gh-text transition-colors"
-              onclick={scrollToCompact}
-              title="Jump to last compacted point (context continuation)"
-            >
-              📍 Last Compacted
-            </button>
-          {/if}
-          <button
-            class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
-                   text-gh-text-secondary hover:text-gh-text transition-colors"
-            onclick={scrollToBottom}
-            title="Go to bottom"
-          >
-            ↓ Bottom
-          </button>
-        </div>
+          onclick={openSessionFile}
+          title="Open session file in VSCode"
+        >
+          {session.id}
+        </button>
+      {:else}
+        <h2 class="text-base font-semibold">Messages</h2>
       {/if}
     </div>
-  {/if}
+    {#if activeTab !== 'todos'}
+      <ScrollButtons {messages} {scrollContainer} />
+    {/if}
+  </div>
 
   <!-- Tabs -->
   {#if session}

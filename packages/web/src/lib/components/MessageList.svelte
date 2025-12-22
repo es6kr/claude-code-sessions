@@ -106,7 +106,7 @@
           <h2 class="text-base font-semibold">Messages</h2>
         {/if}
       </div>
-      {#if session && messages.length > 0}
+      {#if messages.length > 0}
         <div class="flex gap-1 flex-shrink-0">
           <button
             class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
@@ -116,7 +116,7 @@
           >
             ↑ Top
           </button>
-          {#if lastCompactIndex >= 0}
+          {#if session && lastCompactIndex >= 0}
             <button
               class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
                      text-gh-text-secondary hover:text-gh-text transition-colors"

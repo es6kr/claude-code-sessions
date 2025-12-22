@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
   import { page } from '$app/state'
+  import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
-  import type { Message, SessionMeta, TodoItem, AgentInfo } from '$lib/api'
   import { SessionViewer } from '$lib/components'
+  import { onMount } from 'svelte'
 
   // State
   let session = $state<SessionMeta | null>(null)
@@ -16,14 +16,11 @@
   let customTitle = $state<string | undefined>(undefined)
   let currentSummary = $state<string | undefined>(undefined)
 
-  // Scroll container for SessionViewer
-  let scrollContainer: HTMLDivElement | undefined = $state()
-
   // Get params from URL
   const projectName = $derived(decodeURIComponent(page.params.project ?? ''))
   const sessionId = $derived(decodeURIComponent(page.params.id ?? ''))
 
-  // Display title: customTitle > currentSummary (truncated) > session.title > 'Untitled'
+  // Display title for page title
   const displayTitle = $derived(
     customTitle ??
       (currentSummary && currentSummary.length > 50
@@ -32,6 +29,9 @@
       session?.title ??
       'Untitled'
   )
+
+  // Back URL
+  const backUrl = $derived(`/#project=${encodeURIComponent(projectName)}`)
 
   // Load session data
   const loadSession = async () => {
@@ -69,21 +69,6 @@
       error = String(e)
     } finally {
       loading = false
-    }
-  }
-
-  // Event handlers (read-only in standalone view)
-  const handleDeleteMessage = async (msg: Message) => {
-    if (!session || !confirm('Delete this message?')) return
-
-    const msgId = msg.uuid || msg.messageId
-    if (!msgId) return
-
-    try {
-      await api.deleteMessage(session.projectName, session.id, msgId)
-      messages = messages.filter((m) => (m.uuid || m.messageId) !== msgId)
-    } catch (e) {
-      error = String(e)
     }
   }
 
@@ -141,56 +126,30 @@
   <title>{displayTitle} - Claude Sessions</title>
 </svelte:head>
 
-<div class="min-h-screen flex flex-col bg-gh-bg">
-  <!-- Header with back button -->
-  <header class="flex-shrink-0 border-b border-gh-border bg-gh-canvas">
-    <div class="flex items-center gap-4 p-4">
-      <a
-        href={`/#project=${encodeURIComponent(projectName)}`}
-        class="text-gh-muted hover:text-gh-fg flex-shrink-0"
-        title="Back to project"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M10 19l-7-7m0 0l7-7m-7 7h18"
-          />
-        </svg>
-      </a>
-      <div class="flex-1 min-w-0">
-        <h1 class="text-base font-semibold truncate">{displayTitle}</h1>
-        <p class="text-sm text-gh-muted truncate">{projectDisplayName}</p>
-      </div>
+<div class="h-screen bg-gh-bg">
+  {#if loading}
+    <div class="flex items-center justify-center h-full">
+      <div class="text-gh-muted">Loading...</div>
     </div>
-  </header>
-
-  <!-- Content -->
-  <div bind:this={scrollContainer} class="flex-1 overflow-y-auto">
-    {#if loading}
-      <div class="flex items-center justify-center h-full">
-        <div class="text-gh-muted">Loading...</div>
-      </div>
-    {:else if error}
-      <div class="flex items-center justify-center h-full">
-        <div class="text-gh-red">{error}</div>
-      </div>
-    {:else}
-      <SessionViewer
-        {session}
-        {messages}
-        {agents}
-        {todos}
-        onMessagesChange={(newMessages) => (messages = newMessages)}
-        onDeleteMessage={handleDeleteMessage}
-        onEditTitle={handleEditTitle}
-        onSplitSession={handleSplitSession}
-        externalScrollContainer={scrollContainer}
-        enableScroll={false}
-        fullWidth={true}
-        showHeader={false}
-      />
-    {/if}
-  </div>
+  {:else if error}
+    <div class="flex items-center justify-center h-full">
+      <div class="text-gh-red">{error}</div>
+    </div>
+  {:else}
+    <SessionViewer
+      {session}
+      {messages}
+      {agents}
+      {todos}
+      {customTitle}
+      {currentSummary}
+      {projectDisplayName}
+      {backUrl}
+      onMessagesChange={(newMessages) => (messages = newMessages)}
+      onEditTitle={handleEditTitle}
+      onSplitSession={handleSplitSession}
+      enableScroll={true}
+      fullWidth={true}
+    />
+  {/if}
 </div>
