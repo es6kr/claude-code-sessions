@@ -13,6 +13,8 @@
   let loading = $state(true)
   let error = $state<string | null>(null)
   let projectDisplayName = $state<string>('')
+  let customTitle = $state<string | undefined>(undefined)
+  let currentSummary = $state<string | undefined>(undefined)
 
   // Scroll container for SessionViewer
   let scrollContainer: HTMLDivElement | undefined = $state()
@@ -20,6 +22,16 @@
   // Get params from URL
   const projectName = $derived(decodeURIComponent(page.params.project ?? ''))
   const sessionId = $derived(decodeURIComponent(page.params.id ?? ''))
+
+  // Display title: customTitle > currentSummary (truncated) > session.title > 'Untitled'
+  const displayTitle = $derived(
+    customTitle ??
+      (currentSummary && currentSummary.length > 50
+        ? currentSummary.slice(0, 47) + '...'
+        : currentSummary) ??
+      session?.title ??
+      'Untitled'
+  )
 
   // Load session data
   const loadSession = async () => {
@@ -44,13 +56,15 @@
       // Load messages
       messages = await api.getSession(projectName, sessionId)
 
-      // Load session tree data for todos and agents
+      // Load session tree data for todos, agents, and summary info
       const sessionData = await api.getSessionTreeData(projectName, sessionId)
       // Flatten session todos and agent todos
       const sessionTodos = sessionData.todos?.sessionTodos ?? []
       const agentTodoItems = sessionData.todos?.agentTodos?.flatMap((a) => a.todos) ?? []
       todos = [...sessionTodos, ...agentTodoItems]
       agents = sessionData.agents ?? []
+      customTitle = sessionData.customTitle
+      currentSummary = sessionData.currentSummary
     } catch (e) {
       error = String(e)
     } finally {
@@ -124,7 +138,7 @@
 </script>
 
 <svelte:head>
-  <title>{session?.title ?? 'Session'} - Claude Sessions</title>
+  <title>{displayTitle} - Claude Sessions</title>
 </svelte:head>
 
 <div class="min-h-screen flex flex-col bg-gh-bg">
@@ -133,7 +147,7 @@
     <div class="flex items-center gap-4 p-4">
       <a
         href={`/#project=${encodeURIComponent(projectName)}`}
-        class="text-gh-muted hover:text-gh-fg"
+        class="text-gh-muted hover:text-gh-fg flex-shrink-0"
         title="Back to project"
       >
         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -145,7 +159,10 @@
           />
         </svg>
       </a>
-      <p class="text-sm text-gh-muted">{projectDisplayName}</p>
+      <div class="flex-1 min-w-0">
+        <h1 class="text-base font-semibold truncate">{displayTitle}</h1>
+        <p class="text-sm text-gh-muted truncate">{projectDisplayName}</p>
+      </div>
     </div>
   </header>
 

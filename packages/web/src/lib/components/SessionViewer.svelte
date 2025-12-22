@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Message, SessionMeta, TodoItem, AgentInfo } from '$lib/api'
-  import { truncate } from '$lib/utils'
+  import { truncate, getDisplayTitle } from '$lib/utils'
   import MessageItem from './MessageItem.svelte'
   import * as api from '$lib/api'
 
@@ -12,6 +12,8 @@
     messages: Message[]
     todos?: TodoItem[]
     agents?: AgentInfo[]
+    customTitle?: string
+    currentSummary?: string
     onDeleteMessage?: (msg: Message) => void // Called after actual deletion
     onMessagesChange?: (messages: Message[]) => void // Called when messages array changes
     onEditTitle?: (msg: Message) => void
@@ -27,6 +29,8 @@
     messages,
     todos = [],
     agents = [],
+    customTitle,
+    currentSummary,
     onDeleteMessage,
     onMessagesChange,
     onEditTitle,
@@ -36,6 +40,9 @@
     externalScrollContainer = null,
     fullWidth = false,
   }: Props = $props()
+
+  // Get display title: customTitle > currentSummary > session.title > 'Untitled'
+  const displayTitle = $derived(getDisplayTitle(customTitle, currentSummary, session?.title, 50))
 
   let activeTab = $state<TabType>('messages')
   let agentMessages = $state<Message[]>([])
@@ -97,7 +104,8 @@
     if (!session) return
 
     for (const pd of pendingDeletes) {
-      const msgId = pd.msg.uuid
+      // Use uuid, messageId (file-history-snapshot), or leafUuid (summary)
+      const msgId = pd.msg.uuid || pd.msg.messageId || pd.msg.leafUuid
       if (!msgId) continue
 
       try {
@@ -164,20 +172,21 @@
   // Handle message deletion with undo (works for both session and agent messages)
   const handleMessageDeleteWithUndo = (msg: Message, isAgent: boolean) => {
     if (!session) return
-    const msgId = msg.uuid
+    // Use uuid, messageId (file-history-snapshot), or leafUuid (summary)
+    const msgId = msg.uuid || msg.messageId || msg.leafUuid
     if (!msgId) return
 
     if (isAgent) {
       // Find and remove message from agent list (visually)
-      const index = agentMessages.findIndex((m) => m.uuid === msgId)
+      const index = agentMessages.findIndex((m) => (m.uuid || m.messageId || m.leafUuid) === msgId)
       if (index === -1) return
-      agentMessages = agentMessages.filter((m) => m.uuid !== msgId)
+      agentMessages = agentMessages.filter((m) => (m.uuid || m.messageId || m.leafUuid) !== msgId)
       pendingDeletes = [...pendingDeletes, { msg, index, isAgent: true }]
     } else {
       // Find and remove message from session messages (visually)
-      const index = messages.findIndex((m) => m.uuid === msgId)
+      const index = messages.findIndex((m) => (m.uuid || m.messageId || m.leafUuid) === msgId)
       if (index === -1) return
-      const newMessages = messages.filter((m) => m.uuid !== msgId)
+      const newMessages = messages.filter((m) => (m.uuid || m.messageId || m.leafUuid) !== msgId)
       onMessagesChange?.(newMessages)
       pendingDeletes = [...pendingDeletes, { msg, index, isAgent: false }]
     }
@@ -258,7 +267,7 @@
       <div class="flex-1 min-w-[200px]">
         {#if session}
           <h2 class="text-base font-semibold">
-            {truncate(session.title ?? 'Untitled', 50)}
+            {truncate(displayTitle, 50)}
           </h2>
           <button
             class="text-xs text-gh-text-secondary font-mono mt-1 hover:text-gh-accent
@@ -439,6 +448,16 @@
         class="px-3 py-1 text-sm font-medium text-gh-accent hover:bg-gh-border-subtle rounded transition-colors"
       >
         Undo
+      </button>
+      <button
+        onclick={() => {
+          if (deleteTimeoutId) clearTimeout(deleteTimeoutId)
+          executeAllDeletes()
+        }}
+        class="px-2 py-1 text-sm text-gh-text-secondary hover:text-gh-text hover:bg-gh-border-subtle rounded transition-colors"
+        title="Close and delete immediately"
+      >
+        ✕
       </button>
     </div>
   {/if}

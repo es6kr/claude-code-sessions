@@ -42,3 +42,6 @@ export const renderMarkdown = (text: string): string => {
     return text
   }
 }
+
+// Re-export from core
+export { getDisplayTitle } from '@claude-sessions/core'

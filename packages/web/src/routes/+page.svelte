@@ -4,6 +4,7 @@
   import * as api from '$lib/api'
   import type { Project, SessionMeta, SessionData, Message, TodoItem, AgentInfo } from '$lib/api'
   import { ProjectTree, SessionViewer } from '$lib/components'
+  import { getDisplayTitle } from '$lib/utils'
 
   // State
   let projects = $state<Project[]>([])
@@ -174,48 +175,56 @@
   const handleRenameSession = async (e: Event, session: SessionMeta) => {
     e.stopPropagation()
     const sessionData = projectSessionData.get(session.projectName)?.get(session.id)
-    const currentTitle = sessionData?.customTitle ?? session.title ?? ''
-    const currentSummary = sessionData?.lastSummary ?? ''
+    // Use same priority as displayTitle: customTitle > currentSummary > title
+    const currentTitle = getDisplayTitle(
+      sessionData?.customTitle,
+      sessionData?.currentSummary,
+      session.title,
+      Infinity,
+      ''
+    )
 
-    const newTitle = prompt('Enter new title:', currentTitle)
+    const newTitle = prompt(
+      'Enter session title:\n(Sets custom-title for CLI, first summary for VSCode extension)',
+      currentTitle
+    )
     if (newTitle === null) return
 
-    // Also prompt for summary update
-    const newSummary = prompt('Enter new summary (optional):', currentSummary)
-
     try {
-      await api.renameSessionWithSummary(
-        session.projectName,
-        session.id,
-        newTitle,
-        newSummary !== null ? newSummary : undefined
-      )
+      await api.renameSession(session.projectName, session.id, newTitle)
 
-      // Update local state
-      session.title = newTitle
+      // Update local state (customTitle = currentSummary)
       if (sessionData) {
         sessionData.customTitle = newTitle
-        if (newSummary !== null) {
-          sessionData.lastSummary = newSummary
+        sessionData.currentSummary = newTitle
+        if (sessionData.summaries.length > 0) {
+          sessionData.summaries[0] = { ...sessionData.summaries[0], summary: newTitle }
+        } else {
+          sessionData.summaries = [{ summary: newTitle }]
         }
       }
       projectSessions = new Map(projectSessions)
       projectSessionData = new Map(projectSessionData)
+
+      // Reload messages if this session is currently selected (summary may have been added)
+      if (selectedSession?.id === session.id) {
+        messages = await api.getSession(session.projectName, session.id)
+      }
     } catch (e) {
       error = String(e)
     }
   }
 
   const handleDeleteMessage = async (msg: Message) => {
-    if (!selectedSession || !confirm('Delete this message?')) return
+    if (!selectedSession) return
 
-    // Use uuid or messageId (for file-history-snapshot type)
-    const msgId = msg.uuid || msg.messageId
+    // Use uuid, messageId (for file-history-snapshot type), or leafUuid (for summary)
+    const msgId = msg.uuid || msg.messageId || msg.leafUuid
     if (!msgId) return
 
     try {
       await api.deleteMessage(selectedSession.projectName, selectedSession.id, msgId)
-      messages = messages.filter((m) => (m.uuid || m.messageId) !== msgId)
+      messages = messages.filter((m) => (m.uuid || m.messageId || m.leafUuid) !== msgId)
 
       // Update session message count
       const sessions = projectSessions.get(selectedSession.projectName)
@@ -374,6 +383,12 @@
     {messages}
     {todos}
     {agents}
+    customTitle={selectedSession
+      ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.customTitle
+      : undefined}
+    currentSummary={selectedSession
+      ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.currentSummary
+      : undefined}
     onMessagesChange={(newMessages) => (messages = newMessages)}
     onDeleteMessage={handleDeleteMessage}
     onEditTitle={handleEditCustomTitle}

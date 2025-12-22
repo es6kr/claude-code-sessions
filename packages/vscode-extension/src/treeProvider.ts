@@ -76,12 +76,14 @@ export class SessionTreeProvider
       const projects = await Effect.runPromise(session.listProjects)
       const currentProjectName = this.getCurrentProjectName()
 
-      // Sort: current project first, then by name
-      const sorted = projects.sort((a, b) => {
-        if (a.name === currentProjectName) return -1
-        if (b.name === currentProjectName) return 1
-        return a.displayName.localeCompare(b.displayName)
-      })
+      // Filter out projects with 0 sessions, sort: current project first, then by name
+      const sorted = projects
+        .filter((p) => p.sessionCount > 0)
+        .sort((a, b) => {
+          if (a.name === currentProjectName) return -1
+          if (b.name === currentProjectName) return 1
+          return a.displayName.localeCompare(b.displayName)
+        })
 
       return sorted.map(
         (p) =>
@@ -100,36 +102,14 @@ export class SessionTreeProvider
     }
 
     if (element.type === 'project') {
-      // Show sessions under project
-      const sessions = await Effect.runPromise(session.listSessions(element.projectName))
+      // Show sessions under project using loadProjectTreeData for full metadata
+      const projectData = await Effect.runPromise(session.loadProjectTreeData(element.projectName))
+      if (!projectData) return []
 
-      // Check which sessions have todos or agents
-      const sessionsWithMeta = await Promise.all(
-        sessions.map(async (s) => {
-          try {
-            const messages = await Effect.runPromise(session.readSession(element.projectName, s.id))
-            const agentIds = [
-              ...new Set(
-                messages
-                  .filter(
-                    (m): m is typeof m & { agentId: string } =>
-                      m.type === 'agent' && typeof (m as { agentId?: string }).agentId === 'string'
-                  )
-                  .map((m) => m.agentId)
-              ),
-            ]
-            const hasTodos = await Effect.runPromise(session.sessionHasTodos(s.id, agentIds))
-            return { session: s, hasTodos, hasAgents: agentIds.length > 0 }
-          } catch {
-            return { session: s, hasTodos: false, hasAgents: false }
-          }
-        })
-      )
-
-      return sessionsWithMeta.map(
-        ({ session: s }) =>
+      return projectData.sessions.map(
+        (s) =>
           new SessionTreeItem(
-            s.title || s.id,
+            session.getDisplayTitle(s.customTitle, s.currentSummary, s.title),
             vscode.TreeItemCollapsibleState.Collapsed,
             'session',
             element.projectName,

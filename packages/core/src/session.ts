@@ -343,27 +343,36 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
       const newSummaryContent = summaryMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
       yield* Effect.tryPromise(() => fs.writeFile(summaryFilePath, newSummaryContent, 'utf-8'))
     } else {
-      // No summary exists - add one to the current session file
-      // Find a meaningful message uuid to use as leafUuid (first user or assistant message)
-      const meaningfulMsg = messages.find(
-        (m) => (m.type === 'user' || m.type === 'assistant' || m.type === 'human') && m.uuid
-      )
-      if (meaningfulMsg) {
-        const summaryRecord = {
-          type: 'summary',
-          summary: newTitle,
-          leafUuid: meaningfulMsg.uuid,
-          timestamp: new Date().toISOString(),
+      // No summary exists - use legacy method: add title prefix to first user message content
+      // This is recognized by Claude Code extension
+      const currentContent = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+      const currentLines = currentContent.trim().split('\n').filter(Boolean)
+      const currentMessages = currentLines.map((l) => JSON.parse(l) as Record<string, unknown>)
+
+      const firstUserIdx = currentMessages.findIndex((m) => m.type === 'user')
+      if (firstUserIdx >= 0) {
+        const firstMsg = currentMessages[firstUserIdx] as JsonlRecord
+        const msgPayload = firstMsg.message as { content?: unknown } | undefined
+        if (msgPayload?.content && Array.isArray(msgPayload.content)) {
+          // Find first non-IDE text content
+          const textIdx = (msgPayload.content as Array<{ type?: string; text?: string }>).findIndex(
+            (item) =>
+              typeof item === 'object' &&
+              item?.type === 'text' &&
+              !item.text?.trim().startsWith('<ide_')
+          )
+
+          if (textIdx >= 0) {
+            const item = (msgPayload.content as Array<{ type?: string; text?: string }>)[textIdx]
+            const oldText = item.text ?? ''
+            // Remove existing title pattern (first line ending with \n\n)
+            const cleanedText = oldText.replace(/^[^\n]+\n\n/, '')
+            item.text = `${newTitle}\n\n${cleanedText}`
+
+            const updatedContent = currentMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+            yield* Effect.tryPromise(() => fs.writeFile(filePath, updatedContent, 'utf-8'))
+          }
         }
-        // Re-read and update the current session file to add summary after custom-title
-        const currentContent = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-        const currentLines = currentContent.trim().split('\n').filter(Boolean)
-        const currentMessages = currentLines.map((l) => JSON.parse(l) as Record<string, unknown>)
-        // Insert after custom-title (index 0) if it exists, otherwise at the beginning
-        const insertIdx = currentMessages[0]?.type === 'custom-title' ? 1 : 0
-        currentMessages.splice(insertIdx, 0, summaryRecord)
-        const updatedContent = currentMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
-        yield* Effect.tryPromise(() => fs.writeFile(filePath, updatedContent, 'utf-8'))
       }
     }
 

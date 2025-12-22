@@ -35,14 +35,14 @@
     return projectSessionData.get(projectName)?.get(sessionId)
   }
 
-  // Get display title: customTitle > lastSummary > title > 'Untitled'
+  // Get display title: customTitle > currentSummary > title > 'Untitled'
   const getDisplayTitle = (session: SessionMeta): string => {
     const data = getSessionData(session.projectName, session.id)
     // 1. Custom title from session data (user-set)
     if (data?.customTitle) return data.customTitle
-    // 2. Last summary as fallback title
-    if (data?.lastSummary) {
-      const summary = data.lastSummary
+    // 2. Current summary as fallback title
+    if (data?.currentSummary) {
+      const summary = data.currentSummary
       return summary.length > 60 ? summary.slice(0, 57) + '...' : summary
     }
     // 3. Title from session metadata
@@ -53,17 +53,17 @@
   // Get tooltip text based on what's displayed as title
   const getTooltipText = (session: SessionMeta): string => {
     const data = getSessionData(session.projectName, session.id)
-    // If customTitle is displayed, show lastSummary in tooltip
-    if (data?.customTitle && data?.lastSummary) {
-      return data.lastSummary
+    // If customTitle is displayed, show currentSummary in tooltip
+    if (data?.customTitle && data?.currentSummary) {
+      return data.currentSummary
     }
-    // If lastSummary is displayed as title, show original title in tooltip
-    if (data?.lastSummary && session.title && session.title !== 'Untitled') {
+    // If currentSummary is displayed as title, show original title in tooltip
+    if (data?.currentSummary && session.title && session.title !== 'Untitled') {
       return session.title
     }
-    // If title is displayed, show lastSummary if available
-    if (data?.lastSummary) {
-      return data.lastSummary
+    // If title is displayed, show currentSummary if available
+    if (data?.currentSummary) {
+      return data.currentSummary
     }
     return session.title ?? 'No summary available'
   }
@@ -187,7 +187,7 @@
                 {@const displayTitle = getDisplayTitle(session)}
                 {@const tooltipText = getTooltipText(session)}
                 {@const data = getSessionData(session.projectName, session.id)}
-                {@const isSummaryFallback = !data?.customTitle && !data?.lastSummary}
+                {@const isSummaryFallback = !data?.customTitle && !data?.currentSummary}
                 {@const isExpanded = expandedSessions.has(session.id)}
                 {@const hasSubItems =
                   sessionInfo.summaries > 0 || sessionInfo.agents > 0 || sessionInfo.todos > 0}
@@ -262,10 +262,10 @@
                         class="flex-1 min-w-0 pl-7 pr-2 text-xs text-gh-text-secondary italic overflow-hidden text-ellipsis whitespace-nowrap"
                       >
                         <!-- Left: Summary text on hover -->
-                        {#if data?.lastSummary}
-                          {data.lastSummary.length > 50
-                            ? data.lastSummary.slice(0, 47) + '...'
-                            : data.lastSummary}
+                        {#if data?.currentSummary}
+                          {data.currentSummary.length > 50
+                            ? data.currentSummary.slice(0, 47) + '...'
+                            : data.currentSummary}
                         {:else}
                           {displayTitle}
                         {/if}
@@ -296,22 +296,29 @@
                   <!-- Session Sub Items (Summaries, Todos, Agents) -->
                   {#if isExpanded && hasSubItems}
                     <ul class="bg-gh-bg-secondary/50 border-t border-gh-border-subtle text-xs">
-                      <!-- Summaries (newest first) -->
+                      <!-- Summaries (oldest first, current summary at index 0) -->
                       {#if data?.summaries && data.summaries.length > 0}
                         {#each data.summaries as summary, idx}
                           <li
-                            class="py-1.5 px-4 pl-8 text-gh-text-secondary hover:bg-gh-border-subtle/50 flex items-start gap-2"
+                            class="py-1.5 px-4 pl-8 hover:bg-gh-border-subtle/50 flex flex-col gap-0.5 {idx ===
+                            0
+                              ? 'text-gh-text'
+                              : 'text-gh-text-secondary'}"
                             title={summary.summary}
                           >
-                            <span class="flex-shrink-0">📝</span>
-                            <span class="overflow-hidden text-ellipsis line-clamp-2">
-                              {#if idx === 0}
-                                <span class="text-gh-accent font-medium">[Last]</span>
-                              {/if}
-                              {summary.summary.length > 100
-                                ? summary.summary.slice(0, 97) + '...'
-                                : summary.summary}
-                            </span>
+                            <div class="flex items-start gap-2">
+                              <span class="flex-shrink-0">📝</span>
+                              <span class="overflow-hidden text-ellipsis line-clamp-2">
+                                {summary.summary.length > 100
+                                  ? summary.summary.slice(0, 97) + '...'
+                                  : summary.summary}
+                              </span>
+                            </div>
+                            {#if summary.timestamp}
+                              <span class="pl-6 text-[10px] text-gh-text-secondary/70">
+                                {new Date(summary.timestamp).toLocaleString()}
+                              </span>
+                            {/if}
                           </li>
                         {/each}
                       {/if}
