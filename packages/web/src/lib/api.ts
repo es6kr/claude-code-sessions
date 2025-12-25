@@ -157,7 +157,8 @@ export const clearSessions = (options: {
     deletedOrphanTodoCount: number
   }>('/cleanup', options)
 
-export const getVersion = () => get<{ version: string }>('/version')
+export const getVersion = () =>
+  get<{ version: string; homeDir: string; currentProjectName: string }>('/version')
 
 export const shutdown = () => post<{ success: boolean; message: string }>('/shutdown', {})
 

@@ -1,4 +1,5 @@
 import { marked } from 'marked'
+import { maskHomePath } from '$lib/stores/config'
 
 /**
  * Format utilities for display
@@ -26,10 +27,10 @@ export const truncate = (str: string, len: number): string =>
 
 /**
  * Format project name for display
- * /Users/david/Sync/AI -> ~/Sync/AI
+ * Uses current user's home directory from appConfig store
  */
 export const formatProjectName = (displayName: string): string => {
-  return displayName.replace(/^\/Users\/[^/]+/, '~')
+  return maskHomePath(displayName)
 }
 
 /**

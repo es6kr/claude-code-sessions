@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { Project, SessionMeta, SessionData } from '$lib/api'
   import { formatProjectName } from '$lib/utils'
+  import { sortProjects } from '@claude-sessions/core'
+  import { appConfig } from '$lib/stores/config'
 
   interface Props {
     projects: Project[]
@@ -84,8 +86,13 @@
     }
   }
 
-  // Filter out empty projects
-  const nonEmptyProjects = $derived(projects.filter((p) => p.sessionCount > 0))
+  // Sort projects: current project first, then user's home paths, then others
+  const sortedProjects = $derived(
+    sortProjects(projects, {
+      currentProjectName: $appConfig.currentProjectName,
+      homeDir: $appConfig.homeDir,
+    })
+  )
 
   // Expanded sessions state (for showing summaries, todos, agents sublist)
   let expandedSessions = $state<Set<string>>(new Set())
@@ -141,11 +148,11 @@
 
 <aside class="bg-gh-bg-secondary border border-gh-border rounded-lg overflow-hidden flex flex-col">
   <h2 class="p-4 text-base font-semibold border-b border-gh-border bg-gh-bg">
-    Projects ({nonEmptyProjects.length})
+    Projects ({sortedProjects.length})
   </h2>
 
   <ul class="overflow-y-auto flex-1">
-    {#each nonEmptyProjects as project}
+    {#each sortedProjects as project}
       {@const isDropTarget = dropTargetProject === project.name}
       <li class="border-b border-gh-border-subtle">
         <!-- Project Header -->

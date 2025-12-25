@@ -45,6 +45,8 @@ export {
   isInvalidApiKeyMessage,
   isContinuationSummary,
   getDisplayTitle,
+  maskHomePath,
+  sortProjects,
 } from './utils.js'
 
 // Agent management

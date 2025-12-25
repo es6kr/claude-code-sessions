@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { truncate, formatProjectName, formatDate } from './format'
+import { truncate, formatDate } from './format'
+import { maskHomePath } from '$lib/stores/config'
 
 describe('truncate', () => {
   it('should return string unchanged if shorter than limit', () => {
@@ -19,21 +20,23 @@ describe('truncate', () => {
   })
 })
 
-describe('formatProjectName', () => {
-  it('should replace /Users/username with ~', () => {
-    expect(formatProjectName('/Users/david/projects/test')).toBe('~/projects/test')
+describe('maskHomePath for project names', () => {
+  const homeDir = '/Users/david'
+
+  it('should replace current user home with ~', () => {
+    expect(maskHomePath('/Users/david/projects/test', homeDir)).toBe('~/projects/test')
   })
 
-  it('should handle different usernames', () => {
-    expect(formatProjectName('/Users/john/work')).toBe('~/work')
+  it('should NOT mask other users paths', () => {
+    expect(maskHomePath('/Users/john/work', homeDir)).toBe('/Users/john/work')
   })
 
   it('should not modify paths without /Users prefix', () => {
-    expect(formatProjectName('/home/user/project')).toBe('/home/user/project')
+    expect(maskHomePath('/home/user/project', homeDir)).toBe('/home/user/project')
   })
 
   it('should handle root user folder', () => {
-    expect(formatProjectName('/Users/admin')).toBe('~')
+    expect(maskHomePath('/Users/david', homeDir)).toBe('~')
   })
 })
 

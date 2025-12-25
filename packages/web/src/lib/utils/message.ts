@@ -3,18 +3,14 @@
  */
 
 import type { Content, Message } from '$lib/api'
+import { maskHomePath } from '$lib/stores/config'
 
 /**
  * Replace home directory paths with ~ in text content
- * Matches /Users/username/... patterns and replaces with ~/...
+ * Uses current user's home directory from appConfig store
  */
 export const maskHomePaths = (text: string): string => {
-  // Match /Users/username or C:\Users\username patterns
-  // Only replace paths that are followed by / or end of path segment
-  return text.replace(
-    /(?:\/Users\/[^/\s]+|C:\\Users\\[^\\\s]+)(?=[/\\]|(?=\s|$|[)"'\]}>,:;]))/g,
-    '~'
-  )
+  return maskHomePath(text)
 }
 
 /**

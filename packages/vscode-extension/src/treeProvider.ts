@@ -1,9 +1,12 @@
 import * as vscode from 'vscode'
 import * as session from '@claude-sessions/core'
 import type { TodoItem } from '@claude-sessions/core'
+import { maskHomePath, sortProjects } from '@claude-sessions/core'
 import { Effect } from 'effect'
+import { homedir } from 'os'
 
 const MIME_TYPE = 'application/vnd.code.tree.claudesessions'
+const USER_HOME = homedir()
 
 export class SessionTreeProvider
   implements
@@ -76,19 +79,16 @@ export class SessionTreeProvider
       const projects = await Effect.runPromise(session.listProjects)
       const currentProjectName = this.getCurrentProjectName()
 
-      // Filter out projects with 0 sessions, sort: current project first, then by name
-      const sorted = projects
-        .filter((p) => p.sessionCount > 0)
-        .sort((a, b) => {
-          if (a.name === currentProjectName) return -1
-          if (b.name === currentProjectName) return 1
-          return a.displayName.localeCompare(b.displayName)
-        })
+      // Sort: 1) current project, 2) current user's home subpaths, 3) others
+      const sorted = sortProjects(projects, {
+        currentProjectName,
+        homeDir: USER_HOME,
+      })
 
       return sorted.map(
         (p) =>
           new SessionTreeItem(
-            session.folderNameToPath(p.name), // Show ~/... or absolute path
+            maskHomePath(session.folderNameToPath(p.name), USER_HOME), // Show ~/... for current user only
             // Expand current project by default
             p.name === currentProjectName
               ? vscode.TreeItemCollapsibleState.Expanded

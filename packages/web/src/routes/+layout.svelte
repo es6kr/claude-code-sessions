@@ -5,6 +5,7 @@
   import { page } from '$app/state'
   import type { Snippet } from 'svelte'
   import * as api from '$lib/api'
+  import { appConfig } from '$lib/stores/config'
 
   let { children }: { children: Snippet } = $props()
 
@@ -77,6 +78,11 @@
     try {
       const res = await api.getVersion()
       version = res.version
+      appConfig.set({
+        version: res.version,
+        homeDir: res.homeDir,
+        currentProjectName: res.currentProjectName,
+      })
     } catch {
       version = 'unknown'
     }
