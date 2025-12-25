@@ -1,7 +1,7 @@
 /**
  * Utility functions for message processing
  */
-import type { Message, MessagePayload, TextContent } from './types.js'
+import type { Message, MessagePayload, TextContent, AskUserQuestionResult } from './types.js'
 import { createLogger } from './logger.js'
 
 const logger = createLogger('utils')
@@ -95,27 +95,41 @@ export const getDisplayTitle = (
   return fallback
 }
 
+// Helper to replace message content with extracted text
+const replaceMessageContent = (msg: Message, text: string): Message => ({
+  ...msg,
+  message: {
+    ...msg.message,
+    content: [{ type: 'text', text } satisfies TextContent],
+  },
+  toolUseResult: undefined,
+})
+
 // Clean up first message content when splitting session
-// Uses toolUseResult field to extract the actual user message from tool rejection
+// Handles: 1) tool rejection with reason, 2) AskUserQuestion responses
 export const cleanupSplitFirstMessage = (msg: Message): Message => {
   const toolUseResult = msg.toolUseResult
   if (!toolUseResult) return msg
 
-  // Extract rejection reason from toolUseResult
-  const rejectionMarker = 'The user provided the following reason for the rejection:'
-  const rejectionIndex = toolUseResult.indexOf(rejectionMarker)
-  if (rejectionIndex === -1) return msg
-
-  const text = toolUseResult.slice(rejectionIndex + rejectionMarker.length).trim()
-  if (!text) return msg
-
-  // Replace message content with extracted text
-  return {
-    ...msg,
-    message: {
-      ...msg.message,
-      content: [{ type: 'text', text } satisfies TextContent],
-    },
-    toolUseResult: undefined,
+  // Case 1: AskUserQuestion response (toolUseResult is object with questions/answers)
+  if (typeof toolUseResult === 'object' && 'answers' in toolUseResult) {
+    const answers = (toolUseResult as AskUserQuestionResult).answers
+    const qaText = Object.entries(answers)
+      .map(([q, a]) => `Q: ${q}\nA: ${a}`)
+      .join('\n\n')
+    return replaceMessageContent(msg, qaText)
   }
+
+  // Case 2: Tool rejection with reason (toolUseResult is string)
+  if (typeof toolUseResult === 'string') {
+    const rejectionMarker = 'The user provided the following reason for the rejection:'
+    const rejectionIndex = toolUseResult.indexOf(rejectionMarker)
+    if (rejectionIndex === -1) return msg
+
+    const text = toolUseResult.slice(rejectionIndex + rejectionMarker.length).trim()
+    if (!text) return msg
+    return replaceMessageContent(msg, text)
+  }
+
+  return msg
 }

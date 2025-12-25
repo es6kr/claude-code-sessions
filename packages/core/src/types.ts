@@ -88,6 +88,24 @@ export interface MessagePayload {
 // ============================================================================
 
 /**
+ * AskUserQuestion tool response with questions and user answers.
+ */
+export interface AskUserQuestionResult {
+  questions: Array<{
+    question: string
+    header: string
+    options: Array<{ label: string; description: string }>
+    multiSelect: boolean
+  }>
+  answers: Record<string, string>
+}
+
+/**
+ * Tool use result - either a string (rejection reason) or AskUserQuestion response.
+ */
+export type ToolUseResult = string | AskUserQuestionResult
+
+/**
  * A single message in a Claude Code session.
  * Stored as a line in a JSONL session file.
  */
@@ -110,8 +128,8 @@ export interface Message extends TypedObject {
   summary?: string
   /** Flag indicating this is a context continuation summary */
   isCompactSummary?: boolean
-  /** Tool use result text (for tool_result messages) */
-  toolUseResult?: string
+  /** Tool use result (string for rejections, AskUserQuestionResult for Q&A) */
+  toolUseResult?: ToolUseResult
 }
 
 // ============================================================================
