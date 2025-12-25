@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Message } from '$lib/api'
   import * as api from '$lib/api'
-  import { formatDate, getMessageContent, parseIdeTags } from '$lib/utils'
+  import { formatDate, getMessageContent, maskHomePaths, parseIdeTags } from '$lib/utils'
   import ExpandableContent from './ExpandableContent.svelte'
   import IdeTag from './IdeTag.svelte'
   import TodoItem from './TodoItem.svelte'
@@ -183,17 +183,17 @@
     <ul class="space-y-1">
       {#each snapshotData.files as [filePath, info]}
         {@const hasBackup = !!(info.backupFileName && sessionId)}
-        <li class="font-mono text-xs truncate" title={filePath}>
+        <li class="font-mono text-xs truncate" title={maskHomePaths(filePath)}>
           {#if hasBackup}
             <button
               class="text-gh-accent hover:underline cursor-pointer bg-transparent border-none p-0"
               onclick={() => api.openFileInVscode(sessionId, info.backupFileName!)}
               title="Open backup in VS Code"
             >
-              {filePath}
+              {maskHomePaths(filePath)}
             </button>
           {:else}
-            <span class="text-gh-text-secondary">{filePath}</span>
+            <span class="text-gh-text-secondary">{maskHomePaths(filePath)}</span>
           {/if}
         </li>
       {/each}

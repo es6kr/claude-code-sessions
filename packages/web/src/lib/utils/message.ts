@@ -5,6 +5,19 @@
 import type { Content, Message } from '$lib/api'
 
 /**
+ * Replace home directory paths with ~ in text content
+ * Matches /Users/username/... patterns and replaces with ~/...
+ */
+export const maskHomePaths = (text: string): string => {
+  // Match /Users/username or C:\Users\username patterns
+  // Only replace paths that are followed by / or end of path segment
+  return text.replace(
+    /(?:\/Users\/[^/\s]+|C:\\Users\\[^\\\s]+)(?=[/\\]|(?=\s|$|[)"'\]}>,:;]))/g,
+    '~'
+  )
+}
+
+/**
  * Recursively extract text from Content
  */
 const extractText = (content: Content): string => {
@@ -36,23 +49,26 @@ const extractText = (content: Content): string => {
  * Extract displayable content from message
  */
 export const getMessageContent = (msg: Message): string => {
+  let content = ''
+
   // Check msg.summary for summary type messages
   if (msg.summary) {
-    return msg.summary
+    content = msg.summary
   }
-
   // Check msg.content (for system messages)
-  if (msg.content) {
-    return extractText(msg.content)
+  else if (msg.content) {
+    content = extractText(msg.content)
   }
-
   // Check msg.message.content (for user/assistant messages)
-  const m = msg.message as { content?: Content } | undefined
-  if (m?.content) {
-    return extractText(m.content)
+  else {
+    const m = msg.message as { content?: Content } | undefined
+    if (m?.content) {
+      content = extractText(m.content)
+    }
   }
 
-  return ''
+  // Mask home directory paths for privacy
+  return maskHomePaths(content)
 }
 
 /**
