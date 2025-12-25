@@ -374,17 +374,22 @@
 
 <!-- Cleanup Modal -->
 {#if showCleanupModal && cleanupPreview}
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <!-- svelte-ignore a11y_interactive_supports_focus -->
   <div
     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
     onclick={(e) => e.target === e.currentTarget && closeCleanupModal()}
+    onkeydown={(e) => e.key === 'Escape' && closeCleanupModal()}
     role="dialog"
     aria-modal="true"
     aria-labelledby="cleanup-modal-title"
   >
-    <div class="bg-gh-bg-secondary border border-gh-border rounded-lg p-6 w-[400px] shadow-xl">
+    <div
+      class="bg-gh-bg-secondary border border-gh-border rounded-lg p-6 w-[400px] shadow-xl text-gh-text"
+    >
       <h2 id="cleanup-modal-title" class="text-lg font-semibold mb-4">Cleanup Options</h2>
 
-      <div class="space-y-3">
+      <div class="space-y-3 text-gh-text">
         <!-- Clear Empty Sessions -->
         <label class="flex items-center gap-3 cursor-pointer">
           <input
@@ -398,7 +403,7 @@
           </span>
         </label>
 
-        <!-- Skip With Todos (indented, disabled if clearEmpty is false) -->
+        <!-- Preserve With Todos (indented, disabled if clearEmpty is false) -->
         <label class="flex items-center gap-3 cursor-pointer ml-6" class:opacity-50={!clearEmpty}>
           <input
             type="checkbox"
@@ -407,8 +412,10 @@
             class="w-4 h-4 rounded border-gh-border bg-gh-bg text-gh-green focus:ring-gh-green disabled:opacity-50"
           />
           <span class="flex-1">
-            Skip sessions with todos
-            <span class="text-gh-text-secondary">({totalWithTodos})</span>
+            Preserve sessions with todos
+            <span class="text-gh-text-secondary"
+              >({totalWithTodos > 0 ? `-${totalWithTodos}` : '0'})</span
+            >
           </span>
         </label>
 
