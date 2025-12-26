@@ -159,6 +159,7 @@ export function activate(context: vscode.ExtensionContext) {
   const treeView = vscode.window.createTreeView('claudeSessions', {
     treeDataProvider: treeProvider,
     showCollapseAll: true,
+    canSelectMany: true,
     dragAndDropController: treeProvider,
   })
 
@@ -269,6 +270,47 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
+    vscode.commands.registerCommand('claudeSessions.moveSession', async (item: SessionTreeItem) => {
+      if (item.type !== 'session') return
+
+      // Get all projects
+      const projects = await Effect.runPromise(session.listProjects)
+      const otherProjects = projects.filter(
+        (p) => p.name !== item.projectName && p.sessionCount >= 0
+      )
+
+      if (otherProjects.length === 0) {
+        vscode.window.showWarningMessage('No other projects available')
+        return
+      }
+
+      // Show quick pick to select target project
+      const selected = await vscode.window.showQuickPick(
+        otherProjects.map((p) => ({
+          label: session.folderNameToPath(p.name),
+          description: `${p.sessionCount} sessions`,
+          projectName: p.name,
+        })),
+        {
+          placeHolder: 'Select target project',
+          title: 'Move Session to...',
+        }
+      )
+
+      if (!selected) return
+
+      const result = await Effect.runPromise(
+        session.moveSession(item.projectName, item.sessionId, selected.projectName)
+      )
+
+      if (result.success) {
+        treeProvider.refresh()
+        vscode.window.showInformationMessage(`Moved session to ${selected.label}`)
+      } else {
+        vscode.window.showErrorMessage(`Failed to move session: ${result.error}`)
+      }
+    }),
+
     vscode.commands.registerCommand('claudeSessions.cleanup', async () => {
       const preview = await Effect.runPromise(session.previewCleanup())
 
@@ -292,6 +334,63 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(`Cleaned up ${result.deletedCount} sessions`)
       }
     }),
+
+    vscode.commands.registerCommand(
+      'claudeSessions.resumeSession',
+      async (item: SessionTreeItem) => {
+        if (item.type !== 'session') return
+
+        const choice = await vscode.window.showQuickPick(
+          [
+            {
+              label: '$(terminal) Internal Terminal',
+              description: 'Open in VSCode integrated terminal',
+              mode: 'internal' as const,
+            },
+            {
+              label: '$(link-external) External Terminal',
+              description: 'Open in system default terminal',
+              mode: 'external' as const,
+            },
+          ],
+          {
+            placeHolder: 'Where to open Claude session?',
+            title: 'Resume Session',
+          }
+        )
+
+        if (!choice) return
+
+        // Get project path for cwd
+        const folderPath = session.folderNameToPath(item.projectName)
+        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
+        const cwd = folderPath.startsWith('~') ? folderPath.replace('~', homeDir) : folderPath
+
+        if (choice.mode === 'internal') {
+          // Create terminal with proper name and cwd
+          const terminal = vscode.window.createTerminal({
+            name: `Claude: ${item.label}`,
+            cwd,
+          })
+          terminal.show()
+          terminal.sendText(`claude --resume ${item.sessionId}`)
+        } else {
+          // External: spawn detached process
+          const result = session.resumeSession({
+            sessionId: item.sessionId,
+            cwd,
+          })
+
+          if (result.success) {
+            vscode.window.showInformationMessage(
+              `Claude session started in external terminal (PID: ${result.pid})`
+            )
+          } else {
+            vscode.window.showErrorMessage(`Failed to resume session: ${result.error}`)
+          }
+        }
+      }
+    ),
 
     treeView
   )

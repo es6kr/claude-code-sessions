@@ -8,6 +8,13 @@ import { homedir } from 'os'
 const MIME_TYPE = 'application/vnd.code.tree.claudesessions'
 const USER_HOME = homedir()
 
+// Import outputChannel from extension for debug logging
+import { outputChannel } from './extension'
+
+const debug = (msg: string, ...args: unknown[]) => {
+  outputChannel.appendLine(`[DnD] ${msg} ${args.length > 0 ? JSON.stringify(args) : ''}`)
+}
+
 export class SessionTreeProvider
   implements
     vscode.TreeDataProvider<SessionTreeItem>,
@@ -27,34 +34,75 @@ export class SessionTreeProvider
   }
 
   getTreeItem(element: SessionTreeItem): vscode.TreeItem {
+    debug('getTreeItem', { type: element.type, label: element.label })
     return element
   }
 
-  handleDrag(source: readonly SessionTreeItem[], dataTransfer: vscode.DataTransfer): void {
+  public async handleDrag(
+    source: readonly SessionTreeItem[],
+    dataTransfer: vscode.DataTransfer,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _token: vscode.CancellationToken
+  ): Promise<void> {
+    debug('handleDrag called', { sourceCount: source.length, types: source.map((s) => s.type) })
     const sessions = source.filter((item) => item.type === 'session')
+    debug('filtered sessions', { sessionCount: sessions.length })
     if (sessions.length > 0) {
       dataTransfer.set(MIME_TYPE, new vscode.DataTransferItem(sessions))
+      debug('dataTransfer set with MIME_TYPE', MIME_TYPE)
     }
   }
 
-  async handleDrop(
+  public async handleDrop(
     target: SessionTreeItem | undefined,
-    dataTransfer: vscode.DataTransfer
+    dataTransfer: vscode.DataTransfer,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _token: vscode.CancellationToken
   ): Promise<void> {
-    if (!target || target.type !== 'project') return
+    debug('handleDrop called', {
+      targetType: target?.type,
+      targetLabel: target?.label,
+      targetProject: target?.projectName,
+    })
+
+    if (!target || target.type !== 'project') {
+      debug('drop rejected: target is not a project')
+      return
+    }
 
     const transferItem = dataTransfer.get(MIME_TYPE)
-    if (!transferItem) return
+    debug('transferItem', { hasMimeType: !!transferItem })
+
+    if (!transferItem) {
+      debug('drop rejected: no transfer item with MIME_TYPE')
+      return
+    }
 
     const sessions = transferItem.value as SessionTreeItem[]
-    if (!sessions || sessions.length === 0) return
+    debug('sessions from transfer', { count: sessions?.length, sessions })
+
+    if (!sessions || sessions.length === 0) {
+      debug('drop rejected: no sessions in transfer')
+      return
+    }
 
     for (const sessionItem of sessions) {
-      if (sessionItem.projectName === target.projectName) continue // Skip same project
+      debug('processing session', {
+        id: sessionItem.sessionId,
+        from: sessionItem.projectName,
+        to: target.projectName,
+      })
+
+      if (sessionItem.projectName === target.projectName) {
+        debug('skipping: same project')
+        continue
+      }
 
       const result = await Effect.runPromise(
         session.moveSession(sessionItem.projectName, sessionItem.sessionId, target.projectName)
       )
+
+      debug('moveSession result', result)
 
       if (result.success) {
         vscode.window.showInformationMessage(`Moved session to ${target.label}`)

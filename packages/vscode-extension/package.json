@@ -43,7 +43,8 @@
         {
           "id": "claudeSessions",
           "name": "Sessions",
-          "contextualTitle": "Claude Code Sessions"
+          "contextualTitle": "Claude Code Sessions",
+          "canSelectMany": true
         }
       ]
     },
@@ -86,6 +87,16 @@
         "command": "claudeSessions.openSessionsFolder",
         "title": "Open Sessions Folder",
         "icon": "$(history)"
+      },
+      {
+        "command": "claudeSessions.moveSession",
+        "title": "Move to Project...",
+        "icon": "$(move)"
+      },
+      {
+        "command": "claudeSessions.resumeSession",
+        "title": "Resume Session",
+        "icon": "$(play)"
       }
     ],
     "menus": {
@@ -131,6 +142,21 @@
           "command": "claudeSessions.deleteSession",
           "when": "view == claudeSessions && viewItem == session",
           "group": "2_delete"
+        },
+        {
+          "command": "claudeSessions.moveSession",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "3_move"
+        },
+        {
+          "command": "claudeSessions.resumeSession",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "inline@0"
+        },
+        {
+          "command": "claudeSessions.resumeSession",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "0_resume"
         },
         {
           "command": "claudeSessions.openProjectFolder",
