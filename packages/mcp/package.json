@@ -1,6 +1,6 @@
 {
   "name": "claude-sessions-mcp",
-  "version": "0.3.1",
+  "version": "0.3.3",
   "description": "MCP server for managing Claude Code conversation sessions",
   "type": "module",
   "license": "MIT",
