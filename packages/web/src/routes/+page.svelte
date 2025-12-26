@@ -264,8 +264,8 @@
     if (!selectedSession) return
 
     const msgIndex = messages.findIndex((m) => m.uuid === msg.uuid)
-    const oldMessagesCount = msgIndex
-    const keptMessagesCount = messages.length - msgIndex
+    const oldMessagesCount = msgIndex // OLD messages (before split point) - get new ID
+    const keptMessagesCount = messages.length - msgIndex // NEW messages (from split point) - keep original ID
 
     if (
       !confirm(
@@ -274,29 +274,49 @@
     )
       return
 
+    const currentProjectName = selectedSession.projectName
+    const currentSessionId = selectedSession.id
+
     try {
       loading = true
-      const result = await api.splitSession(
-        selectedSession.projectName,
-        selectedSession.id,
-        msg.uuid
-      )
+      const result = await api.splitSession(currentProjectName, currentSessionId, msg.uuid)
 
       if (result.success && result.newSessionId) {
-        // Refresh session list for current project
-        const newSessions = await api.listSessions(selectedSession.projectName)
-        projectSessions.set(selectedSession.projectName, newSessions)
-        projectSessions = new Map(projectSessions)
+        // Refresh full session data for current project
+        const sessionDataList = await api.expandProject(currentProjectName)
 
-        // Update current session view (show kept messages - from split point onwards)
+        // Rebuild session metadata and data maps
+        const sessions: SessionMeta[] = []
+        const dataMap = new Map<string, SessionData>()
+
+        for (const data of sessionDataList) {
+          sessions.push({
+            id: data.id,
+            projectName: currentProjectName,
+            title: data.title,
+            messageCount: data.messageCount,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+          })
+          dataMap.set(data.id, data)
+        }
+
+        projectSessions.set(currentProjectName, sessions)
+        projectSessions = new Map(projectSessions)
+        projectSessionData.set(currentProjectName, dataMap)
+        projectSessionData = new Map(projectSessionData)
+
+        // Update current session view (show kept messages - FROM split point, newer messages)
         messages = messages.slice(msgIndex)
 
-        // Update session metadata
-        const sessions = projectSessions.get(selectedSession.projectName)
-        const currentSession = sessions?.find((s) => s.id === selectedSession!.id)
-        if (currentSession) {
-          currentSession.messageCount = messages.length
-          projectSessions = new Map(projectSessions)
+        // Update selectedSession reference to the refreshed session
+        // Must be done AFTER projectSessions is updated for reactivity to work
+        const updatedSession = sessions.find((s) => s.id === currentSessionId)
+        if (updatedSession) {
+          // Update message count to reflect kept messages
+          updatedSession.messageCount = messages.length
+          // Force reactivity by creating new object reference
+          selectedSession = { ...updatedSession }
         }
 
         toast = `Session split! Old messages moved to new session: ${result.newSessionId.slice(0, 8)}...`

@@ -141,7 +141,7 @@
 </script>
 
 {#snippet splitButton()}
-  {#if onSplit && !isFirst}
+  {#if onSplit && !isFirst && msg.uuid}
     <button
       class="opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer p-1 rounded hover:bg-gh-accent/20 text-xs"
       onclick={() => onSplit(msg)}

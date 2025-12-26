@@ -3,6 +3,7 @@
   import { formatProjectName } from '$lib/utils'
   import { sortProjects } from '@claude-sessions/core'
   import { appConfig } from '$lib/stores/config'
+  import TooltipButton from './TooltipButton.svelte'
 
   interface Props {
     projects: Project[]
@@ -283,31 +284,28 @@
                       <!-- Right: Action buttons -->
                       <div class="flex-shrink-0 flex gap-0.5 pr-2 pointer-events-auto">
                         {#if onResumeSession}
-                          <button
-                            class="bg-transparent border-none cursor-pointer p-1 rounded
-                                   hover:bg-gh-green/20 text-xs"
+                          <TooltipButton
+                            class="p-1 rounded hover:bg-gh-green/20 text-xs"
                             onclick={(e) => onResumeSession(e, session)}
                             title="Resume session"
                           >
                             ▶️
-                          </button>
+                          </TooltipButton>
                         {/if}
-                        <button
-                          class="bg-transparent border-none cursor-pointer p-1 rounded
-                                 hover:bg-gh-border text-xs"
+                        <TooltipButton
+                          class="p-1 rounded hover:bg-gh-border text-xs"
                           onclick={(e) => onRenameSession(e, session)}
                           title="Rename"
                         >
                           ✏️
-                        </button>
-                        <button
-                          class="bg-transparent border-none cursor-pointer p-1 rounded
-                                 hover:bg-gh-red/20 text-xs"
+                        </TooltipButton>
+                        <TooltipButton
+                          class="p-1 rounded hover:bg-gh-red/20 text-xs"
                           onclick={(e) => onDeleteSession(e, session)}
                           title="Delete"
                         >
                           🗑️
-                        </button>
+                        </TooltipButton>
                       </div>
                     </div>
                   </div>
