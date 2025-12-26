@@ -230,16 +230,22 @@
   <div
     class="p-4 border-b border-gh-border bg-gh-bg flex flex-wrap justify-between items-start gap-2"
   >
-    <a href={backUrl} class="text-gh-muted hover:text-gh-fg flex-shrink-0" title="Back to project">
-      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M10 19l-7-7m0 0l7-7m-7 7h18"
-        />
-      </svg>
-    </a>
+    {#if backUrl}
+      <a
+        href={backUrl}
+        class="text-gh-muted hover:text-gh-fg flex-shrink-0"
+        title="Back to project"
+      >
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M10 19l-7-7m0 0l7-7m-7 7h18"
+          />
+        </svg>
+      </a>
+    {/if}
     <div class="flex-1 min-w-[200px]">
       {#if session}
         <h2 class="text-base font-semibold">

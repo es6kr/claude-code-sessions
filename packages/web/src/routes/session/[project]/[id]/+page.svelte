@@ -2,7 +2,7 @@
   import { page } from '$app/state'
   import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
-  import { SessionViewer } from '$lib/components'
+  import { SessionViewer, Toast } from '$lib/components'
   import { onMount } from 'svelte'
 
   // State
@@ -12,6 +12,7 @@
   let agents = $state<AgentInfo[]>([])
   let loading = $state(true)
   let error = $state<string | null>(null)
+  let toast = $state<string | null>(null)
   let projectDisplayName = $state<string>('')
   let customTitle = $state<string | undefined>(undefined)
   let currentSummary = $state<string | undefined>(undefined)
@@ -108,7 +109,7 @@
 
       if (result.success && result.newSessionId) {
         messages = messages.slice(0, msgIndex)
-        alert(`Session split successfully!\nNew session ID: ${result.newSessionId}`)
+        toast = `Session split successfully! New session ID: ${result.newSessionId}`
       } else {
         error = result.error ?? 'Failed to split session'
       }
@@ -153,3 +154,5 @@
     />
   {/if}
 </div>
+
+<Toast bind:message={toast} />

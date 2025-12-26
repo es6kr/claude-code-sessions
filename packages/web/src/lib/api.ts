@@ -296,3 +296,14 @@ export const getAgentMessages = (projectName: string, sessionId: string, agentId
   get<Message[]>(
     `/agent/messages?project=${encodeURIComponent(projectName)}&session=${encodeURIComponent(sessionId)}&agent=${encodeURIComponent(agentId)}`
   )
+
+// Resume session types
+export interface ResumeSessionResult {
+  success: boolean
+  pid?: number
+  error?: string
+}
+
+// Resume session - spawn claude CLI with --resume
+export const resumeSession = (projectName: string, sessionId: string) =>
+  post<ResumeSessionResult>('/session/resume', { projectName, sessionId })

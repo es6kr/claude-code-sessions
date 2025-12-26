@@ -3,7 +3,7 @@
   import { browser } from '$app/environment'
   import * as api from '$lib/api'
   import type { Project, SessionMeta, SessionData, Message, TodoItem, AgentInfo } from '$lib/api'
-  import { ProjectTree, SessionViewer } from '$lib/components'
+  import { ProjectTree, SessionViewer, Toast } from '$lib/components'
   import { getDisplayTitle } from '$lib/utils'
 
   // State
@@ -18,6 +18,7 @@
   let loading = $state(false)
   let loadingProject = $state<string | null>(null)
   let error = $state<string | null>(null)
+  let toast = $state<string | null>(null)
 
   // URL hash helpers
   const parseHash = (): { project?: string; session?: string } => {
@@ -298,7 +299,7 @@
           projectSessions = new Map(projectSessions)
         }
 
-        alert(`Session split successfully!\nNew session ID: ${result.newSessionId}`)
+        toast = `Session split successfully! New session ID: ${result.newSessionId}`
       } else {
         error = result.error ?? 'Failed to split session'
       }
@@ -354,6 +355,21 @@
     }
   }
 
+  const handleResumeSession = async (e: Event, session: SessionMeta) => {
+    e.stopPropagation()
+
+    try {
+      const result = await api.resumeSession(session.projectName, session.id)
+      if (result.success) {
+        toast = `Claude session started (PID: ${result.pid})`
+      } else {
+        error = result.error ?? 'Failed to resume session'
+      }
+    } catch (e) {
+      error = String(e)
+    }
+  }
+
   // Lifecycle
   onMount(() => {
     loadProjects().then(() => restoreFromHash())
@@ -376,6 +392,7 @@
     onRenameSession={handleRenameSession}
     onDeleteSession={handleDeleteSession}
     onMoveSession={handleMoveSession}
+    onResumeSession={handleResumeSession}
   />
 
   <SessionViewer
@@ -405,3 +422,5 @@
     {error}
   </div>
 {/if}
+
+<Toast bind:message={toast} />
