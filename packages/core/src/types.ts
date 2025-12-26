@@ -309,3 +309,28 @@ export interface ProjectTreeData {
   sessionCount: number
   sessions: SessionTreeData[]
 }
+
+// ============================================================================
+// Resume Session Types
+// ============================================================================
+
+/** Options for resuming a session */
+export interface ResumeSessionOptions {
+  /** Session ID to resume */
+  sessionId: string
+  /** Working directory for the claude process */
+  cwd?: string
+  /** Whether to fork the session instead of continuing */
+  fork?: boolean
+  /** Additional arguments to pass to claude */
+  args?: string[]
+}
+
+/** Result of spawning a resume session process */
+export interface ResumeSessionResult {
+  success: boolean
+  /** Process ID if spawned successfully */
+  pid?: number
+  /** Error message if failed */
+  error?: string
+}

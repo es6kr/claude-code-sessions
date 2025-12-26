@@ -25,6 +25,8 @@ export type {
   AgentInfo,
   SessionTreeData,
   ProjectTreeData,
+  ResumeSessionOptions,
+  ResumeSessionResult,
 } from './types.js'
 
 // Path utilities
@@ -85,6 +87,9 @@ export {
   loadProjectTreeData,
   updateSessionSummary,
 } from './session.js'
+
+// Note: resumeSession is exported from '@claude-sessions/core/server'
+// It uses child_process and should only be used in server/Node.js environments
 
 // Logger
 export type { Logger } from './logger.js'
