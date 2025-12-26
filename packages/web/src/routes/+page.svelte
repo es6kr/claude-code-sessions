@@ -264,12 +264,12 @@
     if (!selectedSession) return
 
     const msgIndex = messages.findIndex((m) => m.uuid === msg.uuid)
-    const remainingCount = msgIndex
-    const movingCount = messages.length - msgIndex
+    const oldMessagesCount = msgIndex
+    const keptMessagesCount = messages.length - msgIndex
 
     if (
       !confirm(
-        `Split session at this message?\n\nThis session will keep ${remainingCount} messages.\nNew session will have ${movingCount} messages.`
+        `Split session at this message?\n\nThis session will keep ${keptMessagesCount} messages (from here onwards).\nOld messages (${oldMessagesCount}) will be moved to a new session.`
       )
     )
       return
@@ -288,8 +288,8 @@
         projectSessions.set(selectedSession.projectName, newSessions)
         projectSessions = new Map(projectSessions)
 
-        // Update current session view (show remaining messages)
-        messages = messages.slice(0, msgIndex)
+        // Update current session view (show kept messages - from split point onwards)
+        messages = messages.slice(msgIndex)
 
         // Update session metadata
         const sessions = projectSessions.get(selectedSession.projectName)
@@ -299,7 +299,7 @@
           projectSessions = new Map(projectSessions)
         }
 
-        toast = `Session split successfully! New session ID: ${result.newSessionId}`
+        toast = `Session split! Old messages moved to new session: ${result.newSessionId.slice(0, 8)}...`
       } else {
         error = result.error ?? 'Failed to split session'
       }

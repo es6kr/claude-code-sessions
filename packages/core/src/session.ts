@@ -557,6 +557,8 @@ export const moveSession = (
   })
 
 // Split session at a specific message
+// Original session keeps the ID and contains messages FROM splitAtMessageUuid onwards (newer messages)
+// New session gets a new ID and contains messages BEFORE splitAtMessageUuid (older messages)
 export const splitSession = (projectName: string, sessionId: string, splitAtMessageUuid: string) =>
   Effect.gen(function* () {
     const projectPath = path.join(getSessionsDir(), projectName)
@@ -577,11 +579,10 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
       return { success: false, error: 'Cannot split at first message' } satisfies SplitSessionResult
     }
 
-    // Generate new session ID
+    // Generate new session ID for the OLD messages (before split point)
     const newSessionId = crypto.randomUUID()
 
     // Find all summary messages and get the last (most recent) one
-    // Summaries are typically at the beginning, but we want the most recent one
     const summaryMessages = allMessages.filter((m) => m.type === 'summary')
     const summaryMessage =
       summaryMessages.length > 0 ? summaryMessages[summaryMessages.length - 1] : null
@@ -590,27 +591,29 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
     const splitMessage = allMessages[splitIndex]
     const shouldDuplicate = isContinuationSummary(splitMessage)
 
-    // Split messages - if continuation summary, include it in both sessions
-    let remainingMessages: Message[]
-    const movedMessages = allMessages.slice(splitIndex)
+    // Split messages:
+    // - keptMessages: from splitIndex onwards (stays in original session with original ID) - NEW messages
+    // - movedMessages: before splitIndex (goes to new session with new ID) - OLD messages
+    let keptMessages = allMessages.slice(splitIndex)
+    let movedMessages: Message[]
 
     if (shouldDuplicate) {
-      // Create a copy of the continuation message with new UUID for the original session
+      // Create a copy of the continuation message with new UUID for the new (old messages) session
       const duplicatedMessage: Message = {
         ...splitMessage,
         uuid: crypto.randomUUID(),
-        sessionId: sessionId, // Keep original session ID
+        sessionId: newSessionId,
       }
-      remainingMessages = [...allMessages.slice(0, splitIndex), duplicatedMessage]
+      movedMessages = [...allMessages.slice(0, splitIndex), duplicatedMessage]
     } else {
-      remainingMessages = allMessages.slice(0, splitIndex)
+      movedMessages = allMessages.slice(0, splitIndex)
     }
 
-    // Update moved messages with new sessionId and fix first message's parentUuid
-    const updatedMovedMessages = movedMessages.map((msg, index) => {
-      let updated: Message = { ...msg, sessionId: newSessionId }
+    // Update kept messages: fix first message's parentUuid
+    keptMessages = keptMessages.map((msg, index) => {
+      let updated: Message = { ...msg }
       if (index === 0) {
-        // First message of new session should have no parent
+        // First message of kept session should have no parent
         updated.parentUuid = null
         // Clean up first message content if it's a tool_result rejection
         updated = cleanupSplitFirstMessage(updated)
@@ -618,25 +621,34 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
       return updated
     })
 
-    // Clone summary message to new session if exists
+    // Update moved messages with new sessionId
+    const updatedMovedMessages: Message[] = movedMessages.map((msg) => ({
+      ...msg,
+      sessionId: newSessionId,
+    }))
+
+    // Clone summary message to new session (old messages) if exists
     if (summaryMessage) {
       const clonedSummary = {
         ...summaryMessage,
+        sessionId: newSessionId,
         leafUuid: updatedMovedMessages[0]?.uuid ?? null,
-      }
+      } as Message
+      // Add summary at the beginning of moved messages
       updatedMovedMessages.unshift(clonedSummary)
     }
 
-    // Write remaining messages to original file
-    const remainingContent = remainingMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
-    yield* Effect.tryPromise(() => fs.writeFile(filePath, remainingContent, 'utf-8'))
+    // Write kept messages (newer) to original file (keeps original ID)
+    const keptContent = keptMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(filePath, keptContent, 'utf-8'))
 
-    // Write moved messages to new session file
+    // Write moved messages (older) to new session file
     const newFilePath = path.join(projectPath, `${newSessionId}.jsonl`)
     const newContent = updatedMovedMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
     yield* Effect.tryPromise(() => fs.writeFile(newFilePath, newContent, 'utf-8'))
 
     // Update linked agent files that reference the old sessionId
+    // Agents related to OLD messages should be moved to new session
     const agentFiles = yield* Effect.tryPromise(() => fs.readdir(projectPath))
     const agentJsonlFiles = agentFiles.filter((f) => f.startsWith('agent-') && f.endsWith('.jsonl'))
 
@@ -651,7 +663,7 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
 
       // If this agent belongs to the original session, check if it should be moved
       if (firstAgentMsg.sessionId === sessionId) {
-        // Check if any message in moved messages is related to this agent
+        // Check if any message in MOVED (old) messages is related to this agent
         const agentId = agentFile.replace('agent-', '').replace('.jsonl', '')
         const isRelatedToMoved = movedMessages.some(
           (msg) => (msg as { agentId?: string }).agentId === agentId

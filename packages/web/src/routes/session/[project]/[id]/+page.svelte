@@ -93,12 +93,12 @@
     if (!session) return
 
     const msgIndex = messages.findIndex((m) => m.uuid === msg.uuid)
-    const remainingCount = msgIndex
-    const movingCount = messages.length - msgIndex
+    const oldMessagesCount = msgIndex
+    const keptMessagesCount = messages.length - msgIndex
 
     if (
       !confirm(
-        `Split session at this message?\n\nThis session will keep ${remainingCount} messages.\nNew session will have ${movingCount} messages.`
+        `Split session at this message?\n\nThis session will keep ${keptMessagesCount} messages (from here onwards).\nOld messages (${oldMessagesCount}) will be moved to a new session.`
       )
     )
       return
@@ -108,8 +108,9 @@
       const result = await api.splitSession(session.projectName, session.id, msg.uuid)
 
       if (result.success && result.newSessionId) {
-        messages = messages.slice(0, msgIndex)
-        toast = `Session split successfully! New session ID: ${result.newSessionId}`
+        // Keep messages from split point onwards (original session keeps newer messages)
+        messages = messages.slice(msgIndex)
+        toast = `Session split! Old messages moved to new session: ${result.newSessionId.slice(0, 8)}...`
       } else {
         error = result.error ?? 'Failed to split session'
       }
