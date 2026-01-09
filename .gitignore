@@ -11,3 +11,6 @@ build/
 packages/web/test-results/
 .claude/
 .playwright-mcp/
+
+*storybook.log
+storybook-static
