@@ -3,11 +3,9 @@ import { SessionTreeProvider, type SessionTreeItem } from './treeProvider'
 import * as session from '@claude-sessions/core'
 import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { outputChannel } from './output'
 
 let webServerProcess: ChildProcess | null = null
-
-// Global output channel for debugging
-export const outputChannel = vscode.window.createOutputChannel('Claude Sessions')
 
 // Configure core library to use VSCode output channel
 session.setLogger({

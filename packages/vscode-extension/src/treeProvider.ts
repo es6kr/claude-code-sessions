@@ -8,11 +8,19 @@ import { homedir } from 'os'
 const MIME_TYPE = 'application/vnd.code.tree.claudesessions'
 const USER_HOME = homedir()
 
-// Import outputChannel from extension for debug logging
-import { outputChannel } from './extension'
+// Import outputChannel from separate module to avoid circular dependency
+import { outputChannel } from './output'
 
 const debug = (msg: string, ...args: unknown[]) => {
   outputChannel.appendLine(`[DnD] ${msg} ${args.length > 0 ? JSON.stringify(args) : ''}`)
+}
+
+interface SessionDTO {
+  type: string
+  projectName: string
+  sessionId: string
+  label: string
+  id: string
 }
 
 export class SessionTreeProvider
@@ -25,16 +33,15 @@ export class SessionTreeProvider
   >()
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event
 
-  // Drag and drop
+  // Drag and drop - match official VSCode sample
   readonly dropMimeTypes = [MIME_TYPE]
-  readonly dragMimeTypes = [MIME_TYPE]
+  readonly dragMimeTypes = ['text/uri-list', MIME_TYPE]
 
   refresh(): void {
     this._onDidChangeTreeData.fire()
   }
 
   getTreeItem(element: SessionTreeItem): vscode.TreeItem {
-    debug('getTreeItem', { type: element.type, label: element.label })
     return element
   }
 
@@ -44,13 +51,17 @@ export class SessionTreeProvider
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _token: vscode.CancellationToken
   ): Promise<void> {
-    debug('handleDrag called', { sourceCount: source.length, types: source.map((s) => s.type) })
-    const sessions = source.filter((item) => item.type === 'session')
-    debug('filtered sessions', { sessionCount: sessions.length })
-    if (sessions.length > 0) {
-      dataTransfer.set(MIME_TYPE, new vscode.DataTransferItem(sessions))
-      debug('dataTransfer set with MIME_TYPE', MIME_TYPE)
-    }
+    // Create safe DTOs to avoid circular references and serialization issues
+    const items = source.map((s) => ({
+      type: s.type,
+      projectName: s.projectName,
+      sessionId: s.sessionId,
+      label: s.label,
+      id: s.id,
+    }))
+
+    // Use DTOs for custom MIME type
+    dataTransfer.set(MIME_TYPE, new vscode.DataTransferItem(items))
   }
 
   public async handleDrop(
@@ -59,30 +70,62 @@ export class SessionTreeProvider
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     _token: vscode.CancellationToken
   ): Promise<void> {
+    const types: string[] = []
+    dataTransfer.forEach((_, mimeType) => {
+      types.push(mimeType)
+    })
+
     debug('handleDrop called', {
       targetType: target?.type,
       targetLabel: target?.label,
       targetProject: target?.projectName,
+      availableMimeTypes: types,
     })
 
-    if (!target || target.type !== 'project') {
-      debug('drop rejected: target is not a project')
+    // Need a target to drop onto
+    if (!target) {
+      debug('drop rejected: no target')
       return
     }
 
+    let sessions: SessionDTO[] = []
+
+    // Try getting items from custom MIME type
     const transferItem = dataTransfer.get(MIME_TYPE)
-    debug('transferItem', { hasMimeType: !!transferItem })
-
-    if (!transferItem) {
-      debug('drop rejected: no transfer item with MIME_TYPE')
-      return
+    if (transferItem) {
+      const value = transferItem.value
+      if (Array.isArray(value)) {
+        // Filter for sessions from the DTO array
+        sessions = value.filter(
+          (item): item is SessionDTO =>
+            item && typeof item === 'object' && 'type' in item && item.type === 'session'
+        )
+        debug('MIME_TYPE sessions found', { count: sessions.length })
+      } else {
+        // If value is string (sometimes happens with IPC), parse it
+        if (typeof value === 'string') {
+          try {
+            const parsed = JSON.parse(value)
+            if (Array.isArray(parsed)) {
+              sessions = parsed.filter(
+                (item): item is SessionDTO =>
+                  item && typeof item === 'object' && 'type' in item && item.type === 'session'
+              )
+              debug('MIME_TYPE string parsed sessions', { count: sessions.length })
+            }
+          } catch (e) {
+            debug('MIME_TYPE value string parse failed', e)
+          }
+        } else {
+          debug('MIME_TYPE value is weird type', { type: typeof value })
+        }
+      }
     }
 
-    const sessions = transferItem.value as SessionTreeItem[]
-    debug('sessions from transfer', { count: sessions?.length, sessions })
+    debug('final sessions to move', { count: sessions.length })
 
-    if (!sessions || sessions.length === 0) {
-      debug('drop rejected: no sessions in transfer')
+    if (sessions.length === 0) {
+      debug('drop rejected: no sessions to move')
       return
     }
 
@@ -157,46 +200,53 @@ export class SessionTreeProvider
       const projectData = await Effect.runPromise(session.loadProjectTreeData(element.projectName))
       if (!projectData) return []
 
-      return projectData.sessions.map(
-        (s) =>
-          new SessionTreeItem(
-            session.getDisplayTitle(s.customTitle, s.currentSummary, s.title),
-            vscode.TreeItemCollapsibleState.Collapsed,
-            'session',
-            element.projectName,
-            s.id,
-            s.messageCount,
-            s.updatedAt
-          )
-      )
+      return projectData.sessions.map((s) => {
+        // Calculate if session has sub-items (summaries, agents, todos)
+        const todoCount =
+          s.todos.sessionTodos.length +
+          s.todos.agentTodos.reduce((sum, a) => sum + a.todos.length, 0)
+        const hasSubItems = s.summaries.length > 0 || s.agents.length > 0 || todoCount > 0
+
+        return new SessionTreeItem(
+          session.getDisplayTitle(s.customTitle, s.currentSummary, s.title),
+          hasSubItems
+            ? vscode.TreeItemCollapsibleState.Collapsed
+            : vscode.TreeItemCollapsibleState.None,
+          'session',
+          element.projectName,
+          s.id,
+          s.messageCount,
+          s.updatedAt
+        )
+      })
     }
 
     if (element.type === 'session') {
-      // Show "Todos" and "Agents" groups under session
-      const messages = await Effect.runPromise(
-        session.readSession(element.projectName, element.sessionId)
+      // Show "Summaries", "Todos" and "Agents" groups under session
+      const sessionData = await Effect.runPromise(
+        session.loadSessionTreeData(element.projectName, element.sessionId)
       )
-      const agentIds = [
-        ...new Set(
-          messages
-            .filter(
-              (m): m is typeof m & { agentId: string } =>
-                m.type === 'agent' && typeof (m as { agentId?: string }).agentId === 'string'
-            )
-            .map((m) => m.agentId)
-        ),
-      ]
-
-      const todosResult = await Effect.runPromise(
-        session.findLinkedTodos(element.sessionId, agentIds)
-      )
-      const totalTodos =
-        todosResult.sessionTodos.length +
-        todosResult.agentTodos.reduce((sum, a) => sum + a.todos.length, 0)
 
       const items: SessionTreeItem[] = []
 
+      // Summaries group (if any)
+      if (sessionData.summaries.length > 0) {
+        items.push(
+          new SessionTreeItem(
+            'Summaries',
+            vscode.TreeItemCollapsibleState.Collapsed,
+            'summaries-group',
+            element.projectName,
+            element.sessionId,
+            sessionData.summaries.length
+          )
+        )
+      }
+
       // Todos group
+      const totalTodos =
+        sessionData.todos.sessionTodos.length +
+        sessionData.todos.agentTodos.reduce((sum, a) => sum + a.todos.length, 0)
       if (totalTodos > 0) {
         items.push(
           new SessionTreeItem(
@@ -211,7 +261,7 @@ export class SessionTreeProvider
       }
 
       // Agents group
-      if (agentIds.length > 0) {
+      if (sessionData.agents.length > 0) {
         items.push(
           new SessionTreeItem(
             'Agents',
@@ -219,7 +269,7 @@ export class SessionTreeProvider
             'agents-group',
             element.projectName,
             element.sessionId,
-            agentIds.length
+            sessionData.agents.length
           )
         )
       }
@@ -227,30 +277,38 @@ export class SessionTreeProvider
       return items
     }
 
+    if (element.type === 'summaries-group') {
+      // Show summaries under "Summaries" group
+      const sessionData = await Effect.runPromise(
+        session.loadSessionTreeData(element.projectName, element.sessionId)
+      )
+
+      return sessionData.summaries.map((summary, idx) => {
+        // Truncate summary text for display
+        const displayText =
+          summary.summary.length > 60 ? summary.summary.slice(0, 57) + '...' : summary.summary
+        return new SessionTreeItem(
+          displayText,
+          vscode.TreeItemCollapsibleState.None,
+          'summary',
+          element.projectName,
+          element.sessionId,
+          idx === 0 ? undefined : idx, // Show index for older summaries
+          summary.timestamp
+        )
+      })
+    }
+
     if (element.type === 'todos-group') {
       // Show todos under "Todos" group
-      const messages = await Effect.runPromise(
-        session.readSession(element.projectName, element.sessionId)
-      )
-      const agentIds = [
-        ...new Set(
-          messages
-            .filter(
-              (m): m is typeof m & { agentId: string } =>
-                m.type === 'agent' && typeof (m as { agentId?: string }).agentId === 'string'
-            )
-            .map((m) => m.agentId)
-        ),
-      ]
-
-      const todosResult = await Effect.runPromise(
-        session.findLinkedTodos(element.sessionId, agentIds)
+      const sessionData = await Effect.runPromise(
+        session.loadSessionTreeData(element.projectName, element.sessionId)
       )
 
       const items: SessionTreeItem[] = []
 
       // Session todos
-      for (const todo of todosResult.sessionTodos) {
+      for (const todo of sessionData.todos.sessionTodos) {
         items.push(
           new SessionTreeItem(
             todo.content,
@@ -266,7 +324,7 @@ export class SessionTreeProvider
       }
 
       // Agent todos
-      for (const agentTodo of todosResult.agentTodos) {
+      for (const agentTodo of sessionData.todos.agentTodos) {
         for (const todo of agentTodo.todos) {
           items.push(
             new SessionTreeItem(
@@ -289,32 +347,22 @@ export class SessionTreeProvider
 
     if (element.type === 'agents-group') {
       // Show agents under "Agents" group
-      const messages = await Effect.runPromise(
-        session.readSession(element.projectName, element.sessionId)
+      const sessionData = await Effect.runPromise(
+        session.loadSessionTreeData(element.projectName, element.sessionId)
       )
-      const agentIds = [
-        ...new Set(
-          messages
-            .filter(
-              (m): m is typeof m & { agentId: string } =>
-                m.type === 'agent' && typeof (m as { agentId?: string }).agentId === 'string'
-            )
-            .map((m) => m.agentId)
-        ),
-      ]
 
-      return agentIds.map(
-        (agentId) =>
+      return sessionData.agents.map(
+        (agent) =>
           new SessionTreeItem(
-            agentId.slice(0, 8),
+            agent.name ?? agent.id.slice(0, 8),
             vscode.TreeItemCollapsibleState.None,
             'agent',
             element.projectName,
             element.sessionId,
+            agent.messageCount,
             undefined,
             undefined,
-            undefined,
-            agentId
+            agent.id
           )
       )
     }
@@ -323,7 +371,15 @@ export class SessionTreeProvider
   }
 }
 
-type TreeItemType = 'project' | 'session' | 'todos-group' | 'agents-group' | 'todo' | 'agent'
+type TreeItemType =
+  | 'project'
+  | 'session'
+  | 'summaries-group'
+  | 'todos-group'
+  | 'agents-group'
+  | 'summary'
+  | 'todo'
+  | 'agent'
 
 export class SessionTreeItem extends vscode.TreeItem {
   constructor(
@@ -339,6 +395,8 @@ export class SessionTreeItem extends vscode.TreeItem {
   ) {
     super(label, collapsibleState)
 
+    // Set unique ID for drag and drop to work (required by VSCode)
+    this.id = `${type}:${projectName}:${sessionId}`
     this.contextValue = type
 
     if (type === 'project') {
@@ -354,12 +412,18 @@ export class SessionTreeItem extends vscode.TreeItem {
         title: 'Open Session',
         arguments: [this],
       }
+    } else if (type === 'summaries-group') {
+      this.iconPath = new vscode.ThemeIcon('history')
+      this.description = `${count ?? 0}`
     } else if (type === 'todos-group') {
       this.iconPath = new vscode.ThemeIcon('checklist')
       this.description = `${count ?? 0}`
     } else if (type === 'agents-group') {
       this.iconPath = new vscode.ThemeIcon('hubot')
       this.description = `${count ?? 0}`
+    } else if (type === 'summary') {
+      this.iconPath = new vscode.ThemeIcon('note')
+      this.description = updatedAt ? formatDate(updatedAt) : undefined
     } else if (type === 'todo') {
       const status = todo?.status ?? 'pending'
       if (status === 'completed') {
