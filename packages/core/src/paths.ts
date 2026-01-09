@@ -248,3 +248,52 @@ export const folderNameToPath = (folderName: string): string => {
   const absolutePath = folderNameToDisplayPath(folderName)
   return toRelativePath(absolutePath, homeDir)
 }
+
+/**
+ * Find project folder name that matches the given workspace path
+ * Searches through all projects and checks if any session's cwd matches
+ *
+ * @param workspacePath - Absolute path of current workspace
+ * @param projectNames - List of project folder names to search
+ * @param sessionsDir - Optional sessions directory for testing
+ * @param fileSystem - Optional FileSystem for testing
+ * @param logger - Optional Logger for testing
+ * @returns Matching project folder name or null
+ */
+export const findProjectByWorkspacePath = (
+  workspacePath: string,
+  projectNames: string[],
+  sessionsDir: string = getSessionsDir(),
+  fileSystem: FileSystem = fs,
+  logger: Logger = log
+): string | null => {
+  // First, check if direct conversion matches any project
+  const directMatch = pathToFolderName(workspacePath)
+  if (projectNames.includes(directMatch)) {
+    return directMatch
+  }
+
+  // Search through projects to find one with matching cwd
+  for (const projectName of projectNames) {
+    const projectDir = path.join(sessionsDir, projectName)
+
+    try {
+      const files = fileSystem.readdirSync(projectDir).filter(isSessionFile)
+
+      for (const f of files) {
+        const cwd = tryGetCwdFromFile(path.join(projectDir, f), fileSystem, logger)
+        if (cwd === workspacePath) {
+          logger.debug(
+            `findProjectByWorkspacePath: ${workspacePath} -> found in ${projectName} (moved session)`
+          )
+          return projectName
+        }
+      }
+    } catch {
+      // Skip inaccessible projects
+    }
+  }
+
+  logger.debug(`findProjectByWorkspacePath: ${workspacePath} -> no matching project found`)
+  return null
+}

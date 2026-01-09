@@ -1,9 +1,15 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   pathToFolderName,
   folderNameToDisplayPath,
   displayPathToFolderName,
   toRelativePath,
+  findProjectByWorkspacePath,
+  extractCwdFromContent,
+  isSessionFile,
+  tryGetCwdFromFile,
+  type FileSystem,
+  type Logger,
 } from './paths.js'
 
 describe('pathToFolderName', () => {
@@ -201,5 +207,236 @@ describe('roundtrip conversion', () => {
       const restored = folderNameToDisplayPath(folderName)
       expect(restored).toBe(original)
     })
+  })
+})
+
+// ============================================
+// Pure function tests
+// ============================================
+
+describe('extractCwdFromContent', () => {
+  it('extracts cwd from first line', () => {
+    const content = '{"cwd":"/home/user/project","type":"user"}\n{"type":"assistant"}'
+    expect(extractCwdFromContent(content)).toBe('/home/user/project')
+  })
+
+  it('extracts cwd from later line if first line has no cwd', () => {
+    const content = '{"type":"system"}\n{"cwd":"/home/user/project","type":"user"}'
+    expect(extractCwdFromContent(content)).toBe('/home/user/project')
+  })
+
+  it('returns null for empty content', () => {
+    expect(extractCwdFromContent('')).toBeNull()
+  })
+
+  it('returns null when no cwd field exists', () => {
+    const content = '{"type":"user"}\n{"type":"assistant"}'
+    expect(extractCwdFromContent(content)).toBeNull()
+  })
+
+  it('handles Windows paths in cwd', () => {
+    const content = '{"cwd":"C:\\\\Users\\\\david\\\\project"}'
+    expect(extractCwdFromContent(content)).toBe('C:\\Users\\david\\project')
+  })
+})
+
+describe('isSessionFile', () => {
+  it('returns true for .jsonl files', () => {
+    expect(isSessionFile('abc123.jsonl')).toBe(true)
+  })
+
+  it('returns false for agent files', () => {
+    expect(isSessionFile('agent-abc123.jsonl')).toBe(false)
+  })
+
+  it('returns false for non-jsonl files', () => {
+    expect(isSessionFile('readme.md')).toBe(false)
+    expect(isSessionFile('config.json')).toBe(false)
+  })
+})
+
+// ============================================
+// I/O function tests with mocks
+// ============================================
+
+describe('tryGetCwdFromFile', () => {
+  const mockLogger: Logger = {
+    debug: vi.fn(),
+    warn: vi.fn(),
+  }
+
+  it('extracts cwd from valid session file', () => {
+    const mockFs: FileSystem = {
+      readFileSync: () => '{"cwd":"/home/user/project","type":"user"}',
+      readdirSync: () => [],
+    }
+
+    const result = tryGetCwdFromFile('/path/to/session.jsonl', mockFs, mockLogger)
+    expect(result).toBe('/home/user/project')
+  })
+
+  it('returns null for file without cwd', () => {
+    const mockFs: FileSystem = {
+      readFileSync: () => '{"type":"user"}',
+      readdirSync: () => [],
+    }
+
+    const result = tryGetCwdFromFile('/path/to/session.jsonl', mockFs, mockLogger)
+    expect(result).toBeNull()
+  })
+
+  it('returns null and logs warning on read error', () => {
+    const warnFn = vi.fn()
+    const mockFs: FileSystem = {
+      readFileSync: () => {
+        throw new Error('ENOENT')
+      },
+      readdirSync: () => [],
+    }
+
+    const result = tryGetCwdFromFile('/path/to/session.jsonl', mockFs, {
+      debug: vi.fn(),
+      warn: warnFn,
+    })
+    expect(result).toBeNull()
+    expect(warnFn).toHaveBeenCalled()
+  })
+})
+
+describe('findProjectByWorkspacePath', () => {
+  const mockLogger: Logger = {
+    debug: vi.fn(),
+    warn: vi.fn(),
+  }
+
+  it('returns direct match when pathToFolderName matches a project', () => {
+    const mockFs: FileSystem = {
+      readFileSync: () => '',
+      readdirSync: () => [],
+    }
+
+    // /home/user/projects -> -home-user-projects
+    const result = findProjectByWorkspacePath(
+      '/home/user/projects',
+      ['-home-user-projects', '-home-user-other'],
+      '/tmp/sessions',
+      mockFs,
+      mockLogger
+    )
+
+    expect(result).toBe('-home-user-projects')
+  })
+
+  it('finds moved session by searching cwd in session files', () => {
+    const mockFs: FileSystem = {
+      readFileSync: (filePath: string) => {
+        // Session in 'old-folder' has cwd pointing to current workspace
+        if (filePath.includes('old-folder')) {
+          return '{"cwd":"/home/user/current-project","type":"user"}'
+        }
+        return '{"cwd":"/some/other/path","type":"user"}'
+      },
+      readdirSync: (dirPath: string) => {
+        if (dirPath.includes('old-folder')) {
+          return ['session1.jsonl', 'session2.jsonl']
+        }
+        if (dirPath.includes('another-folder')) {
+          return ['session3.jsonl']
+        }
+        return []
+      },
+    }
+
+    // Workspace is /home/user/current-project
+    // But pathToFolderName would give -home-user-current-project which doesn't exist
+    // However, 'old-folder' has a session with cwd=/home/user/current-project
+    const result = findProjectByWorkspacePath(
+      '/home/user/current-project',
+      ['old-folder', 'another-folder'],
+      '/tmp/sessions',
+      mockFs,
+      mockLogger
+    )
+
+    expect(result).toBe('old-folder')
+  })
+
+  it('returns null when no matching project found', () => {
+    const debugFn = vi.fn()
+    const mockFs: FileSystem = {
+      readFileSync: () => '{"cwd":"/different/path","type":"user"}',
+      readdirSync: () => ['session.jsonl'],
+    }
+
+    const result = findProjectByWorkspacePath(
+      '/home/user/my-project',
+      ['some-project', 'other-project'],
+      '/tmp/sessions',
+      mockFs,
+      { debug: debugFn, warn: vi.fn() }
+    )
+
+    expect(result).toBeNull()
+    expect(debugFn).toHaveBeenCalledWith(expect.stringContaining('no matching project found'))
+  })
+
+  it('returns null for empty project list', () => {
+    const mockFs: FileSystem = {
+      readFileSync: () => '',
+      readdirSync: () => [],
+    }
+
+    const result = findProjectByWorkspacePath(
+      '/home/user/projects',
+      [],
+      '/tmp/sessions',
+      mockFs,
+      mockLogger
+    )
+
+    expect(result).toBeNull()
+  })
+
+  it('skips inaccessible project directories', () => {
+    const mockFs: FileSystem = {
+      readFileSync: () => '{"cwd":"/home/user/target","type":"user"}',
+      readdirSync: (dirPath: string) => {
+        if (dirPath.includes('inaccessible')) {
+          throw new Error('EACCES')
+        }
+        return ['session.jsonl']
+      },
+    }
+
+    // First project throws, second should still be checked
+    const result = findProjectByWorkspacePath(
+      '/home/user/target',
+      ['inaccessible-project', 'accessible-project'],
+      '/tmp/sessions',
+      mockFs,
+      mockLogger
+    )
+
+    expect(result).toBe('accessible-project')
+  })
+
+  it('prefers direct match over cwd search', () => {
+    const mockFs: FileSystem = {
+      readFileSync: () => '{"cwd":"/home/user/projects","type":"user"}',
+      readdirSync: () => ['session.jsonl'],
+    }
+
+    // Both direct match and cwd match exist
+    // -home-user-projects is the direct conversion
+    const result = findProjectByWorkspacePath(
+      '/home/user/projects',
+      ['-home-user-projects', 'moved-project-folder'],
+      '/tmp/sessions',
+      mockFs,
+      mockLogger
+    )
+
+    // Should return direct match without even reading files
+    expect(result).toBe('-home-user-projects')
   })
 })

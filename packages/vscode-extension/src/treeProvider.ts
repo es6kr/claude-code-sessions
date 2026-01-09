@@ -114,18 +114,21 @@ export class SessionTreeProvider
     this.refresh()
   }
 
-  private getCurrentProjectName(): string | null {
+  private findCurrentProject(projectNames: string[]): string | null {
     const workspaceFolders = vscode.workspace.workspaceFolders
     if (!workspaceFolders || workspaceFolders.length === 0) return null
     const fsPath = workspaceFolders[0].uri.fsPath
-    return session.pathToFolderName(fsPath)
+    // Use findProjectByWorkspacePath which verifies against actual project list
+    // and searches session cwd for moved sessions
+    return session.findProjectByWorkspacePath(fsPath, projectNames)
   }
 
   async getChildren(element?: SessionTreeItem): Promise<SessionTreeItem[]> {
     if (!element) {
       // Root level - show projects
       const projects = await Effect.runPromise(session.listProjects)
-      const currentProjectName = this.getCurrentProjectName()
+      const projectNames = projects.map((p) => p.name)
+      const currentProjectName = this.findCurrentProject(projectNames)
 
       // Sort: 1) current project, 2) current user's home subpaths, 3) others
       const sorted = sortProjects(projects, {

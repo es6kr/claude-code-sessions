@@ -38,6 +38,7 @@ export {
   pathToFolderName,
   folderNameToPath,
   getRealPathFromSession,
+  findProjectByWorkspacePath,
 } from './paths.js'
 
 // Message utilities
