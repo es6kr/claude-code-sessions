@@ -2,7 +2,7 @@
   import { page } from '$app/state'
   import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
-  import { SessionViewer, Toast } from '$lib/components'
+  import { ConfirmModal, InputModal, SessionViewer, Toast } from '$lib/components'
   import { onMount } from 'svelte'
 
   // State
@@ -16,6 +16,61 @@
   let projectDisplayName = $state<string>('')
   let customTitle = $state<string | undefined>(undefined)
   let currentSummary = $state<string | undefined>(undefined)
+
+  // Modal states
+  let confirmModal = $state<{
+    show: boolean
+    title: string
+    message: string
+    variant: 'danger' | 'default'
+    onConfirm: () => void
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    variant: 'default',
+    onConfirm: () => {},
+  })
+
+  let inputModal = $state<{
+    show: boolean
+    title: string
+    label: string
+    initialValue: string
+    onConfirm: (value: string) => void
+  }>({
+    show: false,
+    title: '',
+    label: '',
+    initialValue: '',
+    onConfirm: () => {},
+  })
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    variant: 'danger' | 'default' = 'default'
+  ) => {
+    confirmModal = { show: true, title, message, variant, onConfirm }
+  }
+
+  const closeConfirm = () => {
+    confirmModal = { ...confirmModal, show: false }
+  }
+
+  const showInput = (
+    title: string,
+    label: string,
+    initialValue: string,
+    onConfirm: (value: string) => void
+  ) => {
+    inputModal = { show: true, title, label, initialValue, onConfirm }
+  }
+
+  const closeInput = () => {
+    inputModal = { ...inputModal, show: false }
+  }
 
   // Get params from URL
   const projectName = $derived(decodeURIComponent(page.params.project ?? ''))
@@ -73,52 +128,54 @@
     }
   }
 
-  const handleEditTitle = async (msg: Message) => {
+  const handleEditTitle = (msg: Message) => {
     if (!session) return
 
     const currentTitle = (msg as Message & { customTitle?: string }).customTitle ?? ''
-    const newTitle = prompt('Enter new custom title:', currentTitle)
-    if (newTitle === null || newTitle === currentTitle) return
+    showInput('Edit Custom Title', 'Custom title:', currentTitle, async (newTitle) => {
+      closeInput()
+      if (newTitle === currentTitle) return
 
-    try {
-      await api.updateCustomTitle(session.projectName, session.id, msg.uuid, newTitle)
-      ;(msg as Message & { customTitle?: string }).customTitle = newTitle
-      messages = [...messages]
-    } catch (e) {
-      error = String(e)
-    }
+      try {
+        await api.updateCustomTitle(session!.projectName, session!.id, msg.uuid, newTitle)
+        ;(msg as Message & { customTitle?: string }).customTitle = newTitle
+        messages = [...messages]
+      } catch (e) {
+        error = String(e)
+      }
+    })
   }
 
-  const handleSplitSession = async (msg: Message) => {
+  const handleSplitSession = (msg: Message) => {
     if (!session) return
 
     const msgIndex = messages.findIndex((m) => m.uuid === msg.uuid)
     const oldMessagesCount = msgIndex
     const keptMessagesCount = messages.length - msgIndex
 
-    if (
-      !confirm(
-        `Split session at this message?\n\nThis session will keep ${keptMessagesCount} messages (from here onwards).\nOld messages (${oldMessagesCount}) will be moved to a new session.`
-      )
-    )
-      return
+    showConfirm(
+      'Split Session',
+      `Split session at this message?\n\nThis session will keep ${keptMessagesCount} messages (from here onwards).\nOld messages (${oldMessagesCount}) will be moved to a new session.`,
+      async () => {
+        closeConfirm()
+        try {
+          loading = true
+          const result = await api.splitSession(session!.projectName, session!.id, msg.uuid)
 
-    try {
-      loading = true
-      const result = await api.splitSession(session.projectName, session.id, msg.uuid)
-
-      if (result.success && result.newSessionId) {
-        // Keep messages from split point onwards (original session keeps newer messages)
-        messages = messages.slice(msgIndex)
-        toast = `Session split! Old messages moved to new session: ${result.newSessionId.slice(0, 8)}...`
-      } else {
-        error = result.error ?? 'Failed to split session'
+          if (result.success && result.newSessionId) {
+            // Keep messages from split point onwards (original session keeps newer messages)
+            messages = messages.slice(msgIndex)
+            toast = `Session split! Old messages moved to new session: ${result.newSessionId.slice(0, 8)}...`
+          } else {
+            error = result.error ?? 'Failed to split session'
+          }
+        } catch (e) {
+          error = String(e)
+        } finally {
+          loading = false
+        }
       }
-    } catch (e) {
-      error = String(e)
-    } finally {
-      loading = false
-    }
+    )
   }
 
   onMount(loadSession)
@@ -157,3 +214,21 @@
 </div>
 
 <Toast bind:message={toast} />
+
+<ConfirmModal
+  show={confirmModal.show}
+  title={confirmModal.title}
+  message={confirmModal.message}
+  variant={confirmModal.variant}
+  onConfirm={confirmModal.onConfirm}
+  onCancel={closeConfirm}
+/>
+
+<InputModal
+  show={inputModal.show}
+  title={inputModal.title}
+  label={inputModal.label}
+  initialValue={inputModal.initialValue}
+  onConfirm={inputModal.onConfirm}
+  onCancel={closeInput}
+/>

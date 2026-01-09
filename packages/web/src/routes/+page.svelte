@@ -3,7 +3,7 @@
   import { browser } from '$app/environment'
   import * as api from '$lib/api'
   import type { Project, SessionMeta, SessionData, Message, TodoItem, AgentInfo } from '$lib/api'
-  import { ProjectTree, SessionViewer, Toast } from '$lib/components'
+  import { ConfirmModal, InputModal, ProjectTree, SessionViewer, Toast } from '$lib/components'
   import { getDisplayTitle } from '$lib/utils'
 
   // State
@@ -19,6 +19,61 @@
   let loadingProject = $state<string | null>(null)
   let error = $state<string | null>(null)
   let toast = $state<string | null>(null)
+
+  // Modal states
+  let confirmModal = $state<{
+    show: boolean
+    title: string
+    message: string
+    variant: 'danger' | 'default'
+    onConfirm: () => void
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    variant: 'default',
+    onConfirm: () => {},
+  })
+
+  let inputModal = $state<{
+    show: boolean
+    title: string
+    label: string
+    initialValue: string
+    onConfirm: (value: string) => void
+  }>({
+    show: false,
+    title: '',
+    label: '',
+    initialValue: '',
+    onConfirm: () => {},
+  })
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    variant: 'danger' | 'default' = 'default'
+  ) => {
+    confirmModal = { show: true, title, message, variant, onConfirm }
+  }
+
+  const closeConfirm = () => {
+    confirmModal = { ...confirmModal, show: false }
+  }
+
+  const showInput = (
+    title: string,
+    label: string,
+    initialValue: string,
+    onConfirm: (value: string) => void
+  ) => {
+    inputModal = { show: true, title, label, initialValue, onConfirm }
+  }
+
+  const closeInput = () => {
+    inputModal = { ...inputModal, show: false }
+  }
 
   // URL hash helpers
   const parseHash = (): { project?: string; session?: string } => {
@@ -149,31 +204,37 @@
     }
   }
 
-  const handleDeleteSession = async (e: Event, session: SessionMeta) => {
+  const handleDeleteSession = (e: Event, session: SessionMeta) => {
     e.stopPropagation()
-    if (!confirm(`Delete session "${session.title}"?`)) return
-
-    try {
-      await api.deleteSession(session.projectName, session.id)
-      const sessions = projectSessions.get(session.projectName)
-      if (sessions) {
-        projectSessions.set(
-          session.projectName,
-          sessions.filter((s) => s.id !== session.id)
-        )
-        projectSessions = new Map(projectSessions)
-      }
-      if (selectedSession?.id === session.id) {
-        selectedSession = null
-        messages = []
-        updateHash(session.projectName)
-      }
-    } catch (e) {
-      error = String(e)
-    }
+    showConfirm(
+      'Delete Session',
+      `Delete session "${session.title}"?`,
+      async () => {
+        closeConfirm()
+        try {
+          await api.deleteSession(session.projectName, session.id)
+          const sessions = projectSessions.get(session.projectName)
+          if (sessions) {
+            projectSessions.set(
+              session.projectName,
+              sessions.filter((s) => s.id !== session.id)
+            )
+            projectSessions = new Map(projectSessions)
+          }
+          if (selectedSession?.id === session.id) {
+            selectedSession = null
+            messages = []
+            updateHash(session.projectName)
+          }
+        } catch (e) {
+          error = String(e)
+        }
+      },
+      'danger'
+    )
   }
 
-  const handleRenameSession = async (e: Event, session: SessionMeta) => {
+  const handleRenameSession = (e: Event, session: SessionMeta) => {
     e.stopPropagation()
     const sessionData = projectSessionData.get(session.projectName)?.get(session.id)
     // Use same priority as displayTitle: customTitle > currentSummary > title
@@ -185,35 +246,39 @@
       ''
     )
 
-    const newTitle = prompt(
-      'Enter session title:\n(Sets custom-title for CLI, first summary for VSCode extension)',
-      currentTitle
-    )
-    if (newTitle === null) return
+    showInput(
+      'Rename Session',
+      'Sets custom-title for CLI, first summary for VSCode extension',
+      currentTitle,
+      async (newTitle) => {
+        closeInput()
+        if (newTitle === currentTitle) return
 
-    try {
-      await api.renameSession(session.projectName, session.id, newTitle)
+        try {
+          await api.renameSession(session.projectName, session.id, newTitle)
 
-      // Update local state (customTitle = currentSummary)
-      if (sessionData) {
-        sessionData.customTitle = newTitle
-        sessionData.currentSummary = newTitle
-        if (sessionData.summaries.length > 0) {
-          sessionData.summaries[0] = { ...sessionData.summaries[0], summary: newTitle }
-        } else {
-          sessionData.summaries = [{ summary: newTitle }]
+          // Update local state (customTitle = currentSummary)
+          if (sessionData) {
+            sessionData.customTitle = newTitle
+            sessionData.currentSummary = newTitle
+            if (sessionData.summaries.length > 0) {
+              sessionData.summaries[0] = { ...sessionData.summaries[0], summary: newTitle }
+            } else {
+              sessionData.summaries = [{ summary: newTitle }]
+            }
+          }
+          projectSessions = new Map(projectSessions)
+          projectSessionData = new Map(projectSessionData)
+
+          // Reload messages if this session is currently selected (summary may have been added)
+          if (selectedSession?.id === session.id) {
+            messages = await api.getSession(session.projectName, session.id)
+          }
+        } catch (e) {
+          error = String(e)
         }
       }
-      projectSessions = new Map(projectSessions)
-      projectSessionData = new Map(projectSessionData)
-
-      // Reload messages if this session is currently selected (summary may have been added)
-      if (selectedSession?.id === session.id) {
-        messages = await api.getSession(session.projectName, session.id)
-      }
-    } catch (e) {
-      error = String(e)
-    }
+    )
   }
 
   const handleDeleteMessage = async (msg: Message) => {
@@ -239,140 +304,147 @@
     }
   }
 
-  const handleEditCustomTitle = async (msg: Message) => {
+  const handleEditCustomTitle = (msg: Message) => {
     if (!selectedSession) return
 
     const currentTitle = (msg as Message & { customTitle?: string }).customTitle ?? ''
-    const newTitle = prompt('Enter new custom title:', currentTitle)
-    if (newTitle === null || newTitle === currentTitle) return
+    showInput('Edit Custom Title', 'Custom title:', currentTitle, async (newTitle) => {
+      closeInput()
+      if (newTitle === currentTitle) return
 
-    try {
-      await api.updateCustomTitle(
-        selectedSession.projectName,
-        selectedSession.id,
-        msg.uuid,
-        newTitle
-      )
-      ;(msg as Message & { customTitle?: string }).customTitle = newTitle
-      messages = [...messages]
-    } catch (e) {
-      error = String(e)
-    }
+      try {
+        await api.updateCustomTitle(
+          selectedSession!.projectName,
+          selectedSession!.id,
+          msg.uuid,
+          newTitle
+        )
+        ;(msg as Message & { customTitle?: string }).customTitle = newTitle
+        messages = [...messages]
+      } catch (e) {
+        error = String(e)
+      }
+    })
   }
 
-  const handleSplitSession = async (msg: Message) => {
+  const handleSplitSession = (msg: Message) => {
     if (!selectedSession) return
 
     const msgIndex = messages.findIndex((m) => m.uuid === msg.uuid)
     const oldMessagesCount = msgIndex // OLD messages (before split point) - get new ID
     const keptMessagesCount = messages.length - msgIndex // NEW messages (from split point) - keep original ID
 
-    if (
-      !confirm(
-        `Split session at this message?\n\nThis session will keep ${keptMessagesCount} messages (from here onwards).\nOld messages (${oldMessagesCount}) will be moved to a new session.`
-      )
-    )
-      return
+    showConfirm(
+      'Split Session',
+      `Split session at this message?\n\nThis session will keep ${keptMessagesCount} messages (from here onwards).\nOld messages (${oldMessagesCount}) will be moved to a new session.`,
+      async () => {
+        closeConfirm()
+        const currentProjectName = selectedSession!.projectName
+        const currentSessionId = selectedSession!.id
 
-    const currentProjectName = selectedSession.projectName
-    const currentSessionId = selectedSession.id
+        try {
+          loading = true
+          const result = await api.splitSession(currentProjectName, currentSessionId, msg.uuid)
 
-    try {
-      loading = true
-      const result = await api.splitSession(currentProjectName, currentSessionId, msg.uuid)
+          if (result.success && result.newSessionId) {
+            // Refresh full session data for current project
+            const sessionDataList = await api.expandProject(currentProjectName)
 
-      if (result.success && result.newSessionId) {
-        // Refresh full session data for current project
-        const sessionDataList = await api.expandProject(currentProjectName)
+            // Rebuild session metadata and data maps
+            const sessions: SessionMeta[] = []
+            const dataMap = new Map<string, SessionData>()
 
-        // Rebuild session metadata and data maps
-        const sessions: SessionMeta[] = []
-        const dataMap = new Map<string, SessionData>()
+            for (const data of sessionDataList) {
+              sessions.push({
+                id: data.id,
+                projectName: currentProjectName,
+                title: data.title,
+                messageCount: data.messageCount,
+                createdAt: data.createdAt,
+                updatedAt: data.updatedAt,
+              })
+              dataMap.set(data.id, data)
+            }
 
-        for (const data of sessionDataList) {
-          sessions.push({
-            id: data.id,
-            projectName: currentProjectName,
-            title: data.title,
-            messageCount: data.messageCount,
-            createdAt: data.createdAt,
-            updatedAt: data.updatedAt,
-          })
-          dataMap.set(data.id, data)
+            projectSessions.set(currentProjectName, sessions)
+            projectSessions = new Map(projectSessions)
+            projectSessionData.set(currentProjectName, dataMap)
+            projectSessionData = new Map(projectSessionData)
+
+            // Update current session view (show kept messages - FROM split point, newer messages)
+            messages = messages.slice(msgIndex)
+
+            // Update selectedSession reference to the refreshed session
+            // Must be done AFTER projectSessions is updated for reactivity to work
+            const updatedSession = sessions.find((s) => s.id === currentSessionId)
+            if (updatedSession) {
+              // Update message count to reflect kept messages
+              updatedSession.messageCount = messages.length
+              // Force reactivity by creating new object reference
+              selectedSession = { ...updatedSession }
+            }
+
+            toast = `Session split! Old messages moved to new session: ${result.newSessionId.slice(0, 8)}...`
+          } else {
+            error = result.error ?? 'Failed to split session'
+          }
+        } catch (e) {
+          error = String(e)
+        } finally {
+          loading = false
         }
-
-        projectSessions.set(currentProjectName, sessions)
-        projectSessions = new Map(projectSessions)
-        projectSessionData.set(currentProjectName, dataMap)
-        projectSessionData = new Map(projectSessionData)
-
-        // Update current session view (show kept messages - FROM split point, newer messages)
-        messages = messages.slice(msgIndex)
-
-        // Update selectedSession reference to the refreshed session
-        // Must be done AFTER projectSessions is updated for reactivity to work
-        const updatedSession = sessions.find((s) => s.id === currentSessionId)
-        if (updatedSession) {
-          // Update message count to reflect kept messages
-          updatedSession.messageCount = messages.length
-          // Force reactivity by creating new object reference
-          selectedSession = { ...updatedSession }
-        }
-
-        toast = `Session split! Old messages moved to new session: ${result.newSessionId.slice(0, 8)}...`
-      } else {
-        error = result.error ?? 'Failed to split session'
       }
-    } catch (e) {
-      error = String(e)
-    } finally {
-      loading = false
-    }
+    )
   }
 
-  const handleMoveSession = async (session: SessionMeta, targetProject: string) => {
-    if (!confirm(`Move session "${session.title}" to ${targetProject.split('-').pop()}?`)) return
+  const handleMoveSession = (session: SessionMeta, targetProject: string) => {
+    showConfirm(
+      'Move Session',
+      `Move session "${session.title}" to ${targetProject.split('-').pop()}?`,
+      async () => {
+        closeConfirm()
+        try {
+          loading = true
+          const result = await api.moveSession(session.projectName, session.id, targetProject)
 
-    try {
-      loading = true
-      const result = await api.moveSession(session.projectName, session.id, targetProject)
+          if (result.success) {
+            // Remove from source project
+            const sourceSessions = projectSessions.get(session.projectName)
+            if (sourceSessions) {
+              projectSessions.set(
+                session.projectName,
+                sourceSessions.filter((s) => s.id !== session.id)
+              )
+            }
 
-      if (result.success) {
-        // Remove from source project
-        const sourceSessions = projectSessions.get(session.projectName)
-        if (sourceSessions) {
-          projectSessions.set(
-            session.projectName,
-            sourceSessions.filter((s) => s.id !== session.id)
-          )
+            // Add to target project (refresh list)
+            const targetSessions = await api.listSessions(targetProject)
+            projectSessions.set(targetProject, targetSessions)
+            projectSessions = new Map(projectSessions)
+
+            // Update project counts
+            const sourceProject = projects.find((p) => p.name === session.projectName)
+            const destProject = projects.find((p) => p.name === targetProject)
+            if (sourceProject) sourceProject.sessionCount--
+            if (destProject) destProject.sessionCount++
+            projects = [...projects]
+
+            // Clear selection if moved session was selected
+            if (selectedSession?.id === session.id) {
+              selectedSession = null
+              messages = []
+              updateHash()
+            }
+          } else {
+            error = result.error ?? 'Failed to move session'
+          }
+        } catch (e) {
+          error = String(e)
+        } finally {
+          loading = false
         }
-
-        // Add to target project (refresh list)
-        const targetSessions = await api.listSessions(targetProject)
-        projectSessions.set(targetProject, targetSessions)
-        projectSessions = new Map(projectSessions)
-
-        // Update project counts
-        const sourceProject = projects.find((p) => p.name === session.projectName)
-        const destProject = projects.find((p) => p.name === targetProject)
-        if (sourceProject) sourceProject.sessionCount--
-        if (destProject) destProject.sessionCount++
-        projects = [...projects]
-
-        // Clear selection if moved session was selected
-        if (selectedSession?.id === session.id) {
-          selectedSession = null
-          messages = []
-          updateHash()
-        }
-      } else {
-        error = result.error ?? 'Failed to move session'
       }
-    } catch (e) {
-      error = String(e)
-    } finally {
-      loading = false
-    }
+    )
   }
 
   const handleResumeSession = async (e: Event, session: SessionMeta) => {
@@ -444,3 +516,21 @@
 {/if}
 
 <Toast bind:message={toast} />
+
+<ConfirmModal
+  show={confirmModal.show}
+  title={confirmModal.title}
+  message={confirmModal.message}
+  variant={confirmModal.variant}
+  onConfirm={confirmModal.onConfirm}
+  onCancel={closeConfirm}
+/>
+
+<InputModal
+  show={inputModal.show}
+  title={inputModal.title}
+  label={inputModal.label}
+  initialValue={inputModal.initialValue}
+  onConfirm={inputModal.onConfirm}
+  onCancel={closeInput}
+/>

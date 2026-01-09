@@ -3,7 +3,7 @@
 
   interface Props {
     message: string | null
-    variant?: 'success' | 'error' | 'info'
+    variant?: 'success' | 'error' | 'info' | 'warning'
     duration?: number
   }
 
@@ -15,6 +15,7 @@
     success: 'bg-gh-green/90',
     error: 'bg-gh-red/90',
     info: 'bg-gh-accent/90',
+    warning: 'bg-yellow-600/90',
   }
 
   $effect(() => {

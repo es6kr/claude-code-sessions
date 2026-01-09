@@ -6,6 +6,7 @@
   import type { Snippet } from 'svelte'
   import * as api from '$lib/api'
   import { appConfig } from '$lib/stores/config'
+  import { ConfirmModal, Toast } from '$lib/components'
 
   let { children }: { children: Snippet } = $props()
 
@@ -44,6 +45,46 @@
     deletedOrphanAgentCount: number
     deletedOrphanTodoCount: number
   } | null>(null)
+
+  // Toast for alerts
+  let toastMessage = $state<string | null>(null)
+  let toastVariant = $state<'success' | 'error' | 'info' | 'warning'>('info')
+
+  // Confirm modal state
+  let confirmModal = $state<{
+    show: boolean
+    title: string
+    message: string
+    variant: 'danger' | 'default'
+    onConfirm: () => void
+  }>({
+    show: false,
+    title: '',
+    message: '',
+    variant: 'default',
+    onConfirm: () => {},
+  })
+
+  const showToast = (
+    message: string,
+    variant: 'success' | 'error' | 'info' | 'warning' = 'info'
+  ) => {
+    toastMessage = message
+    toastVariant = variant
+  }
+
+  const showConfirm = (
+    title: string,
+    message: string,
+    onConfirm: () => void,
+    variant: 'danger' | 'default' = 'default'
+  ) => {
+    confirmModal = { show: true, title, message, variant, onConfirm }
+  }
+
+  const closeConfirm = () => {
+    confirmModal = { ...confirmModal, show: false }
+  }
 
   // Search state
   let searchQuery = $state('')
@@ -88,15 +129,21 @@
     }
   })
 
-  const handleShutdown = async () => {
-    if (!confirm('Shutdown the server?')) return
-
-    shuttingDown = true
-    try {
-      await api.shutdown()
-    } catch {
-      // Server is shutting down, connection will be lost
-    }
+  const handleShutdown = () => {
+    showConfirm(
+      'Shutdown',
+      'Shutdown the server?',
+      async () => {
+        closeConfirm()
+        shuttingDown = true
+        try {
+          await api.shutdown()
+        } catch {
+          // Server is shutting down, connection will be lost
+        }
+      },
+      'danger'
+    )
   }
 
   const openCleanupModal = async () => {
@@ -104,7 +151,7 @@
       cleanupPreview = await api.previewCleanup()
       showCleanupModal = true
     } catch (e) {
-      alert(`Error: ${e}`)
+      showToast(`Error: ${e}`, 'error')
     }
   }
 
@@ -115,7 +162,7 @@
 
   const executeCleanup = async () => {
     if (effectiveDeleteCount === 0 && !clearOrphanAgents && !clearOrphanTodos) {
-      alert('Nothing to clean up')
+      showToast('Nothing to clean up', 'warning')
       return
     }
 
@@ -135,7 +182,7 @@
         window.location.reload()
       }, 2000)
     } catch (e) {
-      alert(`Error: ${e}`)
+      showToast(`Error: ${e}`, 'error')
     } finally {
       cleaning = false
     }
@@ -510,3 +557,14 @@
     {/if}
   </div>
 {/if}
+
+<ConfirmModal
+  show={confirmModal.show}
+  title={confirmModal.title}
+  message={confirmModal.message}
+  variant={confirmModal.variant}
+  onConfirm={confirmModal.onConfirm}
+  onCancel={closeConfirm}
+/>
+
+<Toast bind:message={toastMessage} variant={toastVariant} />
