@@ -169,7 +169,17 @@ export class SessionTreeProvider
   async getChildren(element?: SessionTreeItem): Promise<SessionTreeItem[]> {
     if (!element) {
       // Root level - show projects
-      const projects = await Effect.runPromise(session.listProjects)
+      const allProjects = await Effect.runPromise(session.listProjects)
+
+      // Filter out projects matching exclude patterns
+      const excludePatterns = vscode.workspace
+        .getConfiguration('claudeSessions')
+        .get<string[]>('excludeProjectPatterns', [])
+      const projects =
+        excludePatterns.length > 0
+          ? allProjects.filter((p) => !excludePatterns.some((pattern) => p.name.includes(pattern)))
+          : allProjects
+
       const projectNames = projects.map((p) => p.name)
       const currentProjectName = this.findCurrentProject(projectNames)
 

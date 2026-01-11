@@ -38,5 +38,8 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Test
+      - name: Test (core)
         run: pnpm --filter @claude-sessions/core test
+
+      - name: Test (vscode extension)
+        run: xvfb-run -a pnpm --filter claude-sessions test

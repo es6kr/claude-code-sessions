@@ -12,5 +12,10 @@ packages/web/test-results/
 .claude/
 .playwright-mcp/
 
+# Storybook
 *storybook.log
 storybook-static
+
+# VSCode extension test files
+packages/vscode-extension/.vscode-test/
+packages/vscode-extension/out/

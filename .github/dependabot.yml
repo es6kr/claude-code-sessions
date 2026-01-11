@@ -9,6 +9,9 @@ updates:
         dependency-type: 'development'
       production-dependencies:
         dependency-type: 'production'
+    ignore:
+      - dependency-name: '@types/vscode'
+        update-types: ['version-update:semver-major', 'version-update:semver-minor']
 
   - package-ecosystem: 'github-actions'
     directory: '/'

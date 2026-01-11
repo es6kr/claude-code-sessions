@@ -23,9 +23,6 @@
     "ai"
   ],
   "icon": "resources/marketplace.png",
-  "extensionDependencies": [
-    "Anthropic.claude-code"
-  ],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
@@ -197,6 +194,14 @@
           "type": "boolean",
           "default": true,
           "description": "Open sessions in VS Code Simple Browser (true) or external browser (false)"
+        },
+        "claudeSessions.excludeProjectPatterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Patterns to exclude from project list (e.g., 'es6.kr' to hide personal projects)"
         }
       }
     }
@@ -206,17 +211,28 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "package": "vsce package --no-dependencies",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "pretest": "node -e \"const p=require('./package.json'); delete p.extensionDependencies; require('fs').writeFileSync('./package.json', JSON.stringify(p,null,2)+'\\n')\"",
+    "test": "tsc -p tsconfig.test.json && node ./out/test/runTest.js",
+    "posttest": "node -e \"const p=require('./package.json'); p.extensionDependencies=['Anthropic.claude-code']; require('fs').writeFileSync('./package.json', JSON.stringify(p,null,2)+'\\n')\""
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
     "effect": "^3.19.14"
   },
   "devDependencies": {
+    "@types/glob": "^9.0.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^25.0.6",
-    "@types/vscode": "^1.108.1",
+    "@types/vscode": "^1.85.0",
+    "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.0.0",
+    "glob": "^13.0.0",
+    "mocha": "^11.7.5",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"
-  }
+  },
+  "extensionDependencies": [
+    "Anthropic.claude-code"
+  ]
 }
