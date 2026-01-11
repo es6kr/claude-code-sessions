@@ -98,7 +98,10 @@
   )
 
   // Expanded sessions state (for showing summaries, todos, agents sublist)
-  let expandedSessions = $state<Set<string>>(new Set())
+  // Auto-expand selected session
+  let expandedSessions = $state<Set<string>>(
+    selectedSession ? new Set([selectedSession.id]) : new Set()
+  )
 
   const toggleSessionExpand = (e: Event, sessionId: string) => {
     e.stopPropagation()

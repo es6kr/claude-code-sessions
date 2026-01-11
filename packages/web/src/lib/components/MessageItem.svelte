@@ -5,6 +5,7 @@
   import ExpandableContent from './ExpandableContent.svelte'
   import IdeTag from './IdeTag.svelte'
   import TodoItem from './TodoItem.svelte'
+  import TooltipButton from './TooltipButton.svelte'
 
   interface Props {
     msg: Message
@@ -142,24 +143,24 @@
 
 {#snippet splitButton()}
   {#if onSplit && !isFirst && msg.uuid}
-    <button
-      class="opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer p-1 rounded hover:bg-gh-accent/20 text-xs"
+    <TooltipButton
+      class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gh-accent/20 text-xs"
       onclick={() => onSplit(msg)}
       title="Split session from this message"
     >
       ✂️
-    </button>
+    </TooltipButton>
   {/if}
 {/snippet}
 
 {#snippet deleteButton()}
-  <button
-    class="opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer p-1 rounded hover:bg-gh-red/20 text-xs"
+  <TooltipButton
+    class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gh-red/20 text-xs"
     onclick={() => onDelete(msg)}
     title="Delete message"
   >
     🗑️
-  </button>
+  </TooltipButton>
 {/snippet}
 
 {#if isQueueOperation}
@@ -296,13 +297,13 @@
           {messageId}
         </span>
         {#if isCustomTitle && onEditTitle}
-          <button
-            class="opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer p-1 rounded hover:bg-gh-border text-xs"
+          <TooltipButton
+            class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gh-border text-xs"
             onclick={() => onEditTitle(msg)}
             title="Edit title"
           >
             ✏️
-          </button>
+          </TooltipButton>
         {/if}
         {@render splitButton()}
         {@render deleteButton()}

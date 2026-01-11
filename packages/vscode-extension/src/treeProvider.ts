@@ -200,17 +200,27 @@ export class SessionTreeProvider
       const projectData = await Effect.runPromise(session.loadProjectTreeData(element.projectName))
       if (!projectData) return []
 
-      return projectData.sessions.map((s) => {
+      // Check if this is the current project (should auto-expand first session)
+      const projectNames = (await Effect.runPromise(session.listProjects)).map((p) => p.name)
+      const currentProjectName = this.findCurrentProject(projectNames)
+      const isCurrentProject = element.projectName === currentProjectName
+
+      return projectData.sessions.map((s, index) => {
         // Calculate if session has sub-items (summaries, agents, todos)
         const todoCount =
           s.todos.sessionTodos.length +
           s.todos.agentTodos.reduce((sum, a) => sum + a.todos.length, 0)
         const hasSubItems = s.summaries.length > 0 || s.agents.length > 0 || todoCount > 0
 
+        // Auto-expand first session in current project
+        const shouldExpand = isCurrentProject && index === 0 && hasSubItems
+
         return new SessionTreeItem(
           session.getDisplayTitle(s.customTitle, s.currentSummary, s.title),
           hasSubItems
-            ? vscode.TreeItemCollapsibleState.Collapsed
+            ? shouldExpand
+              ? vscode.TreeItemCollapsibleState.Expanded
+              : vscode.TreeItemCollapsibleState.Collapsed
             : vscode.TreeItemCollapsibleState.None,
           'session',
           element.projectName,
