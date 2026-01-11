@@ -314,7 +314,10 @@ export class SessionTreeProvider
           element.projectName,
           element.sessionId,
           idx === 0 ? undefined : idx, // Show index for older summaries
-          summary.timestamp
+          summary.timestamp,
+          undefined, // todo
+          undefined, // agentId
+          idx // itemIndex for unique ID
         )
       })
     }
@@ -326,6 +329,7 @@ export class SessionTreeProvider
       )
 
       const items: SessionTreeItem[] = []
+      let todoIndex = 0
 
       // Session todos
       for (const todo of sessionData.todos.sessionTodos) {
@@ -338,7 +342,9 @@ export class SessionTreeProvider
             element.sessionId,
             undefined,
             undefined,
-            todo
+            todo,
+            undefined, // agentId
+            todoIndex++ // itemIndex for unique ID
           )
         )
       }
@@ -356,7 +362,8 @@ export class SessionTreeProvider
               undefined,
               undefined,
               todo,
-              agentTodo.agentId
+              agentTodo.agentId,
+              todoIndex++ // itemIndex for unique ID
             )
           )
         }
@@ -372,7 +379,7 @@ export class SessionTreeProvider
       )
 
       return sessionData.agents.map(
-        (agent) =>
+        (agent, idx) =>
           new SessionTreeItem(
             agent.name ?? agent.id.slice(0, 8),
             vscode.TreeItemCollapsibleState.None,
@@ -382,7 +389,8 @@ export class SessionTreeProvider
             agent.messageCount,
             undefined,
             undefined,
-            agent.id
+            agent.id,
+            idx // itemIndex for unique ID
           )
       )
     }
@@ -411,12 +419,21 @@ export class SessionTreeItem extends vscode.TreeItem {
     public readonly count?: number,
     public readonly updatedAt?: string,
     public readonly todo?: TodoItem,
-    public readonly agentId?: string
+    public readonly agentId?: string,
+    public readonly itemIndex?: number
   ) {
     super(label, collapsibleState)
 
     // Set unique ID for drag and drop to work (required by VSCode)
-    this.id = `${type}:${projectName}:${sessionId}`
+    // Include itemIndex and agentId for uniqueness in lists
+    let uniqueId = `${type}:${projectName}:${sessionId}`
+    if (agentId) {
+      uniqueId += `:${agentId}`
+    }
+    if (itemIndex !== undefined) {
+      uniqueId += `:${itemIndex}`
+    }
+    this.id = uniqueId
     this.contextValue = type
 
     if (type === 'project') {

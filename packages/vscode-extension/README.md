@@ -4,15 +4,16 @@ Manage Claude Code sessions directly from VS Code sidebar.
 
 ## Screenshot
 
-![VSCode Extension](../../docs/screenshot-vscode.png)
+![VSCode Extension](https://raw.githubusercontent.com/es6kr/claude-code-sessions/main/docs/screenshot-vscode.png)
 
 ## Features
 
 - **Session Browser**: View all Claude Code projects and sessions in a tree view
-- **Quick Access**: Open sessions with a single click
-- **Session Management**: Rename and delete sessions
+- **Web UI Integration**: View messages, delete messages, split sessions
+- **Resume Session**: Continue any session directly in terminal
+- **Session Management**: Rename, delete, and move sessions between projects
 - **Cleanup**: Remove empty and invalid sessions in bulk
-- **Web UI Integration**: Launch the full web interface
+- **Drag & Drop**: Move sessions between projects
 
 ## Installation
 
@@ -43,11 +44,12 @@ Search for "Claude Code Sessions" in VS Code Extensions.
 
 ## Commands
 
-| Command                             | Description                   |
-| ----------------------------------- | ----------------------------- |
-| `Claude Code Sessions: Refresh`     | Refresh the session tree      |
-| `Claude Code Sessions: Open Web UI` | Open the web interface        |
-| `Claude Code Sessions: Cleanup`     | Remove empty/invalid sessions |
+| Command                                | Description                           |
+| -------------------------------------- | ------------------------------------- |
+| `Claude Code Sessions: Refresh`        | Refresh the session tree              |
+| `Claude Code Sessions: Open Web UI`    | Open the web interface                |
+| `Claude Code Sessions: Cleanup`        | Remove empty/invalid sessions         |
+| `Claude Code Sessions: Resume Session` | Resume session in integrated terminal |
 
 ## Requirements
 
