@@ -210,7 +210,7 @@
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
-    "effect": "^3.12.0"
+    "effect": "^3.19.14"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
