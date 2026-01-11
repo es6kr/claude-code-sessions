@@ -59,7 +59,7 @@ jobs:
           vsce package --no-dependencies -o out/${{ steps.extension.outputs.filename }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: vsix-package
           path: packages/vscode-extension/out/${{ steps.extension.outputs.filename }}
