@@ -19,7 +19,7 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "prepare": "husky",
-    "version": "node -e \"const fs=require('fs');const v=process.env.npm_package_version;['packages/core','packages/web','packages/mcp','packages/vscode-extension'].forEach(d=>{const p=d+'/package.json';const j=JSON.parse(fs.readFileSync(p));j.version=v;fs.writeFileSync(p,JSON.stringify(j,null,2)+'\\n')})\" && git add packages/*/package.json"
+    "version": "node -e \"const fs=require('fs');const v=process.env.npm_package_version;['packages/core','packages/web','packages/mcp'].forEach(d=>{const p=d+'/package.json';const j=JSON.parse(fs.readFileSync(p));j.version=v;fs.writeFileSync(p,JSON.stringify(j,null,2)+'\\n')})\" && git add packages/*/package.json"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
