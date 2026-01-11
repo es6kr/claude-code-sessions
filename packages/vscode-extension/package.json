@@ -213,8 +213,8 @@
     "effect": "^3.19.14"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
-    "@types/vscode": "^1.85.0",
+    "@types/node": "^25.0.6",
+    "@types/vscode": "^1.108.1",
     "@vscode/vsce": "^3.0.0",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"
