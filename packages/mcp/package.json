@@ -37,9 +37,9 @@
   },
   "dependencies": {
     "@claude-sessions/core": "^0.1.0",
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "effect": "^3.12.0",
-    "zod": "^3.24.0"
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "effect": "^3.19.14",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
