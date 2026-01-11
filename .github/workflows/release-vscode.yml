@@ -91,7 +91,7 @@ jobs:
         run: npm install -g @vscode/vsce
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: vscode-v${{ needs.build.outputs.version }}
           name: VSCode Extension v${{ needs.build.outputs.version }}
