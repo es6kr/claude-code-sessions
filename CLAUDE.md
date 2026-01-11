@@ -17,6 +17,15 @@ This is an **English-only open source project**:
 
 ## Development Workflow
 
+### Git Push Policy
+
+**IMPORTANT**: When fixing mistakes or making corrections during a session, ALWAYS use `AskUserQuestion` before `git push`. Never push without explicit user confirmation when:
+
+- Amending commits
+- Force pushing
+- Fixing previous errors
+- Re-doing work after mistakes
+
 ### Version Management
 
 Always use `npm version` command for version bumps:

@@ -2,6 +2,10 @@
 
 Manage Claude Code sessions directly from VS Code sidebar.
 
+## Screenshot
+
+![VSCode Extension](../../docs/screenshot-vscode.png)
+
 ## Features
 
 - **Session Browser**: View all Claude Code projects and sessions in a tree view

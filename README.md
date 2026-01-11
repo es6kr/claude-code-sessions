@@ -56,6 +56,16 @@ pnpm build:mcp     # mcp only
 pnpm build:web     # web only
 ```
 
+## Screenshot
+
+### Web UI
+
+![Web UI Screenshot](docs/screenshot-mainpage.png)
+
+### VSCode Extension
+
+![VSCode Extension Screenshot](docs/screenshot-vscode.png)
+
 ## Features
 
 - **Project listing**: Browse Claude Code project folders
