@@ -11,6 +11,7 @@ import {
   isInvalidApiKeyMessage,
   isContinuationSummary,
   cleanupSplitFirstMessage,
+  isErrorSessionTitle,
 } from './utils.js'
 import { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from './agents.js'
 import {
@@ -1270,12 +1271,21 @@ export const loadProjectTreeData = (projectName: string) =>
       return dateB - dateA
     })
 
+    // Filter out error sessions (API errors, authentication errors, etc.)
+    const filteredSessions = sortedSessions.filter((s) => {
+      // Check all possible title/summary fields for error patterns
+      if (isErrorSessionTitle(s.title)) return false
+      if (isErrorSessionTitle(s.customTitle)) return false
+      if (isErrorSessionTitle(s.currentSummary)) return false
+      return true
+    })
+
     return {
       name: project.name,
       displayName: project.displayName,
       path: project.path,
-      sessionCount: sessions.length,
-      sessions: sortedSessions,
+      sessionCount: filteredSessions.length,
+      sessions: filteredSessions,
     } satisfies ProjectTreeData
   })
 

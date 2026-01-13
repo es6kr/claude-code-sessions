@@ -70,6 +70,21 @@ export const isInvalidApiKeyMessage = (msg: Message): boolean => {
   return text.includes('Invalid API key')
 }
 
+// Error patterns to exclude from tree view
+const ERROR_SESSION_PATTERNS = [
+  'API Error',
+  'authentication_error',
+  'Invalid API key',
+  'OAuth token has expired',
+  'Please run /login',
+]
+
+// Check if session title/summary indicates an error session
+export const isErrorSessionTitle = (title: string | undefined): boolean => {
+  if (!title) return false
+  return ERROR_SESSION_PATTERNS.some((pattern) => title.includes(pattern))
+}
+
 // Check if a message is a continuation summary (from compact)
 export const isContinuationSummary = (msg: Message): boolean => {
   // isCompactSummary flag is set by Claude Code for continuation summaries
