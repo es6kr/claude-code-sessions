@@ -154,6 +154,98 @@ server.tool(
   }
 )
 
+// Analyze session for optimization insights
+server.tool(
+  'analyze_session',
+  'Analyze a session to get statistics, tool usage, patterns, and optimization insights',
+  {
+    project_name: z.string().describe('Project folder name'),
+    session_id: z.string().describe('Session ID'),
+  },
+  async ({ project_name, session_id }) => {
+    const result = await Effect.runPromise(session.analyzeSession(project_name, session_id))
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    }
+  }
+)
+
+// Summarize session into user/assistant conversation format
+server.tool(
+  'summarize_session',
+  'Summarize a session into compact user/assistant conversation format with timestamps',
+  {
+    project_name: z.string().describe('Project folder name'),
+    session_id: z.string().describe('Session ID'),
+    limit: z.number().default(50).describe('Maximum number of messages to include (default: 50)'),
+    max_length: z
+      .number()
+      .default(100)
+      .describe('Maximum length for each message content (default: 100)'),
+  },
+  async ({ project_name, session_id, limit, max_length }) => {
+    const result = await Effect.runPromise(
+      session.summarizeSession(project_name, session_id, {
+        limit,
+        maxLength: max_length,
+      })
+    )
+    return {
+      content: [{ type: 'text', text: result.formatted }],
+    }
+  }
+)
+
+// Compress session to reduce file size
+server.tool(
+  'compress_session',
+  'Compress a session by removing redundant snapshots and truncating long tool outputs',
+  {
+    project_name: z.string().describe('Project folder name'),
+    session_id: z.string().describe('Session ID'),
+    keep_snapshots: z
+      .enum(['first_last', 'all', 'none'])
+      .default('first_last')
+      .describe('Which snapshots to keep: first_last (default), all, or none'),
+    max_tool_output_length: z
+      .number()
+      .default(0)
+      .describe('Truncate tool outputs longer than this (0 = no limit)'),
+  },
+  async ({ project_name, session_id, keep_snapshots, max_tool_output_length }) => {
+    const result = await Effect.runPromise(
+      session.compressSession(project_name, session_id, {
+        keepSnapshots: keep_snapshots,
+        maxToolOutputLength: max_tool_output_length,
+      })
+    )
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    }
+  }
+)
+
+// Extract project knowledge from sessions
+server.tool(
+  'extract_project_knowledge',
+  'Extract patterns, hot files, workflows, and decisions from project sessions',
+  {
+    project_name: z.string().describe('Project folder name'),
+    session_ids: z
+      .array(z.string())
+      .optional()
+      .describe('Optional: specific session IDs to analyze (default: all sessions)'),
+  },
+  async ({ project_name, session_ids }) => {
+    const result = await Effect.runPromise(
+      session.extractProjectKnowledge(project_name, session_ids)
+    )
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    }
+  }
+)
+
 // Split session
 server.tool(
   'split_session',

@@ -334,3 +334,134 @@ export interface ResumeSessionResult {
   /** Error message if failed */
   error?: string
 }
+
+// ============================================================================
+// Session Analysis Types
+// ============================================================================
+
+/** Tool usage statistics */
+export interface ToolUsageStats {
+  /** Tool name */
+  name: string
+  /** Number of times used */
+  count: number
+  /** Number of errors */
+  errorCount: number
+}
+
+/** Session analysis result for optimization */
+export interface SessionAnalysis {
+  sessionId: string
+  projectName: string
+
+  /** Session duration in minutes */
+  durationMinutes: number
+
+  /** Message statistics */
+  stats: {
+    totalMessages: number
+    userMessages: number
+    assistantMessages: number
+    summaryCount: number
+    snapshotCount: number
+  }
+
+  /** Tool usage breakdown */
+  toolUsage: ToolUsageStats[]
+
+  /** Files changed during session */
+  filesChanged: string[]
+
+  /** Detected patterns (e.g., repeated failures, common operations) */
+  patterns: {
+    type: string
+    description: string
+    count: number
+  }[]
+
+  /** Key decisions or milestones extracted from conversation */
+  milestones: {
+    timestamp?: string
+    description: string
+    messageUuid?: string
+  }[]
+}
+
+/** Options for session compression */
+export interface CompressSessionOptions {
+  /** Keep first and last snapshots only */
+  keepSnapshots?: 'first_last' | 'all' | 'none'
+  /** Summarize tool outputs longer than this (0 = no limit) */
+  maxToolOutputLength?: number
+}
+
+/** Result of session compression */
+export interface CompressSessionResult {
+  success: boolean
+  originalSize: number
+  compressedSize: number
+  removedSnapshots: number
+  truncatedOutputs: number
+  error?: string
+}
+
+/** Extracted knowledge from sessions */
+export interface ProjectKnowledge {
+  projectName: string
+  /** Common patterns across sessions */
+  patterns: {
+    type: string
+    description: string
+    frequency: number
+    examples: string[]
+  }[]
+  /** Frequently modified files */
+  hotFiles: {
+    path: string
+    modifyCount: number
+    lastModified?: string
+  }[]
+  /** Common tool workflows */
+  workflows: {
+    sequence: string[]
+    count: number
+  }[]
+  /** Learned decisions */
+  decisions: {
+    context: string
+    decision: string
+    sessionId: string
+  }[]
+}
+
+// ============================================================================
+// Session Summarization Types
+// ============================================================================
+
+/** A single line in conversation summary */
+export interface ConversationLine {
+  /** Message role */
+  role: 'user' | 'assistant'
+  /** Message content (truncated) */
+  content: string
+  /** Timestamp string (MM-DD HH:MM), only for user messages */
+  timestamp?: string
+}
+
+/** Options for summarizing a session */
+export interface SummarizeSessionOptions {
+  /** Maximum number of messages to include */
+  limit?: number
+  /** Maximum length for each message content */
+  maxLength?: number
+}
+
+/** Result of session summarization */
+export interface SummarizeSessionResult {
+  sessionId: string
+  projectName: string
+  /** Structured conversation lines */
+  lines: ConversationLine[]
+  /** Pre-formatted output string */
+  formatted: string
+}

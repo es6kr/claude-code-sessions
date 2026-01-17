@@ -27,6 +27,14 @@ export type {
   ProjectTreeData,
   ResumeSessionOptions,
   ResumeSessionResult,
+  ToolUsageStats,
+  SessionAnalysis,
+  CompressSessionOptions,
+  CompressSessionResult,
+  ProjectKnowledge,
+  ConversationLine,
+  SummarizeSessionOptions,
+  SummarizeSessionResult,
 } from './types.js'
 
 // Path utilities
@@ -79,6 +87,10 @@ export {
   deleteSession,
   renameSession,
   getSessionFiles,
+  analyzeSession,
+  compressSession,
+  extractProjectKnowledge,
+  summarizeSession,
   moveSession,
   splitSession,
   previewCleanup,
