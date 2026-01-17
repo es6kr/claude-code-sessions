@@ -36,7 +36,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "@claude-sessions/core": "^0.1.0",
+    "@claude-sessions/core": "workspace:*",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "effect": "^3.19.14",
     "zod": "^4.3.5"
