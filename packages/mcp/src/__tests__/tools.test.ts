@@ -136,7 +136,8 @@ describe('MCP Tools - Integration Tests', () => {
       await expect(fs.access(sessionPath)).rejects.toThrow()
 
       // Backup should exist
-      await expect(fs.access(result.backupPath)).resolves.toBeUndefined()
+      expect(result.backupPath).toBeDefined()
+      await expect(fs.access(result.backupPath!)).resolves.toBeUndefined()
     })
   })
 
