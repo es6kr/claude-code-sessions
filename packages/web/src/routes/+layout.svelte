@@ -97,7 +97,7 @@
   // Cleanup options
   let clearEmpty = $state(true)
   let skipWithTodos = $state(true)
-  let clearOrphanAgents = $state(false)
+  let clearOrphanAgents = $state(true)
   let clearOrphanTodos = $state(false)
 
   // Computed totals
