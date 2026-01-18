@@ -5,10 +5,22 @@
  */
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
-import { Effect } from 'effect'
+import { Cause, Effect } from 'effect'
 import { z } from 'zod'
 import * as session from '@claude-sessions/core'
 import { startWebServer, stopWebServer, type WebServer } from './server.js'
+
+// Helper to run Effect with detailed error reporting
+async function runEffect<A>(effect: Effect.Effect<A, unknown, never>): Promise<A> {
+  return Effect.runPromise(
+    effect.pipe(
+      Effect.catchAllCause((cause) => {
+        const prettyError = Cause.pretty(cause)
+        return Effect.die(new Error(prettyError))
+      })
+    )
+  ) as Promise<A>
+}
 
 const server = new McpServer({
   name: 'claude-sessions-mcp',
@@ -17,7 +29,7 @@ const server = new McpServer({
 
 // List all projects
 server.tool('list_projects', 'List all Claude Code projects with session counts', {}, async () => {
-  const result = await Effect.runPromise(session.listProjects)
+  const result = await runEffect(session.listProjects)
   return {
     content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
   }
@@ -31,7 +43,7 @@ server.tool(
     project_name: z.string().describe("Project folder name (e.g., '-Users-young-works-myproject')"),
   },
   async ({ project_name }) => {
-    const result = await Effect.runPromise(session.listSessions(project_name))
+    const result = await runEffect(session.listSessions(project_name))
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     }
@@ -48,9 +60,7 @@ server.tool(
     new_title: z.string().describe('New title to add as prefix'),
   },
   async ({ project_name, session_id, new_title }) => {
-    const result = await Effect.runPromise(
-      session.renameSession(project_name, session_id, new_title)
-    )
+    const result = await runEffect(session.renameSession(project_name, session_id, new_title))
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     }
@@ -66,7 +76,7 @@ server.tool(
     session_id: z.string().describe('Session ID to delete'),
   },
   async ({ project_name, session_id }) => {
-    const result = await Effect.runPromise(session.deleteSession(project_name, session_id))
+    const result = await runEffect(session.deleteSession(project_name, session_id))
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     }
@@ -83,9 +93,7 @@ server.tool(
     message_uuid: z.string().describe('UUID of the message to delete'),
   },
   async ({ project_name, session_id, message_uuid }) => {
-    const result = await Effect.runPromise(
-      session.deleteMessage(project_name, session_id, message_uuid)
-    )
+    const result = await runEffect(session.deleteMessage(project_name, session_id, message_uuid))
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     }
@@ -100,7 +108,7 @@ server.tool(
     project_name: z.string().optional().describe('Optional: filter by project name'),
   },
   async ({ project_name }) => {
-    const result = await Effect.runPromise(session.previewCleanup(project_name))
+    const result = await runEffect(session.previewCleanup(project_name))
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     }
@@ -124,7 +132,7 @@ server.tool(
       .describe('Clear orphan agent files whose session no longer exists (default: true)'),
   },
   async ({ project_name, clear_empty, clear_invalid, clear_orphan_agents }) => {
-    const result = await Effect.runPromise(
+    const result = await runEffect(
       session.clearSessions({
         projectName: project_name,
         clearEmpty: clear_empty,
@@ -147,7 +155,7 @@ server.tool(
     session_id: z.string().describe('Session ID'),
   },
   async ({ project_name, session_id }) => {
-    const result = await Effect.runPromise(session.getSessionFiles(project_name, session_id))
+    const result = await runEffect(session.getSessionFiles(project_name, session_id))
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     }
@@ -163,7 +171,7 @@ server.tool(
     session_id: z.string().describe('Session ID'),
   },
   async ({ project_name, session_id }) => {
-    const result = await Effect.runPromise(session.analyzeSession(project_name, session_id))
+    const result = await runEffect(session.analyzeSession(project_name, session_id))
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     }
@@ -184,7 +192,7 @@ server.tool(
       .describe('Maximum length for each message content (default: 100)'),
   },
   async ({ project_name, session_id, limit, max_length }) => {
-    const result = await Effect.runPromise(
+    const result = await runEffect(
       session.summarizeSession(project_name, session_id, {
         limit,
         maxLength: max_length,
@@ -213,7 +221,7 @@ server.tool(
       .describe('Truncate tool outputs longer than this (0 = no limit)'),
   },
   async ({ project_name, session_id, keep_snapshots, max_tool_output_length }) => {
-    const result = await Effect.runPromise(
+    const result = await runEffect(
       session.compressSession(project_name, session_id, {
         keepSnapshots: keep_snapshots,
         maxToolOutputLength: max_tool_output_length,
@@ -237,9 +245,7 @@ server.tool(
       .describe('Optional: specific session IDs to analyze (default: all sessions)'),
   },
   async ({ project_name, session_ids }) => {
-    const result = await Effect.runPromise(
-      session.extractProjectKnowledge(project_name, session_ids)
-    )
+    const result = await runEffect(session.extractProjectKnowledge(project_name, session_ids))
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     }
@@ -260,9 +266,7 @@ server.tool(
       ),
   },
   async ({ project_name, session_id, message_uuid }) => {
-    const result = await Effect.runPromise(
-      session.splitSession(project_name, session_id, message_uuid)
-    )
+    const result = await runEffect(session.splitSession(project_name, session_id, message_uuid))
     return {
       content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
     }

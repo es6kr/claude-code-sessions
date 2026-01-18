@@ -30,8 +30,11 @@ export interface FileSystem {
 // Directory Paths
 // ============================================
 
-/** Get Claude sessions directory (~/.claude/projects) */
-export const getSessionsDir = (): string => path.join(os.homedir(), '.claude', 'projects')
+/** Get Claude sessions directory (~/.claude/projects)
+ * Can be overridden with CLAUDE_SESSIONS_DIR environment variable for testing
+ */
+export const getSessionsDir = (): string =>
+  process.env.CLAUDE_SESSIONS_DIR || path.join(os.homedir(), '.claude', 'projects')
 
 /** Get Claude todos directory (~/.claude/todos) */
 export const getTodosDir = (): string => path.join(os.homedir(), '.claude', 'todos')

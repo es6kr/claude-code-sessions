@@ -32,6 +32,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsx watch src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src"
   },
@@ -45,6 +47,7 @@
     "@types/node": "^25.0.6",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vitest": "^4.0.16"
   }
 }
