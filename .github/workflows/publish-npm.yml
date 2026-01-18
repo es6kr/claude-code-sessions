@@ -20,12 +20,14 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       id-token: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -63,6 +65,29 @@ jobs:
         run: pnpm publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Generate changelog
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          # Get previous npm tag (v* without vscode prefix)
+          PREV_TAG=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -2 | tail -1 || echo '')
+          if [ -n "$PREV_TAG" ]; then
+            echo "Generating changelog from $PREV_TAG"
+            npx changelogen --from $PREV_TAG --output RELEASE_NOTES.md
+          else
+            echo "No previous tag, generating full changelog"
+            npx changelogen --output RELEASE_NOTES.md
+          fi
+
+      - name: Create GitHub Release
+        if: ${{ github.event_name == 'push' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.versions.outputs.core }}
+          name: v${{ steps.versions.outputs.core }}
+          body_path: RELEASE_NOTES.md
+          draft: false
+          prerelease: false
 
       - name: Summary
         run: |

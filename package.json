@@ -19,10 +19,13 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "prepare": "husky",
+    "changelog": "changelogen --output CHANGELOG.md",
+    "changelog:latest": "changelogen --from $(git describe --tags --abbrev=0 2>/dev/null || echo '') --output -",
     "version": "node -e \"const fs=require('fs');const v=process.env.npm_package_version;['packages/core','packages/web','packages/mcp'].forEach(d=>{const p=d+'/package.json';const j=JSON.parse(fs.readFileSync(p));j.version=v;fs.writeFileSync(p,JSON.stringify(j,null,2)+'\\n')})\" && git add packages/*/package.json"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
+    "changelogen": "^0.6.2",
     "editorconfig-checker": "^6.1.1",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.1.8",
