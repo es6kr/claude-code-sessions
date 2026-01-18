@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import { SessionTreeProvider, type SessionTreeItem } from './treeProvider'
 import * as session from '@claude-sessions/core'
+import { resumeSession } from '@claude-sessions/core/server'
 import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { outputChannel } from './output'
@@ -268,46 +269,86 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
-    vscode.commands.registerCommand('claudeSessions.moveSession', async (item: SessionTreeItem) => {
-      if (item.type !== 'session') return
+    vscode.commands.registerCommand(
+      'claudeSessions.moveSession',
+      async (item: SessionTreeItem, selectedItems?: SessionTreeItem[]) => {
+        // When multiple items selected via right-click, selectedItems contains all of them
+        const items = selectedItems && selectedItems.length > 0 ? selectedItems : [item]
+        const sessions = items.filter((i) => i.type === 'session')
 
-      // Get all projects
-      const projects = await Effect.runPromise(session.listProjects)
-      const otherProjects = projects.filter(
-        (p) => p.name !== item.projectName && p.sessionCount >= 0
-      )
+        if (sessions.length === 0) return
 
-      if (otherProjects.length === 0) {
-        vscode.window.showWarningMessage('No other projects available')
-        return
-      }
+        // Get all projects
+        const projects = await Effect.runPromise(session.listProjects)
+        // Exclude all source projects from target list
+        const sourceProjectNames = new Set(sessions.map((s) => s.projectName))
+        const otherProjects = projects.filter(
+          (p) => !sourceProjectNames.has(p.name) && p.sessionCount >= 0
+        )
 
-      // Show quick pick to select target project
-      const selected = await vscode.window.showQuickPick(
-        otherProjects.map((p) => ({
-          label: session.folderNameToPath(p.name),
-          description: `${p.sessionCount} sessions`,
-          projectName: p.name,
-        })),
-        {
-          placeHolder: 'Select target project',
-          title: 'Move Session to...',
+        if (otherProjects.length === 0) {
+          vscode.window.showWarningMessage('No other projects available')
+          return
         }
-      )
 
-      if (!selected) return
+        // Show quick pick to select target project
+        const selected = await vscode.window.showQuickPick(
+          otherProjects.map((p) => ({
+            label: session.folderNameToPath(p.name),
+            description: `${p.sessionCount} sessions`,
+            projectName: p.name,
+          })),
+          {
+            placeHolder: 'Select target project',
+            title:
+              sessions.length > 1 ? `Move ${sessions.length} Sessions to...` : 'Move Session to...',
+          }
+        )
 
-      const result = await Effect.runPromise(
-        session.moveSession(item.projectName, item.sessionId, selected.projectName)
-      )
+        if (!selected) return
 
-      if (result.success) {
+        let successCount = 0
+        let failCount = 0
+
+        for (const sessionItem of sessions) {
+          // Skip if source equals target
+          if (sessionItem.projectName === selected.projectName) continue
+
+          const result = await Effect.runPromise(
+            session.moveSession(
+              sessionItem.projectName,
+              sessionItem.sessionId,
+              selected.projectName
+            )
+          )
+
+          if (result.success) {
+            successCount++
+          } else {
+            failCount++
+            outputChannel.appendLine(
+              `Failed to move session ${sessionItem.sessionId}: ${result.error}`
+            )
+          }
+        }
+
         treeProvider.refresh()
-        vscode.window.showInformationMessage(`Moved session to ${selected.label}`)
-      } else {
-        vscode.window.showErrorMessage(`Failed to move session: ${result.error}`)
+
+        if (successCount > 0 && failCount === 0) {
+          vscode.window.showInformationMessage(
+            successCount === 1
+              ? `Moved session to ${selected.label}`
+              : `Moved ${successCount} sessions to ${selected.label}`
+          )
+        } else if (successCount > 0 && failCount > 0) {
+          vscode.window.showWarningMessage(
+            `Moved ${successCount} sessions, ${failCount} failed. See output for details.`
+          )
+        } else {
+          vscode.window.showErrorMessage('Failed to move sessions. See output for details.')
+        }
       }
-    }),
+    ),
 
     vscode.commands.registerCommand('claudeSessions.cleanup', async () => {
       const preview = await Effect.runPromise(session.previewCleanup())
@@ -374,7 +415,7 @@ export function activate(context: vscode.ExtensionContext) {
           terminal.sendText(`claude --resume ${item.sessionId}`)
         } else {
           // External: spawn detached process
-          const result = session.resumeSession({
+          const result = resumeSession({
             sessionId: item.sessionId,
             cwd,
           })
