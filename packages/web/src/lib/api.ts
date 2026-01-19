@@ -281,9 +281,19 @@ export interface SessionData {
   lastCompactBoundaryUuid?: string
 }
 
+// Sort options for session list
+export interface SessionSortOptions {
+  field?: 'summary' | 'modified' | 'created' | 'updated' | 'messageCount' | 'title'
+  order?: 'asc' | 'desc'
+}
+
 // Expand project - loads all session data including agents, todos, summaries
-export const expandProject = (projectName: string) =>
-  get<SessionData[]>(`/project/expand?project=${encodeURIComponent(projectName)}`)
+export const expandProject = (projectName: string, sortOptions?: SessionSortOptions) => {
+  const params = new URLSearchParams({ project: projectName })
+  if (sortOptions?.field) params.set('sortField', sortOptions.field)
+  if (sortOptions?.order) params.set('sortOrder', sortOptions.order)
+  return get<SessionData[]>(`/project/expand?${params.toString()}`)
+}
 
 // Get session tree data (single session with todos, agents)
 export const getSessionTreeData = (projectName: string, sessionId: string) =>

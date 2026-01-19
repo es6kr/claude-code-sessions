@@ -5,6 +5,7 @@
 import { json, error } from '@sveltejs/kit'
 import { Effect } from 'effect'
 import * as core from '@claude-sessions/core'
+import type { SessionSortField, SessionSortOrder } from '@claude-sessions/core'
 import type { RequestHandler } from './$types'
 
 export const GET: RequestHandler = async ({ url }) => {
@@ -13,7 +14,15 @@ export const GET: RequestHandler = async ({ url }) => {
     throw error(400, 'project parameter required')
   }
 
-  const result = await Effect.runPromise(core.loadProjectTreeData(projectName))
+  // Parse sort options (defaults to 'summary' + 'desc' in core)
+  const sortField = url.searchParams.get('sortField') as SessionSortField | null
+  const sortOrder = url.searchParams.get('sortOrder') as SessionSortOrder | null
+  const sortOptions =
+    sortField && sortOrder
+      ? { field: sortField, order: sortOrder }
+      : { field: 'summary' as SessionSortField, order: 'desc' as SessionSortOrder }
+
+  const result = await Effect.runPromise(core.loadProjectTreeData(projectName, sortOptions))
 
   if (!result) {
     throw error(404, 'Project not found')

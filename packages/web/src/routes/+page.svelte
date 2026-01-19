@@ -5,6 +5,8 @@
   import type { Project, SessionMeta, SessionData, Message, TodoItem, AgentInfo } from '$lib/api'
   import { ConfirmModal, InputModal, ProjectTree, SessionViewer, Toast } from '$lib/components'
   import { getDisplayTitle } from '$lib/utils'
+  import { appConfig } from '$lib/stores/config'
+  import type { SessionSortField, SessionSortOrder } from '@claude-sessions/core'
 
   // State
   let projects = $state<Project[]>([])
@@ -19,6 +21,10 @@
   let loadingProject = $state<string | null>(null)
   let error = $state<string | null>(null)
   let toast = $state<string | null>(null)
+
+  // Sort options state (persisted in localStorage)
+  let sortField = $state<SessionSortField>('summary')
+  let sortOrder = $state<SessionSortOrder>('desc')
 
   // Modal states
   let confirmModal = $state<{
@@ -114,7 +120,10 @@
     loadingProject = projectName
     try {
       // Use expandProject to load full session data with agents, todos, summaries
-      const sessionDataList = await api.expandProject(projectName)
+      const sessionDataList = await api.expandProject(projectName, {
+        field: sortField,
+        order: sortOrder,
+      })
 
       // Build session metadata list and data map
       const sessions: SessionMeta[] = []
@@ -155,6 +164,25 @@
       const sessions = projectSessions.get(project)
       const found = sessions?.find((s) => s.id === session)
       if (found) await selectSession(found, false)
+    }
+  }
+
+  // Auto-expand current project if set via --project option
+  const expandCurrentProject = async () => {
+    const { project } = parseHash()
+    // Skip if hash already has a project
+    if (project) return
+
+    const currentProject = $appConfig.currentProjectName
+    if (!currentProject) return
+
+    // Find the project in the list
+    const found = projects.find((p) => p.name === currentProject)
+    if (found) {
+      await loadSessions(currentProject)
+      expandedProjects.add(currentProject)
+      expandedProjects = new Set(expandedProjects)
+      updateHash(currentProject)
     }
   }
 
@@ -462,8 +490,78 @@
     }
   }
 
+  // Track if we've auto-expanded the current project
+  let hasAutoExpanded = $state(false)
+
+  // Auto-expand current project when appConfig is set
+  $effect(() => {
+    const currentProject = $appConfig.currentProjectName
+    if (currentProject && projects.length > 0 && !hasAutoExpanded) {
+      const { project } = parseHash()
+      // Skip if hash already has a project
+      if (!project) {
+        hasAutoExpanded = true
+        expandCurrentProject()
+      }
+    }
+  })
+
+  // Sort options change handler
+  const handleSortChange = async (field: SessionSortField, order: SessionSortOrder) => {
+    sortField = field
+    sortOrder = order
+
+    // Save to localStorage
+    if (browser) {
+      localStorage.setItem('claudeSessionsSortField', field)
+      localStorage.setItem('claudeSessionsSortOrder', order)
+    }
+
+    // Reload all expanded projects with new sort options
+    for (const projectName of expandedProjects) {
+      loadingProject = projectName
+      try {
+        const sessionDataList = await api.expandProject(projectName, { field, order })
+
+        const sessions: SessionMeta[] = []
+        const dataMap = new Map<string, SessionData>()
+
+        for (const data of sessionDataList) {
+          sessions.push({
+            id: data.id,
+            projectName,
+            title: data.title,
+            messageCount: data.messageCount,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+          })
+          dataMap.set(data.id, data)
+        }
+
+        projectSessions.set(projectName, sessions)
+        projectSessionData.set(projectName, dataMap)
+      } catch (e) {
+        error = String(e)
+      }
+    }
+
+    projectSessions = new Map(projectSessions)
+    projectSessionData = new Map(projectSessionData)
+    loadingProject = null
+  }
+
+  // Restore sort options from localStorage
+  const restoreSortOptions = () => {
+    if (!browser) return
+    const savedField = localStorage.getItem('claudeSessionsSortField') as SessionSortField | null
+    const savedOrder = localStorage.getItem('claudeSessionsSortOrder') as SessionSortOrder | null
+    if (savedField) sortField = savedField
+    if (savedOrder) sortOrder = savedOrder
+  }
+
   // Lifecycle
   onMount(() => {
+    restoreSortOptions()
     loadProjects().then(() => restoreFromHash())
 
     window.addEventListener('hashchange', restoreFromHash)
@@ -479,12 +577,15 @@
     {expandedProjects}
     {selectedSession}
     {loadingProject}
+    {sortField}
+    {sortOrder}
     onToggleProject={toggleProject}
     onSelectSession={selectSession}
     onRenameSession={handleRenameSession}
     onDeleteSession={handleDeleteSession}
     onMoveSession={handleMoveSession}
     onResumeSession={handleResumeSession}
+    onSortChange={handleSortChange}
   />
 
   <SessionViewer

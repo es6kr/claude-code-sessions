@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Project, SessionMeta, SessionData } from '$lib/api'
   import { formatProjectName } from '$lib/utils'
-  import { sortProjects } from '@claude-sessions/core'
+  import { sortProjects, type SessionSortField, type SessionSortOrder } from '@claude-sessions/core'
   import { appConfig } from '$lib/stores/config'
   import TooltipButton from './TooltipButton.svelte'
 
@@ -12,12 +12,15 @@
     expandedProjects: Set<string>
     selectedSession: SessionMeta | null
     loadingProject: string | null
+    sortField: SessionSortField
+    sortOrder: SessionSortOrder
     onToggleProject: (name: string) => void
     onSelectSession: (session: SessionMeta) => void
     onRenameSession: (e: Event, session: SessionMeta) => void
     onDeleteSession: (e: Event, session: SessionMeta) => void
     onMoveSession?: (session: SessionMeta, targetProject: string) => void
     onResumeSession?: (e: Event, session: SessionMeta) => void
+    onSortChange?: (field: SessionSortField, order: SessionSortOrder) => void
   }
 
   let {
@@ -27,13 +30,35 @@
     expandedProjects,
     selectedSession,
     loadingProject,
+    sortField,
+    sortOrder,
     onToggleProject,
     onSelectSession,
     onRenameSession,
     onDeleteSession,
     onMoveSession,
     onResumeSession,
+    onSortChange,
   }: Props = $props()
+
+  // Sort field labels for display
+  const sortFieldLabels: Record<SessionSortField, string> = {
+    summary: 'Summary Time',
+    modified: 'Modified',
+    created: 'Created',
+    updated: 'Last Message',
+    messageCount: 'Messages',
+    title: 'Title',
+  }
+
+  const handleSortFieldChange = (e: Event) => {
+    const target = e.target as HTMLSelectElement
+    onSortChange?.(target.value as SessionSortField, sortOrder)
+  }
+
+  const toggleSortOrder = () => {
+    onSortChange?.(sortField, sortOrder === 'asc' ? 'desc' : 'asc')
+  }
 
   // Get session data with summary info
   const getSessionData = (projectName: string, sessionId: string): SessionData | undefined => {
@@ -153,9 +178,31 @@
 </script>
 
 <aside class="bg-gh-bg-secondary border border-gh-border rounded-lg overflow-hidden flex flex-col">
-  <h2 class="p-4 text-base font-semibold border-b border-gh-border bg-gh-bg">
-    Projects ({sortedProjects.length})
-  </h2>
+  <div class="p-4 border-b border-gh-border bg-gh-bg">
+    <h2 class="text-base font-semibold mb-2">
+      Projects ({sortedProjects.length})
+    </h2>
+    <!-- Sort Options -->
+    <div class="flex items-center gap-2 text-sm">
+      <span class="text-gh-text-secondary">Sort:</span>
+      <select
+        class="bg-gh-bg-secondary border border-gh-border rounded px-2 py-1 text-sm text-gh-text cursor-pointer hover:border-gh-accent focus:border-gh-accent focus:outline-none"
+        value={sortField}
+        onchange={handleSortFieldChange}
+      >
+        {#each Object.entries(sortFieldLabels) as [value, label]}
+          <option {value}>{label}</option>
+        {/each}
+      </select>
+      <button
+        class="bg-gh-bg-secondary border border-gh-border rounded px-2 py-1 text-sm cursor-pointer hover:border-gh-accent hover:bg-gh-border-subtle"
+        onclick={toggleSortOrder}
+        title={sortOrder === 'desc' ? 'Descending (newest first)' : 'Ascending (oldest first)'}
+      >
+        {sortOrder === 'desc' ? '↓' : '↑'}
+      </button>
+    </div>
+  </div>
 
   <ul class="overflow-y-auto flex-1">
     {#each sortedProjects as project}

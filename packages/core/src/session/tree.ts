@@ -339,8 +339,8 @@ export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSo
           // By oldest summary timestamp (default, matches official extension)
           const timeA = getSessionSortTimestamp(a)
           const timeB = getSessionSortTimestamp(b)
-          const dateA = timeA ? new Date(timeA).getTime() : 0
-          const dateB = timeB ? new Date(timeB).getTime() : 0
+          const dateA = timeA ? new Date(timeA).getTime() : (a.fileMtime ?? 0)
+          const dateB = timeB ? new Date(timeB).getTime() : (b.fileMtime ?? 0)
           comparison = dateA - dateB
           break
         }

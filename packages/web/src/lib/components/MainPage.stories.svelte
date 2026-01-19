@@ -225,6 +225,8 @@
           {expandedProjects}
           selectedSession={mockSessions[0]}
           loadingProject={null}
+          sortField="summary"
+          sortOrder="desc"
           onToggleProject={noop}
           onSelectSession={noop}
           onRenameSession={noopEvent}
@@ -261,6 +263,8 @@
           {expandedProjects}
           selectedSession={mockSessions[0]}
           loadingProject={null}
+          sortField="summary"
+          sortOrder="desc"
           onToggleProject={noop}
           onSelectSession={noop}
           onRenameSession={noopEvent}
@@ -300,6 +304,8 @@
           expandedProjects={new Set()}
           selectedSession={null}
           loadingProject={null}
+          sortField="summary"
+          sortOrder="desc"
           onToggleProject={noop}
           onSelectSession={noop}
           onRenameSession={noopEvent}
