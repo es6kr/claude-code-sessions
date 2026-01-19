@@ -1,6 +1,6 @@
 import * as vscode from 'vscode'
 import * as session from '@claude-sessions/core'
-import type { TodoItem } from '@claude-sessions/core'
+import type { TodoItem, SessionSortOptions } from '@claude-sessions/core'
 import { maskHomePath, sortProjects } from '@claude-sessions/core'
 import { Effect } from 'effect'
 import { homedir } from 'os'
@@ -36,6 +36,18 @@ export class SessionTreeProvider
   // Drag and drop - match official VSCode sample
   readonly dropMimeTypes = [MIME_TYPE]
   readonly dragMimeTypes = ['text/uri-list', MIME_TYPE]
+
+  // Sort options (persisted in memory, reset on restart)
+  private sortOptions: SessionSortOptions = { field: 'summary', order: 'desc' }
+
+  getSortOptions(): SessionSortOptions {
+    return this.sortOptions
+  }
+
+  setSortOptions(options: SessionSortOptions): void {
+    this.sortOptions = options
+    this.refresh()
+  }
 
   refresh(): void {
     this._onDidChangeTreeData.fire()
@@ -207,7 +219,9 @@ export class SessionTreeProvider
 
     if (element.type === 'project') {
       // Show sessions under project using loadProjectTreeData for full metadata
-      const projectData = await Effect.runPromise(session.loadProjectTreeData(element.projectName))
+      const projectData = await Effect.runPromise(
+        session.loadProjectTreeData(element.projectName, this.sortOptions)
+      )
       if (!projectData) return []
 
       // Check if this is the current project (should auto-expand first session)
@@ -236,7 +250,10 @@ export class SessionTreeProvider
           element.projectName,
           s.id,
           s.messageCount,
-          s.updatedAt
+          s.sortTimestamp,
+          undefined, // todo
+          undefined, // agentId
+          undefined // itemIndex
         )
       })
     }
@@ -417,7 +434,7 @@ export class SessionTreeItem extends vscode.TreeItem {
     public readonly projectName: string,
     public readonly sessionId: string,
     public readonly count?: number,
-    public readonly updatedAt?: string,
+    public readonly sortTimestamp?: number,
     public readonly todo?: TodoItem,
     public readonly agentId?: string,
     public readonly itemIndex?: number
@@ -441,9 +458,14 @@ export class SessionTreeItem extends vscode.TreeItem {
       this.description = `${count ?? 0} sessions`
     } else if (type === 'session') {
       this.iconPath = new vscode.ThemeIcon('comment-discussion')
-      this.description = updatedAt
-        ? `${count ?? 0} msgs · ${formatDate(updatedAt)}`
-        : `${count ?? 0} msgs`
+
+      // Simple description: count + timestamp
+      const parts: string[] = [`${count ?? 0}`]
+      if (sortTimestamp) {
+        parts.push(formatDate(sortTimestamp))
+      }
+      this.description = parts.join(' · ')
+
       this.command = {
         command: 'claudeSessions.openSession',
         title: 'Open Session',
@@ -460,7 +482,7 @@ export class SessionTreeItem extends vscode.TreeItem {
       this.description = `${count ?? 0}`
     } else if (type === 'summary') {
       this.iconPath = new vscode.ThemeIcon('note')
-      this.description = updatedAt ? formatDate(updatedAt) : undefined
+      this.description = sortTimestamp ? formatDate(sortTimestamp) : undefined
     } else if (type === 'todo') {
       const status = todo?.status ?? 'pending'
       if (status === 'completed') {
@@ -478,8 +500,8 @@ export class SessionTreeItem extends vscode.TreeItem {
   }
 }
 
-function formatDate(isoString: string): string {
-  const date = new Date(isoString)
+function formatDate(timestamp: number): string {
+  const date = new Date(timestamp)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
 

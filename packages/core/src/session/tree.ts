@@ -8,8 +8,8 @@ import { getSessionsDir } from '../paths.js'
 import {
   extractTextContent,
   extractTitle,
-  isErrorSessionTitle,
   getSessionSortTimestamp,
+  isErrorSessionTitle,
 } from '../utils.js'
 import { findLinkedAgents } from '../agents.js'
 import { findLinkedTodos } from '../todos.js'
@@ -18,11 +18,66 @@ import type {
   Message,
   SessionTreeData,
   SummaryInfo,
+  SessionSortOptions,
   AgentInfo,
   ProjectTreeData,
   JsonlRecord,
-  SessionSortOptions,
 } from '../types.js'
+
+/**
+ * Sort sessions based on sort options
+ * Exported for testing purposes
+ */
+export const sortSessions = <T extends SessionTreeData>(
+  sessions: T[],
+  sort: SessionSortOptions
+): T[] => {
+  return sessions.sort((a, b) => {
+    let comparison = 0
+
+    switch (sort.field) {
+      case 'summary': {
+        // By pre-calculated sort timestamp (oldest summary timestamp, matches official extension)
+        comparison = a.sortTimestamp - b.sortTimestamp
+        break
+      }
+      case 'modified': {
+        // By file modification time
+        comparison = (a.fileMtime ?? 0) - (b.fileMtime ?? 0)
+        break
+      }
+      case 'created': {
+        // By session creation time
+        const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        comparison = createdA - createdB
+        break
+      }
+      case 'updated': {
+        // By last message timestamp
+        const updatedA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
+        const updatedB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
+        comparison = updatedA - updatedB
+        break
+      }
+      case 'messageCount': {
+        // By number of messages
+        comparison = a.messageCount - b.messageCount
+        break
+      }
+      case 'title': {
+        // Alphabetical by display title (customTitle > currentSummary > title)
+        const titleA = a.customTitle ?? a.currentSummary ?? a.title
+        const titleB = b.customTitle ?? b.currentSummary ?? b.title
+        comparison = titleA.localeCompare(titleB)
+        break
+      }
+    }
+
+    // Apply sort order (desc = newest/largest first)
+    return sort.order === 'desc' ? -comparison : comparison
+  })
+}
 
 // Internal helper for loading session tree data
 const loadSessionTreeDataInternal = (
@@ -180,6 +235,10 @@ const loadSessionTreeDataInternal = (
     // Load todos
     const todos = yield* findLinkedTodos(sessionId, linkedAgentIds)
 
+    // Pre-calculate sort timestamp for 'summary' field
+    const createdAt = (firstMessage?.timestamp as string) ?? undefined
+    const sortTimestamp = getSessionSortTimestamp({ summaries, createdAt })
+
     return {
       id: sessionId,
       projectName,
@@ -192,9 +251,10 @@ const loadSessionTreeDataInternal = (
           : summaries.length > 0
             ? 1
             : 0,
-      createdAt: (firstMessage?.timestamp as string) ?? undefined,
+      createdAt,
       updatedAt: (lastMessage?.timestamp as string) ?? undefined,
       fileMtime,
+      sortTimestamp,
       summaries,
       agents,
       todos,
@@ -331,55 +391,7 @@ export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSo
     )
 
     // Sort sessions based on sortOptions
-    const sortedSessions = sessions.sort((a, b) => {
-      let comparison = 0
-
-      switch (sort.field) {
-        case 'summary': {
-          // By oldest summary timestamp (default, matches official extension)
-          const timeA = getSessionSortTimestamp(a)
-          const timeB = getSessionSortTimestamp(b)
-          const dateA = timeA ? new Date(timeA).getTime() : (a.fileMtime ?? 0)
-          const dateB = timeB ? new Date(timeB).getTime() : (b.fileMtime ?? 0)
-          comparison = dateA - dateB
-          break
-        }
-        case 'modified': {
-          // By file modification time
-          comparison = (a.fileMtime ?? 0) - (b.fileMtime ?? 0)
-          break
-        }
-        case 'created': {
-          // By session creation time
-          const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-          const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0
-          comparison = createdA - createdB
-          break
-        }
-        case 'updated': {
-          // By last message timestamp
-          const updatedA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
-          const updatedB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
-          comparison = updatedA - updatedB
-          break
-        }
-        case 'messageCount': {
-          // By number of messages
-          comparison = a.messageCount - b.messageCount
-          break
-        }
-        case 'title': {
-          // Alphabetical by display title (customTitle > currentSummary > title)
-          const titleA = a.customTitle ?? a.currentSummary ?? a.title
-          const titleB = b.customTitle ?? b.currentSummary ?? b.title
-          comparison = titleA.localeCompare(titleB)
-          break
-        }
-      }
-
-      // Apply sort order (desc = newest/largest first)
-      return sort.order === 'desc' ? -comparison : comparison
-    })
+    const sortedSessions = sortSessions(sessions, sort)
 
     // Filter out error sessions (API errors, authentication errors, etc.)
     const filteredSessions = sortedSessions.filter((s) => {
@@ -396,5 +408,5 @@ export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSo
       path: project.path,
       sessionCount: filteredSessions.length,
       sessions: filteredSessions,
-    } satisfies ProjectTreeData
+    } as ProjectTreeData
   })

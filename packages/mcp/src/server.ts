@@ -14,20 +14,39 @@ export interface WebServer {
   port: number
 }
 
-export async function startWebServer(
-  port: number = 5173,
-  openBrowser: boolean = true
-): Promise<WebServer> {
+export interface WebServerOptions {
+  port?: number
+  openBrowser?: boolean
+  editor?: string
+  home?: string
+  project?: string
+}
+
+export async function startWebServer(options: WebServerOptions = {}): Promise<WebServer> {
+  const { port = 5173, openBrowser = true, editor, home, project } = options
+
   // Try local build first, fallback to npx
   const localCliPath = resolve(__dirname, '../../web/dist/cli.js')
   const useLocal = existsSync(localCliPath)
 
+  // Build CLI arguments
+  const cliArgs = ['--port', String(port)]
+  if (editor) {
+    cliArgs.push('--editor', editor)
+  }
+  if (home) {
+    cliArgs.push('--home', home)
+  }
+  if (project) {
+    cliArgs.push('--project', project)
+  }
+
   const child = useLocal
-    ? spawn('node', [localCliPath, '--port', String(port)], {
+    ? spawn('node', [localCliPath, ...cliArgs], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env },
       })
-    : spawn('npx', ['@claude-sessions/web@latest', '--port', String(port)], {
+    : spawn('npx', ['@claude-sessions/web@latest', ...cliArgs], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env },
       })

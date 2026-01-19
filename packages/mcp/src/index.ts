@@ -289,8 +289,17 @@ server.tool(
       .boolean()
       .default(false)
       .describe('Restart the server if already running (default: false)'),
+    editor: z.string().optional().describe('Editor command to open files (default: code)'),
+    home: z
+      .string()
+      .optional()
+      .describe('Home directory for ~ expansion (default: system homedir)'),
+    project: z
+      .string()
+      .optional()
+      .describe('Current project name for priority sorting in project list'),
   },
-  async ({ port, open_browser, restart }) => {
+  async ({ port, open_browser, restart, editor, home, project }) => {
     try {
       if (webServerInstance) {
         if (restart) {
@@ -316,7 +325,13 @@ server.tool(
         }
       }
 
-      webServerInstance = await startWebServer(port, open_browser)
+      webServerInstance = await startWebServer({
+        port,
+        openBrowser: open_browser,
+        editor,
+        home,
+        project,
+      })
 
       return {
         content: [

@@ -350,6 +350,68 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
+    vscode.commands.registerCommand('claudeSessions.sortBy', async () => {
+      const sortOptions: Array<{
+        label: string
+        description: string
+        field: session.SessionSortField
+        order: session.SessionSortOrder
+      }> = [
+        {
+          label: '$(history) Latest Summary',
+          description: 'Most recent summary first (default)',
+          field: 'summary',
+          order: 'desc',
+        },
+        {
+          label: '$(calendar) Recently Modified',
+          description: 'Most recently modified file first',
+          field: 'modified',
+          order: 'desc',
+        },
+        {
+          label: '$(calendar) Recently Created',
+          description: 'Newest session first',
+          field: 'created',
+          order: 'desc',
+        },
+        {
+          label: '$(comment-discussion) Most Messages',
+          description: 'Highest message count first',
+          field: 'messageCount',
+          order: 'desc',
+        },
+        {
+          label: '$(symbol-text) Title A-Z',
+          description: 'Alphabetical by title',
+          field: 'title',
+          order: 'asc',
+        },
+        {
+          label: '$(calendar) Oldest First',
+          description: 'Oldest session first',
+          field: 'created',
+          order: 'asc',
+        },
+      ]
+
+      const currentSort = treeProvider.getSortOptions()
+      const selected = await vscode.window.showQuickPick(
+        sortOptions.map((opt) => ({
+          ...opt,
+          picked: opt.field === currentSort.field && opt.order === currentSort.order,
+        })),
+        {
+          placeHolder: 'Select sort option',
+          title: 'Sort Sessions',
+        }
+      )
+
+      if (selected) {
+        treeProvider.setSortOptions({ field: selected.field, order: selected.order })
+      }
+    }),
+
     vscode.commands.registerCommand('claudeSessions.cleanup', async () => {
       const preview = await Effect.runPromise(session.previewCleanup())
 

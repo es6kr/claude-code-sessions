@@ -52,6 +52,19 @@ jobs:
           echo "name=$NAME" >> $GITHUB_OUTPUT
           echo "filename=$NAME-$VERSION.vsix" >> $GITHUB_OUTPUT
 
+      - name: Generate CHANGELOG.md
+        working-directory: packages/vscode-extension
+        run: |
+          # Get previous vscode tag
+          PREV_TAG=$(git tag -l 'vscode-v*' --sort=-v:refname | head -2 | tail -1 || echo '')
+          if [ -n "$PREV_TAG" ]; then
+            echo "Generating changelog from $PREV_TAG"
+            npx changelogen --from $PREV_TAG --output CHANGELOG.md
+          else
+            echo "No previous tag, generating full changelog"
+            npx changelogen --output CHANGELOG.md
+          fi
+
       - name: Package extension
         working-directory: packages/vscode-extension
         run: |

@@ -1,6 +1,23 @@
 import { describe, it, expect } from 'vitest'
-import type { SessionSortOptions, SummaryInfo } from '../types.js'
+import type { SummaryInfo, AgentInfo } from '../types.js'
+import { sortSessions } from '../session/tree.js'
 import { getSessionSortTimestamp } from '../utils.js'
+
+/** Test session type with required fields for sorting */
+type TestSession = {
+  id: string
+  summaries: SummaryInfo[]
+  createdAt?: string
+  updatedAt?: string
+  fileMtime?: number
+  messageCount: number
+  title: string
+  customTitle?: string
+  currentSummary?: string
+  sortTimestamp: number
+  projectName: string
+  agents: AgentInfo[]
+}
 
 /**
  * TDD for session sorting by different fields
@@ -16,103 +33,61 @@ import { getSessionSortTimestamp } from '../utils.js'
 
 describe('Session sorting by different fields', () => {
   // Dummy session data for testing
-  const createDummySessions = () => [
-    {
-      id: 'session-alpha',
-      title: 'Alpha feature implementation',
-      customTitle: undefined,
-      currentSummary: 'Implementing alpha feature',
-      messageCount: 50,
-      createdAt: '2026-01-10T00:00:00.000Z',
-      updatedAt: '2026-01-15T12:00:00.000Z',
-      fileMtime: 1704844800000, // Jan 10
-      summaries: [
-        { summary: 'Alpha feature', timestamp: '2026-01-12T00:00:00.000Z' },
-      ] as SummaryInfo[],
-    },
-    {
-      id: 'session-beta',
-      title: 'Beta bug fixes',
-      customTitle: 'Critical Beta Fixes',
-      currentSummary: 'Fixing beta bugs',
-      messageCount: 20,
-      createdAt: '2026-01-15T00:00:00.000Z',
-      updatedAt: '2026-01-18T08:00:00.000Z',
-      fileMtime: 1705276800000, // Jan 15
-      summaries: [
-        { summary: 'Beta fixes', timestamp: '2026-01-16T00:00:00.000Z' },
-      ] as SummaryInfo[],
-    },
-    {
-      id: 'session-gamma',
-      title: 'Gamma refactoring',
-      customTitle: undefined,
-      currentSummary: undefined,
-      messageCount: 100,
-      createdAt: '2026-01-05T00:00:00.000Z',
-      updatedAt: '2026-01-19T10:00:00.000Z',
-      fileMtime: 1705708800000, // Jan 20
-      summaries: [] as SummaryInfo[],
-    },
-  ]
+  const createDummySessions = (): TestSession[] => {
+    const sessions = [
+      {
+        id: 'session-alpha',
+        title: 'Alpha feature implementation',
+        customTitle: undefined,
+        currentSummary: 'Implementing alpha feature',
+        messageCount: 50,
+        createdAt: '2026-01-10T00:00:00.000Z',
+        updatedAt: '2026-01-15T12:00:00.000Z',
+        fileMtime: 1704844800000, // Jan 10
+        summaries: [
+          { summary: 'Alpha feature', timestamp: '2026-01-12T00:00:00.000Z' },
+        ] as SummaryInfo[],
+        projectName: 'test-project',
+        agents: [],
+        todos: [],
+      },
+      {
+        id: 'session-beta',
+        title: 'Beta bug fixes',
+        customTitle: 'Critical Beta Fixes',
+        currentSummary: 'Fixing beta bugs',
+        messageCount: 20,
+        createdAt: '2026-01-15T00:00:00.000Z',
+        updatedAt: '2026-01-18T08:00:00.000Z',
+        fileMtime: 1705276800000, // Jan 15
+        summaries: [
+          { summary: 'Beta fixes', timestamp: '2026-01-16T00:00:00.000Z' },
+        ] as SummaryInfo[],
+        projectName: 'test-project',
+        agents: [],
+        todos: [],
+      },
+      {
+        id: 'session-gamma',
+        title: 'Gamma refactoring',
+        customTitle: undefined,
+        currentSummary: undefined,
+        messageCount: 100,
+        createdAt: '2026-01-05T00:00:00.000Z',
+        updatedAt: '2026-01-19T10:00:00.000Z',
+        fileMtime: 1705708800000, // Jan 20
+        summaries: [] as SummaryInfo[],
+        projectName: 'test-project',
+        agents: [],
+        todos: { sessionId: 'session-gamma', sessionTodos: [], agentTodos: [], hasTodos: false },
+      },
+    ]
 
-  const sortSessions = <
-    T extends {
-      summaries?: SummaryInfo[]
-      createdAt?: string
-      updatedAt?: string
-      fileMtime?: number
-      messageCount: number
-      title: string
-      customTitle?: string
-      currentSummary?: string
-    },
-  >(
-    sessions: T[],
-    sortOptions: SessionSortOptions
-  ): T[] => {
-    return [...sessions].sort((a, b) => {
-      let comparison = 0
-
-      switch (sortOptions.field) {
-        case 'summary': {
-          const timeA = getSessionSortTimestamp(a)
-          const timeB = getSessionSortTimestamp(b)
-          const dateA = timeA ? new Date(timeA).getTime() : 0
-          const dateB = timeB ? new Date(timeB).getTime() : 0
-          comparison = dateA - dateB
-          break
-        }
-        case 'modified': {
-          comparison = (a.fileMtime ?? 0) - (b.fileMtime ?? 0)
-          break
-        }
-        case 'created': {
-          const createdA = a.createdAt ? new Date(a.createdAt).getTime() : 0
-          const createdB = b.createdAt ? new Date(b.createdAt).getTime() : 0
-          comparison = createdA - createdB
-          break
-        }
-        case 'updated': {
-          const updatedA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
-          const updatedB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
-          comparison = updatedA - updatedB
-          break
-        }
-        case 'messageCount': {
-          comparison = a.messageCount - b.messageCount
-          break
-        }
-        case 'title': {
-          const titleA = a.customTitle ?? a.currentSummary ?? a.title
-          const titleB = b.customTitle ?? b.currentSummary ?? b.title
-          comparison = titleA.localeCompare(titleB)
-          break
-        }
-      }
-
-      return sortOptions.order === 'desc' ? -comparison : comparison
-    })
+    // Calculate sortTimestamp for each session
+    return sessions.map((s) => ({
+      ...s,
+      sortTimestamp: getSessionSortTimestamp(s),
+    }))
   }
 
   describe('sort by summary timestamp', () => {
@@ -242,7 +217,7 @@ describe('Session sorting by different fields', () => {
     })
 
     it('should use customTitle over currentSummary over title', () => {
-      const sessions = [
+      const baseSessions = [
         {
           id: 'with-custom',
           title: 'Original title',
@@ -250,6 +225,8 @@ describe('Session sorting by different fields', () => {
           currentSummary: 'BBB Summary',
           messageCount: 1,
           summaries: [] as SummaryInfo[],
+          projectName: 'test-project',
+          agents: [],
         },
         {
           id: 'with-summary',
@@ -258,6 +235,8 @@ describe('Session sorting by different fields', () => {
           currentSummary: 'CCC Summary',
           messageCount: 1,
           summaries: [] as SummaryInfo[],
+          projectName: 'test-project',
+          agents: [],
         },
         {
           id: 'title-only',
@@ -266,8 +245,15 @@ describe('Session sorting by different fields', () => {
           currentSummary: undefined,
           messageCount: 1,
           summaries: [] as SummaryInfo[],
+          projectName: 'test-project',
+          agents: [],
         },
       ]
+
+      const sessions: TestSession[] = baseSessions.map((s) => ({
+        ...s,
+        sortTimestamp: getSessionSortTimestamp(s),
+      }))
 
       const sorted = sortSessions(sessions, { field: 'title', order: 'asc' })
 

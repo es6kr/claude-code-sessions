@@ -172,24 +172,6 @@ export const maskHomePath = (text: string, homeDir: string): string => {
 }
 
 /**
- * Get session sort timestamp based on official Claude Code extension behavior
- *
- * CRITICAL ARCHITECTURE:
- * - Summary records have `leafUuid` but NO timestamp in the summary record itself
- * - `leafUuid` points to a message in ANOTHER session (cross-session reference)
- * - The timestamp for sorting must come from the TARGET message's timestamp
- * - Official extension uses leafUuid's target message timestamp for sorting/display
- *
- * Priority: summaries[0].timestamp (leafUuid-based) > createdAt
- */
-export const getSessionSortTimestamp = (session: {
-  summaries?: SummaryInfo[]
-  createdAt?: string
-}): string | undefined => {
-  return session.summaries?.[0]?.timestamp ?? session.createdAt
-}
-
-/**
  * Sort projects with priority:
  * 1. Current project (if specified)
  * 2. Current user's home directory subpaths
@@ -230,4 +212,16 @@ export const sortProjects = (
     // Finally sort by display name
     return a.displayName.localeCompare(b.displayName)
   })
+}
+
+/**
+ * Get sort timestamp for session (Unix timestamp ms)
+ * Priority: summaries[0].timestamp > createdAt > 0
+ */
+export const getSessionSortTimestamp = (session: {
+  summaries?: SummaryInfo[]
+  createdAt?: string
+}): number => {
+  const timestampStr = session.summaries?.[0]?.timestamp ?? session.createdAt
+  return timestampStr ? new Date(timestampStr).getTime() : 0
 }

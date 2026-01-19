@@ -14,6 +14,10 @@ import { getIndexEntryDisplayTitle, sortIndexEntriesByModified } from '../sessio
  */
 
 describe('getSessionSortTimestamp', () => {
+  // Pre-calculated Unix timestamps for test data
+  const TIMESTAMP_2025_12_26 = 1766753590763 // '2025-12-26T12:53:10.763Z'
+  const TIMESTAMP_2025_12_25 = 1766659320000 // '2025-12-25T10:42:00.000Z'
+
   describe('basic priority logic', () => {
     it('should return summaries[0].timestamp when available', () => {
       const session = {
@@ -23,7 +27,7 @@ describe('getSessionSortTimestamp', () => {
         createdAt: '2025-12-25T10:42:00.000Z',
       }
 
-      expect(getSessionSortTimestamp(session)).toBe('2025-12-26T12:53:10.763Z')
+      expect(getSessionSortTimestamp(session)).toBe(TIMESTAMP_2025_12_26)
     })
 
     it('should return createdAt when no summaries', () => {
@@ -32,7 +36,7 @@ describe('getSessionSortTimestamp', () => {
         createdAt: '2025-12-25T10:42:00.000Z',
       }
 
-      expect(getSessionSortTimestamp(session)).toBe('2025-12-25T10:42:00.000Z')
+      expect(getSessionSortTimestamp(session)).toBe(TIMESTAMP_2025_12_25)
     })
 
     it('should return createdAt when summaries is undefined', () => {
@@ -40,7 +44,7 @@ describe('getSessionSortTimestamp', () => {
         createdAt: '2025-12-25T10:42:00.000Z',
       }
 
-      expect(getSessionSortTimestamp(session)).toBe('2025-12-25T10:42:00.000Z')
+      expect(getSessionSortTimestamp(session)).toBe(TIMESTAMP_2025_12_25)
     })
 
     it('should return createdAt when summaries[0] has no timestamp', () => {
@@ -49,25 +53,26 @@ describe('getSessionSortTimestamp', () => {
         createdAt: '2025-12-25T10:42:00.000Z',
       }
 
-      expect(getSessionSortTimestamp(session)).toBe('2025-12-25T10:42:00.000Z')
+      expect(getSessionSortTimestamp(session)).toBe(TIMESTAMP_2025_12_25)
     })
 
-    it('should return undefined when no timestamps available', () => {
+    it('should return 0 when no timestamps available', () => {
       const session = {
         summaries: [],
       }
 
-      expect(getSessionSortTimestamp(session)).toBeUndefined()
+      expect(getSessionSortTimestamp(session)).toBe(0)
     })
   })
 
   describe('dummy data scenarios', () => {
     // Reference time for relative calculations
     const REFERENCE_TIME = new Date('2026-01-19T05:26:00.000Z')
+    const REFERENCE_TIME_MS = REFERENCE_TIME.getTime()
 
-    const getRelativeTime = (timestamp: string | undefined) => {
-      if (!timestamp) return '?'
-      const diffMs = REFERENCE_TIME.getTime() - new Date(timestamp).getTime()
+    const getRelativeTime = (timestampMs: number) => {
+      if (!timestampMs) return '?'
+      const diffMs = REFERENCE_TIME_MS - timestampMs
       const diffHours = Math.floor(diffMs / 3600000)
       const diffDays = Math.floor(diffHours / 24)
       if (diffDays >= 1) return `${diffDays}d`
@@ -87,22 +92,24 @@ describe('getSessionSortTimestamp', () => {
       }
 
       const sortTimestamp = getSessionSortTimestamp(session)
-      expect(sortTimestamp).toBe('2025-12-26T12:53:10.763Z')
+      expect(sortTimestamp).toBe(TIMESTAMP_2025_12_26)
       expect(getRelativeTime(sortTimestamp)).toBe('23d')
     })
 
     it('should use createdAt for sessions without summaries', () => {
+      const timestamp = new Date('2026-01-18T09:26:00.000Z').getTime()
       const session = {
         summaries: [],
         createdAt: '2026-01-18T09:26:00.000Z', // 20h from reference
       }
 
       const sortTimestamp = getSessionSortTimestamp(session)
-      expect(sortTimestamp).toBe('2026-01-18T09:26:00.000Z')
+      expect(sortTimestamp).toBe(timestamp)
       expect(getRelativeTime(sortTimestamp)).toBe('20h')
     })
 
     it('should prioritize summary timestamp over createdAt even if older', () => {
+      const oldTimestamp = new Date('2025-12-01T00:00:00.000Z').getTime()
       const session = {
         summaries: [
           {
@@ -115,7 +122,7 @@ describe('getSessionSortTimestamp', () => {
       }
 
       const sortTimestamp = getSessionSortTimestamp(session)
-      expect(sortTimestamp).toBe('2025-12-01T00:00:00.000Z')
+      expect(sortTimestamp).toBe(oldTimestamp)
     })
   })
 
@@ -126,9 +133,7 @@ describe('getSessionSortTimestamp', () => {
       return [...sessions].sort((a, b) => {
         const timeA = getSessionSortTimestamp(a)
         const timeB = getSessionSortTimestamp(b)
-        const dateA = timeA ? new Date(timeA).getTime() : 0
-        const dateB = timeB ? new Date(timeB).getTime() : 0
-        return dateB - dateA // Newest first (desc)
+        return timeB - timeA // Newest first (desc)
       })
     }
 

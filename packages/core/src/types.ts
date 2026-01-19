@@ -333,10 +333,12 @@ export interface SessionTreeData {
   updatedAt?: string
   /** File modification time (Unix timestamp ms) */
   fileMtime?: number
+  /** Pre-calculated sort timestamp (Unix timestamp ms) for 'summary' field */
+  sortTimestamp: number
   /** All summaries in reverse order (newest first) */
   summaries: SummaryInfo[]
   agents: AgentInfo[]
-  todos: SessionTodos
+  todos?: SessionTodos
   /** UUID of last compact_boundary message */
   lastCompactBoundaryUuid?: string
 }

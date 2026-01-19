@@ -2,7 +2,7 @@
   "name": "claude-sessions",
   "displayName": "Claude Code Sessions",
   "description": "Manage Claude Code sessions from VS Code sidebar",
-  "version": "0.3.7",
+  "version": "0.4.0",
   "publisher": "es6kr",
   "license": "MIT",
   "repository": {
@@ -94,29 +94,39 @@
         "command": "claudeSessions.resumeSession",
         "title": "Resume Session",
         "icon": "$(play)"
+      },
+      {
+        "command": "claudeSessions.sortBy",
+        "title": "Sort Sessions",
+        "icon": "$(sort-precedence)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "claudeSessions.cleanup",
+          "command": "claudeSessions.sortBy",
           "when": "view == claudeSessions",
           "group": "navigation@1"
         },
         {
-          "command": "claudeSessions.openWebUI",
+          "command": "claudeSessions.cleanup",
           "when": "view == claudeSessions",
           "group": "navigation@2"
         },
         {
-          "command": "claudeSessions.refresh",
+          "command": "claudeSessions.openWebUI",
           "when": "view == claudeSessions",
           "group": "navigation@3"
         },
         {
-          "command": "workbench.action.restartExtensionHost",
+          "command": "claudeSessions.refresh",
           "when": "view == claudeSessions",
           "group": "navigation@4"
+        },
+        {
+          "command": "workbench.action.restartExtensionHost",
+          "when": "view == claudeSessions",
+          "group": "navigation@5"
         }
       ],
       "view/item/context": [
