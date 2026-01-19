@@ -53,6 +53,25 @@ After modifying web features, always test with Playwright:
 
 리팩토링 시 `refactor-comparison` 에이전트 사용 → 순수함수 vs Effect 비교 분석
 
+## Session Summary Architecture
+
+**CRITICAL**: Understanding how summaries work is essential for matching official extension behavior.
+
+- Summary records have `leafUuid` but **no timestamp**
+- `leafUuid` points to a message in **another session** (cross-session reference)
+- The timestamp for sorting/display must be derived from the **target message's timestamp**
+- Official extension calculates relative time based on `leafUuid`'s target message timestamp
+
+```
+Session A (contains summary):
+  { type: "summary", summary: "...", leafUuid: "abc123" }  // no timestamp!
+
+Session B (contains target message):
+  { uuid: "abc123", timestamp: "2025-12-26T12:57:25.141Z" }  // this is the timestamp to use
+```
+
+When matching official extension's session list order and relative time display, use `leafUuid` resolution to get the correct timestamp.
+
 ## Tech Stack
 
 - **Core**: TypeScript, Effect-TS

@@ -35,6 +35,11 @@ export type {
   ConversationLine,
   SummarizeSessionOptions,
   SummarizeSessionResult,
+  SessionIndexEntry,
+  SessionsIndex,
+  SessionSortField,
+  SessionSortOrder,
+  SessionSortOptions,
 } from './types.js'
 
 // Path utilities
@@ -58,6 +63,7 @@ export {
   getDisplayTitle,
   maskHomePath,
   sortProjects,
+  getSessionSortTimestamp,
 } from './utils.js'
 
 // Agent management
@@ -103,6 +109,14 @@ export {
 
 // Note: resumeSession is exported from '@claude-sessions/core/server'
 // It uses child_process and should only be used in server/Node.js environments
+
+// Sessions index file (official Claude Code extension format)
+export {
+  loadSessionsIndex,
+  getIndexEntryDisplayTitle,
+  sortIndexEntriesByModified,
+  hasSessionsIndex,
+} from './session/index-file.js'
 
 // Logger
 export type { Logger } from './logger.js'

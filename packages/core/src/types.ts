@@ -140,7 +140,12 @@ export interface Message extends TypedObject {
 export interface SessionMeta {
   id: string
   projectName: string
+  /** First user message title */
   title?: string
+  /** User-set custom title */
+  customTitle?: string
+  /** Current (first) summary text for display */
+  currentSummary?: string
   messageCount: number
   createdAt?: string
   updatedAt?: string
@@ -263,6 +268,38 @@ export interface SearchResult {
 }
 
 // ============================================================================
+// Sessions Index Types (official Claude Code extension format)
+// ============================================================================
+
+/**
+ * Entry in sessions-index.json file.
+ * This is the official index format used by Claude Code extension.
+ */
+export interface SessionIndexEntry {
+  sessionId: string
+  fullPath: string
+  fileMtime: number
+  firstPrompt: string
+  customTitle?: string
+  summary?: string
+  messageCount: number
+  created: string
+  modified: string
+  gitBranch: string
+  projectPath: string
+  isSidechain: boolean
+}
+
+/**
+ * Sessions index file structure.
+ * Located at ~/.claude/projects/{project-folder}/sessions-index.json
+ */
+export interface SessionsIndex {
+  version: number
+  entries: SessionIndexEntry[]
+}
+
+// ============================================================================
 // Tree View Types (for UI rendering)
 // ============================================================================
 
@@ -271,6 +308,7 @@ export interface SummaryInfo {
   summary: string
   leafUuid?: string
   timestamp?: string
+  sourceFile?: string
 }
 
 /** Agent information for tree display */
@@ -293,6 +331,8 @@ export interface SessionTreeData {
   messageCount: number
   createdAt?: string
   updatedAt?: string
+  /** File modification time (Unix timestamp ms) */
+  fileMtime?: number
   /** All summaries in reverse order (newest first) */
   summaries: SummaryInfo[]
   agents: AgentInfo[]
@@ -308,6 +348,24 @@ export interface ProjectTreeData {
   path: string
   sessionCount: number
   sessions: SessionTreeData[]
+}
+
+/**
+ * Sort options for session list
+ */
+export type SessionSortField =
+  | 'summary' // summaries[0].timestamp (oldest summary) - default
+  | 'modified' // file modification time (fileMtime)
+  | 'created' // session creation time
+  | 'updated' // last message timestamp
+  | 'messageCount' // number of messages
+  | 'title' // alphabetical by title
+
+export type SessionSortOrder = 'asc' | 'desc'
+
+export interface SessionSortOptions {
+  field: SessionSortField
+  order: SessionSortOrder
 }
 
 // ============================================================================

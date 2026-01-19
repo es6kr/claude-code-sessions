@@ -7,6 +7,7 @@ import type {
   TextContent,
   AskUserQuestionResult,
   Project,
+  SummaryInfo,
 } from './types.js'
 import { createLogger } from './logger.js'
 import { pathToFolderName } from './paths.js'
@@ -168,6 +169,24 @@ export const maskHomePath = (text: string, homeDir: string): string => {
   const regex = new RegExp(`${escapedHome}(?=[/\\\\]|$)`, 'g')
 
   return text.replace(regex, '~')
+}
+
+/**
+ * Get session sort timestamp based on official Claude Code extension behavior
+ *
+ * CRITICAL ARCHITECTURE:
+ * - Summary records have `leafUuid` but NO timestamp in the summary record itself
+ * - `leafUuid` points to a message in ANOTHER session (cross-session reference)
+ * - The timestamp for sorting must come from the TARGET message's timestamp
+ * - Official extension uses leafUuid's target message timestamp for sorting/display
+ *
+ * Priority: summaries[0].timestamp (leafUuid-based) > createdAt
+ */
+export const getSessionSortTimestamp = (session: {
+  summaries?: SummaryInfo[]
+  createdAt?: string
+}): string | undefined => {
+  return session.summaries?.[0]?.timestamp ?? session.createdAt
 }
 
 /**
