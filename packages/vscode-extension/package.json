@@ -40,6 +40,7 @@
         {
           "id": "claudeSessions",
           "name": "Sessions",
+          "icon": "resources/activity-bar.svg",
           "contextualTitle": "Claude Code Sessions",
           "canSelectMany": true
         }

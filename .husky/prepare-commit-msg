@@ -4,8 +4,8 @@
 COMMIT_MSG_FILE=$1
 COMMIT_SOURCE=$2
 
-# Skip for merge, squash, or amend
-if [ "$COMMIT_SOURCE" = "merge" ] || [ "$COMMIT_SOURCE" = "squash" ]; then
+# Skip for merge, squash, amend, cherry-pick, or rebase
+if [ "$COMMIT_SOURCE" = "merge" ] || [ "$COMMIT_SOURCE" = "squash" ] || [ "$COMMIT_SOURCE" = "commit" ] || [ -d "$(git rev-parse --git-dir)/rebase-merge" ] || [ -d "$(git rev-parse --git-dir)/rebase-apply" ]; then
   exit 0
 fi
 
