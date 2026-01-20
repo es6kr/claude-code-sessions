@@ -1,0 +1,10 @@
+early_access: false
+enable_free_tier: true
+reviews:
+  disable_cache: true
+  review_status: false
+  auto_review:
+    enabled: true
+    base_branches:
+      - develop
+      - main
