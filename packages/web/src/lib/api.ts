@@ -42,7 +42,17 @@ export interface Message {
   uuid: string
   parentUuid?: string | null
   messageId?: string // For file-history-snapshot type
-  type: string
+  type:
+    | 'assistant'
+    | 'compact_boundary'
+    | 'custom-title'
+    | 'file-history-snapshot'
+    | 'human'
+    | 'progress'
+    | 'queue-operation'
+    | 'summary'
+    | 'system'
+    | 'user'
   subtype?: string
   content?: Content
   message?: unknown

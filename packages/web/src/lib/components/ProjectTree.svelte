@@ -1,7 +1,12 @@
 <script lang="ts">
   import type { Project, SessionMeta, SessionData } from '$lib/api'
   import { formatProjectName } from '$lib/utils'
-  import { sortProjects, type SessionSortField, type SessionSortOrder } from '@claude-sessions/core'
+  import {
+    sortProjects,
+    getDisplayTitle as coreGetDisplayTitle,
+    type SessionSortField,
+    type SessionSortOrder,
+  } from '@claude-sessions/core'
   import { appConfig } from '$lib/stores/config'
   import TooltipButton from './TooltipButton.svelte'
 
@@ -65,19 +70,10 @@
     return projectSessionData.get(projectName)?.get(sessionId)
   }
 
-  // Get display title: customTitle > currentSummary > title > 'Untitled'
+  // Get display title using core utility
   const getDisplayTitle = (session: SessionMeta): string => {
     const data = getSessionData(session.projectName, session.id)
-    // 1. Custom title from session data (user-set)
-    if (data?.customTitle) return data.customTitle
-    // 2. Current summary as fallback title
-    if (data?.currentSummary) {
-      const summary = data.currentSummary
-      return summary.length > 60 ? summary.slice(0, 57) + '...' : summary
-    }
-    // 3. Title from session metadata
-    if (session.title && session.title !== 'Untitled') return session.title
-    return 'Untitled'
+    return coreGetDisplayTitle(data?.customTitle, data?.currentSummary, session.title)
   }
 
   // Get tooltip text based on what's displayed as title

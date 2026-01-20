@@ -60,6 +60,7 @@ export {
   extractTitle,
   isInvalidApiKeyMessage,
   isContinuationSummary,
+  parseCommandMessage,
   getDisplayTitle,
   maskHomePath,
   sortProjects,

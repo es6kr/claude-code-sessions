@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { maskHomePath } from '$lib/stores/config'
+import {
+  parseCommandMessage,
+  parseProgress,
+  parseStopHookSummary,
+  parseTurnDuration,
+} from './message'
 
 describe('maskHomePath', () => {
   const homeDir = '/Users/david'
@@ -54,6 +60,217 @@ describe('maskHomePath', () => {
 
     it('should mask different usernames', () => {
       expect(maskHomePath('/Users/john/work/file.ts')).toBe('~/work/file.ts')
+    })
+  })
+})
+
+describe('parseCommandMessage', () => {
+  it('should parse command-name and command-message tags', () => {
+    const content = '<command-message>vsix</command-message>\n<command-name>/vsix</command-name>'
+    const result = parseCommandMessage(content)
+    expect(result.name).toBe('/vsix')
+    expect(result.message).toBe('vsix')
+  })
+
+  it('should handle real message data format', () => {
+    // Real data from session
+    const content = '<command-message>vsix</command-message>\n<command-name>/vsix</command-name>'
+    const result = parseCommandMessage(content)
+    expect(result).toEqual({ name: '/vsix', message: 'vsix' })
+  })
+
+  it('should return empty strings when tags are missing', () => {
+    const result = parseCommandMessage('plain text without tags')
+    expect(result.name).toBe('')
+    expect(result.message).toBe('')
+  })
+
+  it('should handle undefined content', () => {
+    const result = parseCommandMessage(undefined)
+    expect(result.name).toBe('')
+    expect(result.message).toBe('')
+  })
+
+  it('should handle empty string', () => {
+    const result = parseCommandMessage('')
+    expect(result.name).toBe('')
+    expect(result.message).toBe('')
+  })
+
+  it('should handle only command-name tag', () => {
+    const content = '<command-name>/commit</command-name>'
+    const result = parseCommandMessage(content)
+    expect(result.name).toBe('/commit')
+    expect(result.message).toBe('')
+  })
+
+  it('should handle only command-message tag', () => {
+    const content = '<command-message>build and test</command-message>'
+    const result = parseCommandMessage(content)
+    expect(result.name).toBe('')
+    expect(result.message).toBe('build and test')
+  })
+
+  it('should handle different command names', () => {
+    const content =
+      '<command-message>commit changes</command-message>\n<command-name>/commit</command-name>'
+    const result = parseCommandMessage(content)
+    expect(result.name).toBe('/commit')
+    expect(result.message).toBe('commit changes')
+  })
+})
+
+describe('parseStopHookSummary', () => {
+  it('should parse real stop_hook_summary message', () => {
+    const msg = {
+      type: 'system',
+      subtype: 'stop_hook_summary',
+      hookCount: 1,
+      hookInfos: [{ command: 'callback' }],
+      hookErrors: [],
+      preventedContinuation: false,
+      stopReason: '',
+      hasOutput: false,
+      level: 'suggestion',
+    }
+    const result = parseStopHookSummary(msg)
+    expect(result).toEqual({
+      hookCount: 1,
+      hookInfos: [{ command: 'callback' }],
+      hookErrors: [],
+      preventedContinuation: false,
+      stopReason: '',
+      hasOutput: false,
+      level: 'suggestion',
+    })
+  })
+
+  it('should return null for non stop_hook_summary messages', () => {
+    const msg = { type: 'system', subtype: 'local_command' }
+    expect(parseStopHookSummary(msg)).toBeNull()
+  })
+
+  it('should return null for messages without subtype', () => {
+    const msg = { type: 'user' }
+    expect(parseStopHookSummary(msg)).toBeNull()
+  })
+
+  it('should handle missing optional fields with defaults', () => {
+    const msg = { subtype: 'stop_hook_summary' }
+    const result = parseStopHookSummary(msg)
+    expect(result).toEqual({
+      hookCount: 0,
+      hookInfos: [],
+      hookErrors: [],
+      preventedContinuation: false,
+      stopReason: '',
+      hasOutput: false,
+      level: 'info',
+    })
+  })
+
+  it('should handle hook errors', () => {
+    const msg = {
+      subtype: 'stop_hook_summary',
+      hookCount: 2,
+      hookInfos: [{ command: 'test1' }, { command: 'test2' }],
+      hookErrors: ['Error in hook 1'],
+      preventedContinuation: true,
+      level: 'error',
+    }
+    const result = parseStopHookSummary(msg)
+    expect(result?.hookErrors).toEqual(['Error in hook 1'])
+    expect(result?.preventedContinuation).toBe(true)
+    expect(result?.level).toBe('error')
+  })
+})
+
+describe('parseTurnDuration', () => {
+  it('should parse real turn_duration message', () => {
+    const msg = {
+      type: 'system',
+      subtype: 'turn_duration',
+      durationMs: 59851,
+    }
+    const result = parseTurnDuration(msg)
+    expect(result).toEqual({
+      durationMs: 59851,
+      durationFormatted: '1m 0s',
+    })
+  })
+
+  it('should return null for non turn_duration messages', () => {
+    const msg = { type: 'system', subtype: 'stop_hook_summary' }
+    expect(parseTurnDuration(msg)).toBeNull()
+  })
+
+  it('should handle seconds only (less than 1 minute)', () => {
+    const msg = { subtype: 'turn_duration', durationMs: 45000 }
+    const result = parseTurnDuration(msg)
+    expect(result?.durationFormatted).toBe('45s')
+  })
+
+  it('should handle minutes and seconds', () => {
+    const msg = { subtype: 'turn_duration', durationMs: 125000 }
+    const result = parseTurnDuration(msg)
+    expect(result?.durationFormatted).toBe('2m 5s')
+  })
+
+  it('should handle zero duration', () => {
+    const msg = { subtype: 'turn_duration', durationMs: 0 }
+    const result = parseTurnDuration(msg)
+    expect(result?.durationFormatted).toBe('0s')
+  })
+
+  it('should handle missing durationMs with default', () => {
+    const msg = { subtype: 'turn_duration' }
+    const result = parseTurnDuration(msg)
+    expect(result?.durationMs).toBe(0)
+    expect(result?.durationFormatted).toBe('0s')
+  })
+})
+
+describe('parseProgress', () => {
+  it('should parse real hook_progress message', () => {
+    const msg = {
+      type: 'progress',
+      data: {
+        type: 'hook_progress',
+        hookEvent: 'PostToolUse',
+        hookName: 'PostToolUse:Edit',
+        command: 'some command',
+      },
+    }
+    const result = parseProgress(msg)
+    expect(result).toEqual({
+      type: 'hook_progress',
+      hookEvent: 'PostToolUse',
+      hookName: 'PostToolUse:Edit',
+      command: 'some command',
+    })
+  })
+
+  it('should return null for non progress messages', () => {
+    const msg = { type: 'system', subtype: 'turn_duration' }
+    expect(parseProgress(msg)).toBeNull()
+  })
+
+  it('should return null for progress without data', () => {
+    const msg = { type: 'progress' }
+    expect(parseProgress(msg)).toBeNull()
+  })
+
+  it('should handle missing optional fields', () => {
+    const msg = {
+      type: 'progress',
+      data: { type: 'some_progress' },
+    }
+    const result = parseProgress(msg)
+    expect(result).toEqual({
+      type: 'some_progress',
+      hookEvent: undefined,
+      hookName: undefined,
+      command: undefined,
     })
   })
 })

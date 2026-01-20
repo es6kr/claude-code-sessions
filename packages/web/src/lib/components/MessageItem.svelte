@@ -1,7 +1,16 @@
 <script lang="ts">
   import type { Message } from '$lib/api'
   import * as api from '$lib/api'
-  import { formatDate, getMessageContent, maskHomePaths, parseIdeTags } from '$lib/utils'
+  import {
+    formatDate,
+    getMessageContent,
+    maskHomePaths,
+    parseCommandMessage,
+    parseIdeTags,
+    parseProgress,
+    parseStopHookSummary,
+    parseTurnDuration,
+  } from '$lib/utils'
   import ExpandableContent from './ExpandableContent.svelte'
   import IdeTag from './IdeTag.svelte'
   import TodoItem from './TodoItem.svelte'
@@ -57,12 +66,31 @@
 
   // Parse command data
   const commandData = $derived.by(() => {
-    if (!isLocalCommand) return null
-    const content = typeof msg.content === 'string' ? msg.content : ''
-    const name = content.match(/<command-name>([^<]+)<\/command-name>/)?.[1] ?? ''
-    const message = content.match(/<command-message>([^<]+)<\/command-message>/)?.[1] ?? ''
-    return { name, message }
+    // System local_command type
+    if (isLocalCommand) {
+      const content = typeof msg.content === 'string' ? msg.content : ''
+      return parseCommandMessage(content)
+    }
+    // User message with command tags (slash commands like /vsix)
+    if (isHuman) {
+      const m = msg.message as { content?: string } | undefined
+      const content = typeof m?.content === 'string' ? m.content : ''
+      if (content.includes('<command-name>')) {
+        return parseCommandMessage(content)
+      }
+    }
+    return null
   })
+  const isSlashCommand = $derived(commandData !== null && !isLocalCommand)
+
+  // Parse stop_hook_summary data
+  const stopHookData = $derived(parseStopHookSummary(msg))
+
+  // Parse turn_duration data
+  const turnDurationData = $derived(parseTurnDuration(msg))
+
+  // Parse progress data
+  const progressData = $derived(parseProgress(msg))
 
   // Parse tool_use data from assistant messages
   interface ToolUse {
@@ -165,6 +193,63 @@
 
 {#if isQueueOperation}
   <!-- Queue operations are internal system messages, don't render -->
+{:else if progressData}
+  <!-- Progress message (hook_progress etc.) -->
+  <div data-msg-id={msgId} class="p-2 rounded-lg bg-gh-border-subtle/30 group relative">
+    <div class="flex justify-between items-center text-xs text-gh-text-secondary/60">
+      <span>
+        🔄 {progressData.hookName ?? progressData.type}
+      </span>
+      <div class="flex items-center gap-2">
+        {@render splitButton()}
+        {@render deleteButton()}
+      </div>
+    </div>
+  </div>
+{:else if turnDurationData}
+  <!-- Turn duration message -->
+  <div data-msg-id={msgId} class="p-2 rounded-lg bg-gh-border-subtle/50 group relative">
+    <div class="flex justify-between items-center text-xs text-gh-text-secondary">
+      <span class="text-gh-text-secondary/70">
+        ⏱️ {turnDurationData.durationFormatted}
+      </span>
+      <div class="flex items-center gap-2">
+        {@render splitButton()}
+        {@render deleteButton()}
+      </div>
+    </div>
+  </div>
+{:else if stopHookData}
+  <!-- Stop hook summary message -->
+  <div
+    data-msg-id={msgId}
+    class="p-3 rounded-lg bg-emerald-500/10 border-l-3 border-l-emerald-500 group relative"
+  >
+    <div class="flex justify-between items-center text-xs text-gh-text-secondary">
+      <span class="font-semibold text-emerald-400">
+        🪝 Hook ({stopHookData.hookCount})
+      </span>
+      <div class="flex items-center gap-2">
+        <span>{formatDate(msg.timestamp)}</span>
+        {@render splitButton()}
+        {@render deleteButton()}
+      </div>
+    </div>
+    {#if stopHookData.hookInfos.length > 0}
+      <div class="mt-1 text-xs text-gh-text-secondary">
+        {#each stopHookData.hookInfos as hook}
+          <span class="font-mono">{hook.command}</span>
+        {/each}
+      </div>
+    {/if}
+    {#if stopHookData.hookErrors.length > 0}
+      <div class="mt-1 text-xs text-red-400">
+        {#each stopHookData.hookErrors as error}
+          <p>{error}</p>
+        {/each}
+      </div>
+    {/if}
+  </div>
 {:else if isFileSnapshot && snapshotData}
   <!-- File history snapshot -->
   <div
@@ -199,6 +284,21 @@
         </li>
       {/each}
     </ul>
+  </div>
+{:else if isSlashCommand && commandData}
+  <!-- Slash command message (user input like /vsix) -->
+  <div
+    data-msg-id={msgId}
+    class="p-3 rounded-lg bg-gh-accent/15 border-l-3 border-l-gh-accent group relative"
+  >
+    <div class="flex justify-between items-center text-xs text-gh-text-secondary">
+      <span class="font-semibold text-gh-accent">{commandData.name || 'Command'}</span>
+      <div class="flex items-center gap-2">
+        <span>{formatDate(msg.timestamp)}</span>
+        {@render splitButton()}
+        {@render deleteButton()}
+      </div>
+    </div>
   </div>
 {:else if isLocalCommand && commandData}
   <!-- Local command message -->

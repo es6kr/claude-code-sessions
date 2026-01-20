@@ -67,13 +67,109 @@ export const getMessageContent = (msg: Message): string => {
   return maskHomePaths(content)
 }
 
+// Re-export from core
+export { parseCommandMessage } from '@claude-sessions/core'
+
 /**
- * Parse command message content
+ * Hook info from stop_hook_summary message
  */
-export const parseCommandMessage = (content?: string): { name: string; message: string } => {
-  const name = content?.match(/<command-name>([^<]+)<\/command-name>/)?.[1] ?? ''
-  const message = content?.match(/<command-message>([^<]+)<\/command-message>/)?.[1] ?? ''
-  return { name, message }
+export interface HookInfo {
+  command: string
+}
+
+/**
+ * Parsed stop_hook_summary data
+ */
+export interface StopHookSummaryData {
+  hookCount: number
+  hookInfos: HookInfo[]
+  hookErrors: string[]
+  preventedContinuation: boolean
+  stopReason: string
+  hasOutput: boolean
+  level: string
+}
+
+/**
+ * Parse stop_hook_summary message data
+ */
+export const parseStopHookSummary = (msg: unknown): StopHookSummaryData | null => {
+  const m = msg as Record<string, unknown>
+  if (m?.subtype !== 'stop_hook_summary') return null
+
+  return {
+    hookCount: (m.hookCount as number) ?? 0,
+    hookInfos: (m.hookInfos as HookInfo[]) ?? [],
+    hookErrors: (m.hookErrors as string[]) ?? [],
+    preventedContinuation: (m.preventedContinuation as boolean) ?? false,
+    stopReason: (m.stopReason as string) ?? '',
+    hasOutput: (m.hasOutput as boolean) ?? false,
+    level: (m.level as string) ?? 'info',
+  }
+}
+
+/**
+ * Parsed turn_duration data
+ */
+export interface TurnDurationData {
+  durationMs: number
+  durationFormatted: string
+}
+
+/**
+ * Parse turn_duration message data
+ */
+export const parseTurnDuration = (msg: unknown): TurnDurationData | null => {
+  const m = msg as Record<string, unknown>
+  if (m?.subtype !== 'turn_duration') return null
+
+  const durationMs = (m.durationMs as number) ?? 0
+  const seconds = Math.round(durationMs / 1000)
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+
+  const durationFormatted =
+    minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${remainingSeconds}s`
+
+  return { durationMs, durationFormatted }
+}
+
+/**
+ * Hook progress data from progress message
+ */
+export interface HookProgressData {
+  type: 'hook_progress'
+  hookEvent: string
+  hookName: string
+  command?: string
+}
+
+/**
+ * Parsed progress data
+ */
+export interface ProgressData {
+  type: string
+  hookEvent?: string
+  hookName?: string
+  command?: string
+}
+
+/**
+ * Parse progress message data
+ */
+export const parseProgress = (msg: unknown): ProgressData | null => {
+  const m = msg as Record<string, unknown>
+  if (m?.type !== 'progress') return null
+
+  const data = m.data as Record<string, unknown> | undefined
+  if (!data) return null
+
+  return {
+    type: (data.type as string) ?? 'unknown',
+    hookEvent: data.hookEvent as string | undefined,
+    hookName: data.hookName as string | undefined,
+    command: data.command as string | undefined,
+  }
 }
 
 /**

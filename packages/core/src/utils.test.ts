@@ -1,6 +1,28 @@
 import { describe, it, expect } from 'vitest'
-import { cleanupSplitFirstMessage, getDisplayTitle, maskHomePath, sortProjects } from './utils.js'
+import {
+  cleanupSplitFirstMessage,
+  extractTitle,
+  getDisplayTitle,
+  maskHomePath,
+  sortProjects,
+} from './utils.js'
 import type { Message, Project } from './types.js'
+
+describe('extractTitle', () => {
+  it('should extract command name from slash command message', () => {
+    const text =
+      '<command-message>session</command-message>\n<command-name>/session</command-name>\n<command-args>  repair --dry-run e15f9f9a-db7a-4729-965c-c0beb8d75039</command-args>'
+    expect(extractTitle(text)).toBe('/session')
+  })
+
+  it('should return first line as title for normal text', () => {
+    expect(extractTitle('Hello World\n\nThird line')).toBe('Hello World')
+  })
+
+  it('should return Untitled for empty text', () => {
+    expect(extractTitle('')).toBe('Untitled')
+  })
+})
 
 describe('cleanupSplitFirstMessage', () => {
   it('should return message unchanged if no toolUseResult', () => {

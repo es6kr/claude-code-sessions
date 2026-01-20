@@ -41,9 +41,23 @@ export const extractTextContent = (message: MessagePayload | undefined): string 
   return ''
 }
 
+/**
+ * Parse command message content (e.g., slash commands like /commit)
+ * Returns the command name and message extracted from XML tags
+ */
+export const parseCommandMessage = (content?: string): { name: string; message: string } => {
+  const name = content?.match(/<command-name>([^<]+)<\/command-name>/)?.[1] ?? ''
+  const message = content?.match(/<command-message>([^<]+)<\/command-message>/)?.[1] ?? ''
+  return { name, message }
+}
+
 // Extract title from text content (remove IDE tags, use first line)
 export const extractTitle = (text: string): string => {
   if (!text) return 'Untitled'
+
+  // Check for slash command format (e.g., <command-name>/session</command-name>)
+  const { name } = parseCommandMessage(text)
+  if (name) return name
 
   // Remove IDE tags (<ide_opened_file>, <ide_selection>, etc.)
   let cleaned = text.replace(/<ide_[^>]*>[\s\S]*?<\/ide_[^>]*>/g, '').trim()
@@ -53,8 +67,6 @@ export const extractTitle = (text: string): string => {
   // Use only content before \n\n or \n as title
   if (cleaned.includes('\n\n')) {
     cleaned = cleaned.split('\n\n')[0]
-  } else if (cleaned.includes('\n')) {
-    cleaned = cleaned.split('\n')[0]
   }
 
   // Limit to 100 characters
@@ -100,6 +112,7 @@ export const isContinuationSummary = (msg: Message): boolean => {
 /**
  * Get display title with fallback logic
  * Priority: customTitle > currentSummary (truncated) > title > fallback
+ * Also handles slash command format in title
  */
 export const getDisplayTitle = (
   customTitle: string | undefined,
@@ -114,7 +127,14 @@ export const getDisplayTitle = (
       ? currentSummary.slice(0, maxLength - 3) + '...'
       : currentSummary
   }
-  if (title && title !== 'Untitled') return title
+  if (title && title !== 'Untitled') {
+    // Check if title contains command-name tag (slash command)
+    if (title.includes('<command-name>')) {
+      const { name } = parseCommandMessage(title)
+      if (name) return name
+    }
+    return title
+  }
   return fallback
 }
 
