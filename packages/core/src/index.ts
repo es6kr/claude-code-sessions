@@ -122,3 +122,11 @@ export {
 // Logger
 export type { Logger } from './logger.js'
 export { setLogger, getLogger, createLogger } from './logger.js'
+
+// Validation utilities
+export type { ChainError, ToolUseResultError, ValidationResult } from './session/validation.js'
+export {
+  validateChain,
+  validateToolUseResult,
+  deleteMessageWithChainRepair,
+} from './session/validation.js'

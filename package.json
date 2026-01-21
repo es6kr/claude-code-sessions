@@ -17,6 +17,7 @@
     "build:mcp": "pnpm --filter claude-sessions-mcp build",
     "build:web": "pnpm --filter @claude-sessions/web build",
     "lint": "pnpm -r lint",
+    "storybook": "pnpm --filter @claude-sessions/web storybook",
     "typecheck": "pnpm -r typecheck",
     "prepare": "husky",
     "changelog": "changelogen --output CHANGELOG.md",

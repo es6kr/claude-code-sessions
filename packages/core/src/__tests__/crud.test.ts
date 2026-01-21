@@ -13,7 +13,7 @@ vi.mock('../paths.js', async () => {
   }
 })
 
-import { deleteMessage, readSession } from '../session.js'
+import { deleteMessage, readSession, validateChain } from '../session.js'
 import { getSessionsDir } from '../paths.js'
 
 describe('deleteMessage', () => {
@@ -199,7 +199,7 @@ describe('deleteMessage', () => {
       {
         type: 'assistant',
         uuid: '42a525c3-9656-4619-b0f7-f3099a3082ec',
-        parentUuid: '65c60b85-1a61-4c9b-bd55-0ec5dc218a37',
+        parentUuid: null,
         timestamp: '2026-01-20T04:35:23.280Z',
         message: {
           role: 'assistant',
@@ -278,6 +278,11 @@ describe('deleteMessage', () => {
     expect(user?.parentUuid).toBe('42a525c3-9656-4619-b0f7-f3099a3082ec')
     // last assistant's parent should now be user (was progress, but progress deleted)
     expect(lastAssistant?.parentUuid).toBe('da7e4183-fedd-4075-81ca-7ba40aa162e8')
+
+    // Validate chain integrity using validateChain
+    const chainResult = validateChain(remainingMessages)
+    expect(chainResult.valid).toBe(true)
+    expect(chainResult.errors).toHaveLength(0)
   })
 
   it('should delete tool_result message when corresponding tool_use message is deleted', async () => {

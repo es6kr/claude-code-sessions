@@ -146,6 +146,8 @@ export const readSession = (projectName: string, sessionId: string) =>
     return lines.map((line) => JSON.parse(line) as Message)
   })
 
+import { deleteMessageWithChainRepair } from './validation.js'
+
 // Delete a message from session and repair parentUuid chain
 // Optional targetType parameter to specify which type to delete when uuid/messageId collision exists
 export const deleteMessage = (
@@ -160,105 +162,17 @@ export const deleteMessage = (
     const lines = content.trim().split('\n').filter(Boolean)
     const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
 
-    let targetIndex = -1
+    // Use the pure function for chain repair
+    const result = deleteMessageWithChainRepair(messages, messageUuid, targetType)
 
-    // If targetType is specified, search only that type
-    if (targetType === 'file-history-snapshot') {
-      targetIndex = messages.findIndex(
-        (m) => m.type === 'file-history-snapshot' && m.messageId === messageUuid
-      )
-    } else if (targetType === 'summary') {
-      targetIndex = messages.findIndex((m) => m.leafUuid === messageUuid)
-    } else {
-      // Default behavior: uuid match takes priority over messageId/leafUuid
-      // Priority: any message (by uuid) > summary (by leafUuid) > file-history-snapshot (by messageId)
-      targetIndex = messages.findIndex((m) => m.uuid === messageUuid)
-      if (targetIndex === -1) {
-        targetIndex = messages.findIndex((m) => m.leafUuid === messageUuid)
-      }
-      if (targetIndex === -1) {
-        targetIndex = messages.findIndex(
-          (m) => m.type === 'file-history-snapshot' && m.messageId === messageUuid
-        )
-      }
-    }
-
-    if (targetIndex === -1) {
+    if (!result.deleted) {
       return { success: false, error: 'Message not found' }
-    }
-
-    // Get the deleted message
-    const deletedMsg = messages[targetIndex]
-
-    // Collect tool_use IDs from the deleted message (if it's an assistant message with tool_use)
-    const toolUseIds: string[] = []
-    if (deletedMsg.type === 'assistant') {
-      const msgContent = deletedMsg.message as { content?: Array<{ type?: string; id?: string }> }
-      if (Array.isArray(msgContent?.content)) {
-        for (const item of msgContent.content) {
-          if (item.type === 'tool_use' && item.id) {
-            toolUseIds.push(item.id)
-          }
-        }
-      }
-    }
-
-    // Find indices of tool_result messages that reference deleted tool_use IDs
-    // These must also be deleted to prevent API error
-    const toolResultIndices: number[] = []
-    if (toolUseIds.length > 0) {
-      for (let i = 0; i < messages.length; i++) {
-        const msg = messages[i]
-        if (msg.type === 'user') {
-          const msgContent = msg.message as {
-            content?: Array<{ type?: string; tool_use_id?: string }>
-          }
-          if (Array.isArray(msgContent?.content)) {
-            for (const item of msgContent.content) {
-              if (
-                item.type === 'tool_result' &&
-                item.tool_use_id &&
-                toolUseIds.includes(item.tool_use_id)
-              ) {
-                toolResultIndices.push(i)
-                break
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // Build list of all indices to delete (target + tool_results)
-    const indicesToDelete = [targetIndex, ...toolResultIndices].sort((a, b) => b - a) // Sort descending for safe splice
-
-    // Update parentUuid chain for all messages being deleted
-    for (const idx of indicesToDelete) {
-      const msg = messages[idx]
-      const isInParentChain = msg.type !== 'file-history-snapshot' && msg.uuid
-      if (isInParentChain) {
-        const deletedUuid = msg.uuid as string
-        const parentUuid = msg.parentUuid
-
-        // Find all messages that reference this message as their parent
-        // and update them to point to this message's parent
-        for (const m of messages) {
-          if (m.parentUuid === deletedUuid) {
-            m.parentUuid = parentUuid
-          }
-        }
-      }
-    }
-
-    // Remove messages in reverse order (to preserve indices)
-    for (const idx of indicesToDelete) {
-      messages.splice(idx, 1)
     }
 
     const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
     yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
 
-    return { success: true, deletedMessage: deletedMsg }
+    return { success: true, deletedMessage: result.deleted }
   })
 
 // Restore a deleted message at a specific index

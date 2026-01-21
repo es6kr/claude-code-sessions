@@ -37,3 +37,13 @@ export { searchSessions } from './search.js'
 
 // File tracking
 export { getSessionFiles } from './files.js'
+
+// Validation
+export {
+  validateChain,
+  validateToolUseResult,
+  deleteMessageWithChainRepair,
+  type ValidationResult,
+  type ChainError,
+  type ToolUseResultError,
+} from './validation.js'

@@ -34,4 +34,11 @@ export {
   searchSessions,
   // Files
   getSessionFiles,
+  // Validation
+  validateChain,
+  validateToolUseResult,
+  deleteMessageWithChainRepair,
+  type ValidationResult,
+  type ChainError,
+  type ToolUseResultError,
 } from './session/index.js'
