@@ -22,6 +22,7 @@ function getConfig() {
     port: config.get<number>('port', 5174),
     autoStartServer: config.get<boolean>('autoStartServer', true),
     openInEditor: config.get<boolean>('openInEditor', true),
+    useBetaVersion: config.get<boolean>('useBetaVersion', false),
   }
 }
 
@@ -48,11 +49,14 @@ async function ensureWebServer(): Promise<number> {
     webServerProcess = null
   }
 
+  const { useBetaVersion } = getConfig()
+  const packageSpec = useBetaVersion ? '@claude-sessions/web@beta' : '@claude-sessions/web'
+
   outputChannel.appendLine('=== Starting Web Server ===')
-  outputChannel.appendLine(`Command: npx @claude-sessions/web --port ${port}`)
+  outputChannel.appendLine(`Command: npx ${packageSpec} --port ${port}`)
 
   return new Promise((resolve, reject) => {
-    const child = spawn('npx', ['-y', '@claude-sessions/web', '--port', String(port)], {
+    const child = spawn('npx', ['-y', packageSpec, '--port', String(port)], {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
     })
