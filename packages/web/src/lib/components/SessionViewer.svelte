@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { deleteMessageWithChainRepair } from '@claude-sessions/core'
   import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
   import { getDisplayTitle, truncate } from '$lib/utils'
@@ -19,6 +20,7 @@
     backUrl?: string // If provided, shows back button header
     onDeleteMessage?: (msg: Message) => void // Called after actual deletion
     onMessagesChange?: (messages: Message[]) => void // Called when messages array changes
+    onRefresh?: () => Promise<void> // Called to refresh messages from server
     onEditTitle?: (msg: Message) => void
     onSplitSession?: (msg: Message) => void
     enableScroll?: boolean
@@ -36,6 +38,7 @@
     backUrl,
     onDeleteMessage,
     onMessagesChange,
+    onRefresh,
     onEditTitle,
     onSplitSession,
     enableScroll = true,
@@ -60,6 +63,9 @@
   let undoStack = $state<DeletedMessage[]>([])
   let undoCountdown = $state(0)
   let undoTimeoutId = $state<ReturnType<typeof setTimeout> | null>(null)
+
+  // Delete operation queue - ensures sequential execution to prevent race conditions
+  let deleteQueue: Promise<void> = Promise.resolve()
 
   // Countdown timer effect for undo availability
   $effect(() => {
@@ -106,10 +112,19 @@
     }
   })
 
+  // Server sync - refreshes messages from server to get chain repair results
+  const syncFromServer = async () => {
+    if (!onRefresh) return
+    await onRefresh()
+  }
+
   // Undo all deletions - restore messages via API
   const undoAllDeletes = async () => {
     if (undoTimeoutId) clearTimeout(undoTimeoutId)
     if (!session || undoStack.length === 0) return
+
+    // Wait for all pending delete operations to complete before restoring
+    await deleteQueue
 
     // Restore in reverse order (most recent first) to maintain correct indices
     const toRestore = [...undoStack].reverse()
@@ -141,6 +156,9 @@
     undoStack = []
     undoCountdown = 0
     undoTimeoutId = null
+
+    // Sync from server to ensure consistent state after restore
+    await syncFromServer()
   }
 
   // Handle message deletion with undo (works for both session and agent messages)
@@ -169,34 +187,39 @@
       if (index === -1) return
     }
 
-    try {
-      // Delete immediately via API
-      await api.deleteMessage(session.projectName, targetSessionId, msgId, targetType)
-
-      // Remove from UI
-      if (isAgent) {
-        agentMessages = agentMessages.filter((m) => (m.uuid || m.messageId || m.leafUuid) !== msgId)
-      } else {
-        const newMessages = messages.filter((m) => (m.uuid || m.messageId || m.leafUuid) !== msgId)
-        onMessagesChange?.(newMessages)
-      }
-
-      // Add to undo stack
-      undoStack = [...undoStack, { msg, index, isAgent, sessionId: targetSessionId }]
-
-      // Reset countdown and timer
-      if (undoTimeoutId) clearTimeout(undoTimeoutId)
-      undoCountdown = 10
-      undoTimeoutId = setTimeout(() => {
-        undoStack = []
-        undoCountdown = 0
-        undoTimeoutId = null
-      }, 10000)
-
-      onDeleteMessage?.(msg)
-    } catch (e) {
-      console.error('Failed to delete message:', e)
+    // 1. Remove from UI immediately with chain repair (optimistic update)
+    if (isAgent) {
+      const copy = [...agentMessages] as unknown as Record<string, unknown>[]
+      deleteMessageWithChainRepair(copy, msgId, targetType)
+      agentMessages = copy as unknown as Message[]
+    } else {
+      const copy = [...messages] as unknown as Record<string, unknown>[]
+      deleteMessageWithChainRepair(copy, msgId, targetType)
+      onMessagesChange?.(copy as unknown as Message[])
     }
+
+    // 2. Add to undo stack
+    undoStack = [...undoStack, { msg, index, isAgent, sessionId: targetSessionId }]
+
+    // 3. Reset countdown and timer
+    if (undoTimeoutId) clearTimeout(undoTimeoutId)
+    undoCountdown = 10
+    undoTimeoutId = setTimeout(() => {
+      undoStack = []
+      undoCountdown = 0
+      undoTimeoutId = null
+    }, 10000)
+
+    // 4. Delete via API - queued to prevent race conditions
+    deleteQueue = deleteQueue.then(async () => {
+      try {
+        await api.deleteMessage(session.projectName, targetSessionId, msgId, targetType)
+      } catch (e) {
+        console.error('Failed to delete message:', e)
+      }
+    })
+
+    onDeleteMessage?.(msg)
   }
 
   // Handle agent message deletion with undo

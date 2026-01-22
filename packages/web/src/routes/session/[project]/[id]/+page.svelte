@@ -205,6 +205,11 @@
       {projectDisplayName}
       {backUrl}
       onMessagesChange={(newMessages) => (messages = newMessages)}
+      onRefresh={async () => {
+        if (session) {
+          messages = await api.getSession(session.projectName, session.id)
+        }
+      }}
       onEditTitle={handleEditTitle}
       onSplitSession={handleSplitSession}
       enableScroll={true}

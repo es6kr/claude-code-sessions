@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import type { SummaryInfo, AgentInfo } from '../types.js'
+import type { SummaryInfo, AgentInfo, SessionTodos } from '../types.js'
 import { sortSessions } from '../session/tree.js'
 import { getSessionSortTimestamp } from '../utils.js'
 
@@ -17,7 +17,16 @@ type TestSession = {
   sortTimestamp: number
   projectName: string
   agents: AgentInfo[]
+  todos: SessionTodos
 }
+
+/** Helper to create empty todos */
+const emptyTodos = (sessionId: string): SessionTodos => ({
+  sessionId,
+  sessionTodos: [],
+  agentTodos: [],
+  hasTodos: false,
+})
 
 /**
  * TDD for session sorting by different fields
@@ -49,7 +58,7 @@ describe('Session sorting by different fields', () => {
         ] as SummaryInfo[],
         projectName: 'test-project',
         agents: [],
-        todos: [],
+        todos: emptyTodos('session-alpha'),
       },
       {
         id: 'session-beta',
@@ -65,7 +74,7 @@ describe('Session sorting by different fields', () => {
         ] as SummaryInfo[],
         projectName: 'test-project',
         agents: [],
-        todos: [],
+        todos: emptyTodos('session-beta'),
       },
       {
         id: 'session-gamma',
@@ -227,6 +236,7 @@ describe('Session sorting by different fields', () => {
           summaries: [] as SummaryInfo[],
           projectName: 'test-project',
           agents: [],
+          todos: emptyTodos('with-custom'),
         },
         {
           id: 'with-summary',
@@ -237,6 +247,7 @@ describe('Session sorting by different fields', () => {
           summaries: [] as SummaryInfo[],
           projectName: 'test-project',
           agents: [],
+          todos: emptyTodos('with-summary'),
         },
         {
           id: 'title-only',
@@ -247,6 +258,7 @@ describe('Session sorting by different fields', () => {
           summaries: [] as SummaryInfo[],
           projectName: 'test-project',
           agents: [],
+          todos: emptyTodos('title-only'),
         },
       ]
 

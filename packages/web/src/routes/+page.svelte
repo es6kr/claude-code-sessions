@@ -6,6 +6,7 @@
   import { ConfirmModal, InputModal, ProjectTree, SessionViewer, Toast } from '$lib/components'
   import { getDisplayTitle } from '$lib/utils'
   import { appConfig } from '$lib/stores/config'
+  import { deleteMessageWithChainRepair } from '@claude-sessions/core'
   import type { SessionSortField, SessionSortOrder } from '@claude-sessions/core'
 
   // State
@@ -316,20 +317,33 @@
     const msgId = msg.uuid || msg.messageId || msg.leafUuid
     if (!msgId) return
 
-    try {
-      await api.deleteMessage(selectedSession.projectName, selectedSession.id, msgId)
-      messages = messages.filter((m) => (m.uuid || m.messageId || m.leafUuid) !== msgId)
+    // Determine targetType for disambiguation
+    const targetType =
+      msg.type === 'file-history-snapshot'
+        ? ('file-history-snapshot' as const)
+        : msg.type === 'summary'
+          ? ('summary' as const)
+          : undefined
 
-      // Update session message count
-      const sessions = projectSessions.get(selectedSession.projectName)
-      const session = sessions?.find((s) => s.id === selectedSession!.id)
-      if (session) {
-        session.messageCount = messages.length
-        projectSessions = new Map(projectSessions)
-      }
-    } catch (e) {
-      error = String(e)
+    // Update UI immediately with chain repair
+    const copy = [...messages] as unknown as Record<string, unknown>[]
+    deleteMessageWithChainRepair(copy, msgId, targetType)
+    messages = copy as unknown as Message[]
+
+    // Update session message count
+    const sessions = projectSessions.get(selectedSession.projectName)
+    const session = sessions?.find((s) => s.id === selectedSession!.id)
+    if (session) {
+      session.messageCount = messages.length
+      projectSessions = new Map(projectSessions)
     }
+
+    // Delete via API in background
+    api
+      .deleteMessage(selectedSession.projectName, selectedSession.id, msgId, targetType)
+      .catch((e) => {
+        error = String(e)
+      })
   }
 
   const handleEditCustomTitle = (msg: Message) => {
@@ -600,6 +614,11 @@
       ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.currentSummary
       : undefined}
     onMessagesChange={(newMessages) => (messages = newMessages)}
+    onRefresh={async () => {
+      if (selectedSession) {
+        messages = await api.getSession(selectedSession.projectName, selectedSession.id)
+      }
+    }}
     onDeleteMessage={handleDeleteMessage}
     onEditTitle={handleEditCustomTitle}
     onSplitSession={handleSplitSession}
