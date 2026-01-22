@@ -41,6 +41,39 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Parse tag version
+        id: tag
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          TAG_NAME="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG_NAME#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Check if beta version (contains -beta)
+          if [[ "$VERSION" == *"-beta"* ]]; then
+            echo "is_beta=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=beta" >> $GITHUB_OUTPUT
+          else
+            echo "is_beta=false" >> $GITHUB_OUTPUT
+            echo "npm_tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update package versions from tag
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          VERSION="${{ steps.tag.outputs.version }}"
+          echo "Setting version to $VERSION"
+
+          # Update core package.json
+          cd packages/core
+          npm pkg set version="$VERSION"
+          cd ../..
+
+          # Update web package.json
+          cd packages/web
+          npm pkg set version="$VERSION"
+          cd ../..
+
       - name: Build packages
         run: pnpm run build
 
@@ -55,14 +88,14 @@ jobs:
       - name: Publish @claude-sessions/core
         if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'core' || github.event_name == 'push' }}
         working-directory: packages/core
-        run: pnpm publish --provenance --access public --no-git-checks
+        run: pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @claude-sessions/web
         if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'web' || github.event_name == 'push' }}
         working-directory: packages/web
-        run: pnpm publish --provenance --access public --no-git-checks
+        run: pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -87,12 +120,16 @@ jobs:
           name: v${{ steps.versions.outputs.core }}
           body_path: RELEASE_NOTES.md
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.tag.outputs.is_beta == 'true' }}
 
       - name: Summary
         run: |
           echo "## Published packages" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ steps.tag.outputs.is_beta }}" == "true" ]]; then
+            echo "**Beta release** (npm tag: beta)" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+          fi
           if [[ "${{ github.event.inputs.package }}" == "all" || "${{ github.event.inputs.package }}" == "core" || "${{ github.event_name }}" == "push" ]]; then
             echo "- @claude-sessions/core@${{ steps.versions.outputs.core }}" >> $GITHUB_STEP_SUMMARY
           fi
