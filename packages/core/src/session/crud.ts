@@ -11,6 +11,8 @@ import {
   extractTitle,
   isContinuationSummary,
   cleanupSplitFirstMessage,
+  parseJsonlLines,
+  readJsonlFile,
 } from '../utils.js'
 import { findLinkedAgents } from '../agents.js'
 import { deleteLinkedTodos } from '../todos.js'
@@ -28,9 +30,7 @@ import type {
 export const updateSessionSummary = (projectName: string, sessionId: string, newSummary: string) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-    const lines = content.trim().split('\n').filter(Boolean)
-    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath)
 
     // Find existing summary message
     const summaryIdx = messages.findIndex((m) => m.type === 'summary')
@@ -67,9 +67,7 @@ export const listSessions = (projectName: string) =>
       sessionFiles.map((file) =>
         Effect.gen(function* () {
           const filePath = path.join(projectPath, file)
-          const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-          const lines = content.trim().split('\n').filter(Boolean)
-          const messages = lines.map((line) => JSON.parse(line) as Message)
+          const messages = yield* readJsonlFile<Message>(filePath)
 
           const sessionId = file.replace('.jsonl', '')
 
@@ -141,9 +139,7 @@ export const listSessions = (projectName: string) =>
 export const readSession = (projectName: string, sessionId: string) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-    const lines = content.trim().split('\n').filter(Boolean)
-    return lines.map((line) => JSON.parse(line) as Message)
+    return yield* readJsonlFile<Message>(filePath)
   })
 
 import { deleteMessageWithChainRepair } from './validation.js'
@@ -158,9 +154,7 @@ export const deleteMessage = (
 ) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-    const lines = content.trim().split('\n').filter(Boolean)
-    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath)
 
     // Use the pure function for chain repair
     const result = deleteMessageWithChainRepair(messages, messageUuid, targetType)
@@ -184,9 +178,7 @@ export const restoreMessage = (
 ) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-    const lines = content.trim().split('\n').filter(Boolean)
-    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath)
 
     const msgUuid = message.uuid ?? message.messageId
     if (!msgUuid) {
@@ -283,7 +275,7 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
       return { success: false, error: 'Empty session' } satisfies RenameSessionResult
     }
 
-    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+    const messages = parseJsonlLines<Record<string, unknown>>(lines, filePath)
 
     // Build uuid set for this session's messages
     const sessionUuids = new Set<string>()
@@ -324,9 +316,7 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
     for (const file of allJsonlFiles) {
       const otherFilePath = path.join(projectPath, file)
       try {
-        const otherContent = yield* Effect.tryPromise(() => fs.readFile(otherFilePath, 'utf-8'))
-        const otherLines = otherContent.trim().split('\n').filter(Boolean)
-        const otherMessages = otherLines.map((l) => JSON.parse(l) as Record<string, unknown>)
+        const otherMessages = yield* readJsonlFile<Record<string, unknown>>(otherFilePath)
 
         for (let i = 0; i < otherMessages.length; i++) {
           const msg = otherMessages[i]
@@ -355,9 +345,7 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
       const firstSummary = summariesTargetingThis[0]
 
       const summaryFilePath = path.join(projectPath, firstSummary.file)
-      const summaryContent = yield* Effect.tryPromise(() => fs.readFile(summaryFilePath, 'utf-8'))
-      const summaryLines = summaryContent.trim().split('\n').filter(Boolean)
-      const summaryMessages = summaryLines.map((l) => JSON.parse(l) as Record<string, unknown>)
+      const summaryMessages = yield* readJsonlFile<Record<string, unknown>>(summaryFilePath)
 
       summaryMessages[firstSummary.idx] = {
         ...summaryMessages[firstSummary.idx],
@@ -369,9 +357,7 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
     } else {
       // No summary exists - use legacy method: add title prefix to first user message content
       // This is recognized by Claude Code extension
-      const currentContent = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-      const currentLines = currentContent.trim().split('\n').filter(Boolean)
-      const currentMessages = currentLines.map((l) => JSON.parse(l) as Record<string, unknown>)
+      const currentMessages = yield* readJsonlFile<Record<string, unknown>>(filePath)
 
       const firstUserIdx = currentMessages.findIndex((m) => m.type === 'user')
       if (firstUserIdx >= 0) {
@@ -477,11 +463,9 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
   Effect.gen(function* () {
     const projectPath = path.join(getSessionsDir(), projectName)
     const filePath = path.join(projectPath, `${sessionId}.jsonl`)
-    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-    const lines = content.trim().split('\n').filter(Boolean)
 
     // Parse all messages preserving their full structure
-    const allMessages = lines.map((line) => JSON.parse(line) as Message)
+    const allMessages = yield* readJsonlFile<Message>(filePath)
 
     // Find the split point
     const splitIndex = allMessages.findIndex((m) => m.uuid === splitAtMessageUuid)
@@ -573,7 +557,8 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
 
       if (agentLines.length === 0) continue
 
-      const firstAgentMsg = JSON.parse(agentLines[0]) as { sessionId?: string }
+      const agentMessages = parseJsonlLines<Record<string, unknown>>(agentLines, agentPath)
+      const firstAgentMsg = agentMessages[0] as { sessionId?: string }
 
       // If this agent belongs to the original session, check if it should be moved
       if (firstAgentMsg.sessionId === sessionId) {
@@ -585,10 +570,9 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
 
         if (isRelatedToMoved) {
           // Update all messages in this agent file to reference new sessionId
-          const updatedAgentMessages = agentLines.map((line) => {
-            const msg = JSON.parse(line) as Record<string, unknown>
-            return JSON.stringify({ ...msg, sessionId: newSessionId })
-          })
+          const updatedAgentMessages = agentMessages.map((msg) =>
+            JSON.stringify({ ...msg, sessionId: newSessionId })
+          )
           const updatedAgentContent = updatedAgentMessages.join('\n') + '\n'
           yield* Effect.tryPromise(() => fs.writeFile(agentPath, updatedAgentContent, 'utf-8'))
         }

@@ -10,6 +10,8 @@ import {
   extractTitle,
   getSessionSortTimestamp,
   isErrorSessionTitle,
+  parseJsonlLines,
+  tryParseJsonLine,
 } from '../utils.js'
 import { findLinkedAgents } from '../agents.js'
 import { findLinkedTodos } from '../todos.js'
@@ -91,7 +93,7 @@ const loadSessionTreeDataInternal = (
     const filePath = path.join(projectPath, `${sessionId}.jsonl`)
     const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
     const lines = content.trim().split('\n').filter(Boolean)
-    const messages = lines.map((line) => JSON.parse(line) as JsonlRecord)
+    const messages = parseJsonlLines<JsonlRecord>(lines, filePath)
 
     // Get summaries that TARGET this session (by leafUuid pointing to messages in this session)
     let summaries: SummaryInfo[]
@@ -124,27 +126,24 @@ const loadSessionTreeDataInternal = (
           const otherFilePath = path.join(projectPath, file)
           const otherContent = yield* Effect.tryPromise(() => fs.readFile(otherFilePath, 'utf-8'))
           const otherLines = otherContent.trim().split('\n').filter(Boolean)
-          for (const line of otherLines) {
-            try {
-              const msg = JSON.parse(line) as JsonlRecord
-              if (
-                msg.type === 'summary' &&
-                typeof msg.summary === 'string' &&
-                typeof msg.leafUuid === 'string' &&
-                sessionUuids.has(msg.leafUuid)
-              ) {
-                // This summary's leafUuid points to a message in THIS session
-                const targetMsg = messages.find((m) => m.uuid === msg.leafUuid)
-                summaries.push({
-                  summary: msg.summary as string,
-                  leafUuid: msg.leafUuid,
-                  timestamp:
-                    (targetMsg?.timestamp as string) ?? (msg.timestamp as string | undefined),
-                  sourceFile: file,
-                })
-              }
-            } catch {
-              // Skip invalid JSON
+          for (let i = 0; i < otherLines.length; i++) {
+            const msg = tryParseJsonLine<JsonlRecord>(otherLines[i], i + 1, otherFilePath)
+            if (!msg) continue
+            if (
+              msg.type === 'summary' &&
+              typeof msg.summary === 'string' &&
+              typeof msg.leafUuid === 'string' &&
+              sessionUuids.has(msg.leafUuid)
+            ) {
+              // This summary's leafUuid points to a message in THIS session
+              const targetMsg = messages.find((m) => m.uuid === msg.leafUuid)
+              summaries.push({
+                summary: msg.summary as string,
+                leafUuid: msg.leafUuid,
+                timestamp:
+                  (targetMsg?.timestamp as string) ?? (msg.timestamp as string | undefined),
+                sourceFile: file,
+              })
             }
           }
         } catch {
@@ -319,35 +318,32 @@ export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSo
           try {
             const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
             const lines = content.trim().split('\n').filter(Boolean)
-            for (const line of lines) {
-              try {
-                const msg = JSON.parse(line) as JsonlRecord
-                if (msg.uuid && typeof msg.uuid === 'string') {
-                  globalUuidMap.set(msg.uuid, {
-                    sessionId: fileSessionId,
-                    timestamp: msg.timestamp as string | undefined,
-                  })
-                }
-                // Also check messageId for file-history-snapshot type
-                if (msg.messageId && typeof msg.messageId === 'string') {
-                  globalUuidMap.set(msg.messageId, {
-                    sessionId: fileSessionId,
-                    timestamp: (msg.snapshot as Record<string, unknown> | undefined)?.timestamp as
-                      | string
-                      | undefined,
-                  })
-                }
-                // Collect summaries with source file for sorting
-                if (msg.type === 'summary' && typeof msg.summary === 'string') {
-                  allSummaries.push({
-                    summary: msg.summary as string,
-                    leafUuid: msg.leafUuid as string | undefined,
-                    timestamp: msg.timestamp as string | undefined,
-                    sourceFile: file,
-                  })
-                }
-              } catch {
-                // Skip invalid JSON lines
+            for (let i = 0; i < lines.length; i++) {
+              const msg = tryParseJsonLine<JsonlRecord>(lines[i], i + 1, filePath)
+              if (!msg) continue
+              if (msg.uuid && typeof msg.uuid === 'string') {
+                globalUuidMap.set(msg.uuid, {
+                  sessionId: fileSessionId,
+                  timestamp: msg.timestamp as string | undefined,
+                })
+              }
+              // Also check messageId for file-history-snapshot type
+              if (msg.messageId && typeof msg.messageId === 'string') {
+                globalUuidMap.set(msg.messageId, {
+                  sessionId: fileSessionId,
+                  timestamp: (msg.snapshot as Record<string, unknown> | undefined)?.timestamp as
+                    | string
+                    | undefined,
+                })
+              }
+              // Collect summaries with source file for sorting
+              if (msg.type === 'summary' && typeof msg.summary === 'string') {
+                allSummaries.push({
+                  summary: msg.summary as string,
+                  leafUuid: msg.leafUuid as string | undefined,
+                  timestamp: msg.timestamp as string | undefined,
+                  sourceFile: file,
+                })
               }
             }
           } catch {

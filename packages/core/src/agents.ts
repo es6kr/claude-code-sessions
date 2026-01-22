@@ -5,6 +5,7 @@ import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir } from './paths.js'
+import { tryParseJsonLine } from './utils.js'
 import type { Message } from './types.js'
 
 // Find agent files linked to a session
@@ -238,17 +239,14 @@ export const loadAgentMessages = (
     const lines = content.split('\n').filter((line) => line.trim())
     const messages: Message[] = []
 
-    for (const line of lines) {
-      try {
-        const parsed = JSON.parse(line) as Message
-        // Skip header line (contains sessionId)
-        if ('sessionId' in parsed && !('type' in parsed)) {
-          continue
-        }
-        messages.push(parsed)
-      } catch {
-        // Skip invalid JSON lines
+    for (let i = 0; i < lines.length; i++) {
+      const parsed = tryParseJsonLine<Message>(lines[i], i + 1, agentFilePath)
+      if (!parsed) continue
+      // Skip header line (contains sessionId)
+      if ('sessionId' in parsed && !('type' in parsed)) {
+        continue
       }
+      messages.push(parsed)
     }
 
     return messages

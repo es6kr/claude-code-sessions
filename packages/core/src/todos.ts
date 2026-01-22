@@ -22,7 +22,12 @@ export const findLinkedTodos = (sessionId: string, agentIds: string[] = []) =>
     )
 
     if (!exists) {
-      return undefined
+      return {
+        sessionId,
+        sessionTodos: [],
+        agentTodos: [],
+        hasTodos: false,
+      }
     }
 
     // Read session's own todo file

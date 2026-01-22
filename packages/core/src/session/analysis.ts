@@ -5,7 +5,7 @@ import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir } from '../paths.js'
-import { extractTextContent } from '../utils.js'
+import { extractTextContent, parseJsonlLines } from '../utils.js'
 import { readSession } from './crud.js'
 import type {
   SessionAnalysis,
@@ -209,7 +209,7 @@ export const compressSession = (
     const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
     const originalSize = Buffer.byteLength(content, 'utf-8')
     const lines = content.trim().split('\n').filter(Boolean)
-    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+    const messages = parseJsonlLines<Record<string, unknown>>(lines, filePath)
 
     let removedSnapshots = 0
     let truncatedOutputs = 0

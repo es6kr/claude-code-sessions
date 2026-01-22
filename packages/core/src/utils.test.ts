@@ -1,12 +1,17 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   cleanupSplitFirstMessage,
   extractTitle,
   getDisplayTitle,
   maskHomePath,
-  sortProjects,
+  parseJsonlLines,
+  readJsonlFile,
 } from './utils.js'
-import type { Message, Project } from './types.js'
+import type { Message } from './types.js'
+import { Effect } from 'effect'
+import * as fs from 'node:fs/promises'
+
+vi.mock('node:fs/promises')
 
 describe('extractTitle', () => {
   it('should extract command name from slash command message', () => {
@@ -218,90 +223,90 @@ describe('maskHomePath', () => {
   })
 })
 
-describe('sortProjects', () => {
-  // Use folder name format for name (as returned by pathToFolderName)
-  // and path points to .claude/projects/<name>
-  const MY_HOME = '/home/me'
-  const MY_HOME_PREFIX = '-home-me'
+describe('parseJsonlLines', () => {
+  it('should parse valid JSONL lines', () => {
+    const lines = ['{"type":"user","uuid":"1"}', '{"type":"assistant","uuid":"2"}']
+    const result = parseJsonlLines(lines, '/test/file.jsonl')
 
-  const createProject = (originalPath: string, sessionCount = 5): Project => {
-    // Convert path to folder name format: /home/me -> -home-me
-    const name = originalPath.replace(/^\//, '-').replace(/\//g, '-')
-    return {
-      name,
-      displayName: originalPath,
-      path: `${MY_HOME}/.claude/projects/${name}`,
-      sessionCount,
-    }
-  }
-
-  const projects: Project[] = [
-    createProject('/home/other/work/project-a'),
-    createProject('/home/me/work/project-b'),
-    createProject('/home/me/work/project-a'),
-    createProject('/opt/projects/system'),
-    createProject('/home/me/work/empty', 0),
-  ]
-
-  it('should filter out empty projects by default', () => {
-    const sorted = sortProjects(projects, { homeDir: MY_HOME })
-    expect(sorted.find((p) => p.displayName === '/home/me/work/empty')).toBeUndefined()
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({ type: 'user', uuid: '1' })
+    expect(result[1]).toEqual({ type: 'assistant', uuid: '2' })
   })
 
-  it('should keep empty projects when filterEmpty is false', () => {
-    const sorted = sortProjects(projects, { homeDir: MY_HOME, filterEmpty: false })
-    expect(sorted.find((p) => p.displayName === '/home/me/work/empty')).toBeDefined()
+  it('should throw error with file path and line number on parse failure', () => {
+    const lines = ['{"valid":"json"}', 'invalid json here', '{"also":"valid"}']
+
+    expect(() => parseJsonlLines(lines, '/path/to/session.jsonl')).toThrow(
+      'Failed to parse line 2 in /path/to/session.jsonl:'
+    )
   })
 
-  it('should put current project first', () => {
-    const systemProjectName = '-opt-projects-system'
-    const sorted = sortProjects(projects, {
-      currentProjectName: systemProjectName,
-      homeDir: MY_HOME,
-    })
-    expect(sorted[0].name).toBe(systemProjectName)
+  it('should include original error message in thrown error', () => {
+    const lines = ['not valid json']
+
+    expect(() => parseJsonlLines(lines, '/test.jsonl')).toThrow('Unexpected token')
   })
 
-  it('should prioritize current user home paths over others', () => {
-    const sorted = sortProjects(projects, { homeDir: MY_HOME })
-    // All my projects should come before others
-    // Check using name which is in folder name format: -home-me-...
-    const myProjects = sorted.filter((p) => p.name.startsWith(MY_HOME_PREFIX))
-    const otherProjects = sorted.filter((p) => !p.name.startsWith(MY_HOME_PREFIX))
-
-    expect(myProjects.length).toBe(2)
-    expect(otherProjects.length).toBe(2)
-
-    // Check order: my projects first (index 0), all my before any other
-    const firstMyIndex = sorted.findIndex((p) => p.name.startsWith(MY_HOME_PREFIX))
-    const firstOtherIndex = sorted.findIndex((p) => !p.name.startsWith(MY_HOME_PREFIX))
-
-    expect(firstMyIndex).toBe(0)
-    // All my projects should come before other projects
-    expect(myProjects.every((_, i) => i < otherProjects.length || i < firstOtherIndex)).toBe(true)
+  it('should handle empty lines array', () => {
+    const result = parseJsonlLines([], '/empty.jsonl')
+    expect(result).toEqual([])
   })
 
-  it('should sort alphabetically within same priority group', () => {
-    const sorted = sortProjects(projects, { homeDir: MY_HOME })
+  it('should preserve type information with generic parameter', () => {
+    const lines = ['{"type":"user","uuid":"1","timestamp":"2025-01-01"}']
+    const result = parseJsonlLines<Message>(lines, '/test.jsonl')
 
-    // Within my projects, should be alphabetical by displayName
-    const myProjects = sorted.filter((p) => p.name.startsWith(MY_HOME_PREFIX))
-    expect(myProjects[0].displayName).toBe('/home/me/work/project-a')
-    expect(myProjects[1].displayName).toBe('/home/me/work/project-b')
+    expect(result[0].type).toBe('user')
+    expect(result[0].uuid).toBe('1')
+  })
+})
+
+describe('readJsonlFile', () => {
+  const mockedFs = vi.mocked(fs)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
   })
 
-  it('should work without homeDir option', () => {
-    const otherProjectName = '-home-other-work-project-a'
-    const sorted = sortProjects(projects, { currentProjectName: otherProjectName })
-    expect(sorted[0].name).toBe(otherProjectName)
-    // Rest should be alphabetical
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
-  it('should work without any options', () => {
-    const sorted = sortProjects(projects)
-    // Should just filter empty and sort alphabetically
-    expect(sorted.length).toBe(4)
-    // /home/me/work/project-a has displayName that sorts first alphabetically
-    expect(sorted[0].displayName).toBe('/home/me/work/project-a')
+  it('should read and parse JSONL file', async () => {
+    const fileContent = '{"type":"user","uuid":"1"}\n{"type":"assistant","uuid":"2"}\n'
+    mockedFs.readFile.mockResolvedValue(fileContent)
+
+    const result = await Effect.runPromise(readJsonlFile('/test/session.jsonl'))
+
+    expect(mockedFs.readFile).toHaveBeenCalledWith('/test/session.jsonl', 'utf-8')
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({ type: 'user', uuid: '1' })
+  })
+
+  it('should filter out empty lines', async () => {
+    // filter(Boolean) filters truly empty strings but not whitespace-only
+    // This test verifies actual behavior - whitespace lines are parsed (and fail)
+    const fileContent = '{"a":1}\n\n{"b":2}\n{"c":3}'
+    mockedFs.readFile.mockResolvedValue(fileContent)
+
+    const result = await Effect.runPromise(readJsonlFile('/test.jsonl'))
+
+    expect(result).toHaveLength(3)
+  })
+
+  it('should throw with file path on parse error', async () => {
+    const fileContent = '{"valid":true}\ninvalid line\n'
+    mockedFs.readFile.mockResolvedValue(fileContent)
+
+    await expect(Effect.runPromise(readJsonlFile('/broken/file.jsonl'))).rejects.toThrow(
+      'Failed to parse line 2 in /broken/file.jsonl:'
+    )
+  })
+
+  it('should handle file read errors', async () => {
+    mockedFs.readFile.mockRejectedValue(new Error('ENOENT: no such file'))
+
+    // Effect.tryPromise wraps the error, so we check that it rejects
+    await expect(Effect.runPromise(readJsonlFile('/nonexistent.jsonl'))).rejects.toThrow()
   })
 })

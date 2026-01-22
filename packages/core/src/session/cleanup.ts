@@ -5,7 +5,7 @@ import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir } from '../paths.js'
-import { isInvalidApiKeyMessage } from '../utils.js'
+import { isInvalidApiKeyMessage, parseJsonlLines } from '../utils.js'
 import { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from '../agents.js'
 import { sessionHasTodos, findOrphanTodos, deleteOrphanTodos } from '../todos.js'
 import { listProjects } from './projects.js'
@@ -21,7 +21,7 @@ const cleanInvalidMessages = (projectName: string, sessionId: string) =>
 
     if (lines.length === 0) return { removedCount: 0, remainingCount: 0 }
 
-    const messages = lines.map((line) => JSON.parse(line) as Message)
+    const messages = parseJsonlLines<Message>(lines, filePath)
     const invalidIndices: number[] = []
 
     // Find all invalid API key messages

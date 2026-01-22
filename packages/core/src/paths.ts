@@ -9,6 +9,7 @@ import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { createLogger } from './logger.js'
+import { tryParseJsonLine } from './utils.js'
 
 const log = createLogger('paths')
 
@@ -44,17 +45,13 @@ export const getTodosDir = (): string => path.join(os.homedir(), '.claude', 'tod
 // ============================================
 
 /** Extract cwd from file content - pure function for easy testing */
-export const extractCwdFromContent = (content: string): string | null => {
+export const extractCwdFromContent = (content: string, filePath?: string): string | null => {
   const lines = content.split('\n').filter((l) => l.trim())
 
-  for (const line of lines) {
-    try {
-      const parsed = JSON.parse(line)
-      if (parsed?.cwd) {
-        return parsed.cwd
-      }
-    } catch {
-      // Skip invalid JSON lines
+  for (let i = 0; i < lines.length; i++) {
+    const parsed = tryParseJsonLine<{ cwd?: string }>(lines[i], i + 1, filePath)
+    if (parsed?.cwd) {
+      return parsed.cwd
     }
   }
 

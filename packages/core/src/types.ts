@@ -338,7 +338,7 @@ export interface SessionTreeData {
   /** All summaries in reverse order (newest first) */
   summaries: SummaryInfo[]
   agents: AgentInfo[]
-  todos?: SessionTodos
+  todos: SessionTodos
   /** UUID of last compact_boundary message */
   lastCompactBoundaryUuid?: string
 }

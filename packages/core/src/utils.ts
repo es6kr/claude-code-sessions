@@ -1,16 +1,16 @@
 /**
  * Utility functions for message processing
  */
+import { Effect } from 'effect'
+import * as fs from 'node:fs/promises'
 import type {
   Message,
   MessagePayload,
   TextContent,
   AskUserQuestionResult,
-  Project,
   SummaryInfo,
 } from './types.js'
 import { createLogger } from './logger.js'
-import { pathToFolderName } from './paths.js'
 
 const logger = createLogger('utils')
 
@@ -192,49 +192,6 @@ export const maskHomePath = (text: string, homeDir: string): string => {
 }
 
 /**
- * Sort projects with priority:
- * 1. Current project (if specified)
- * 2. Current user's home directory subpaths
- * 3. Others (alphabetically by displayName)
- */
-export const sortProjects = (
-  projects: Project[],
-  options: {
-    currentProjectName?: string | null
-    homeDir?: string
-    filterEmpty?: boolean
-  } = {}
-): Project[] => {
-  const { currentProjectName, homeDir, filterEmpty = true } = options
-
-  const filtered = filterEmpty ? projects.filter((p) => p.sessionCount > 0) : projects
-
-  // Convert homeDir to folder name format for comparison with project.name
-  // e.g., "/Users/david" -> "-Users-david"
-  const homeDirPrefix = homeDir ? pathToFolderName(homeDir) : null
-
-  return filtered.sort((a, b) => {
-    // Current project always first
-    if (currentProjectName) {
-      if (a.name === currentProjectName) return -1
-      if (b.name === currentProjectName) return 1
-    }
-
-    // Then prioritize current user's home directory paths
-    // Compare using project.name (folder name format) with homeDirPrefix
-    if (homeDirPrefix) {
-      const aIsUserHome = a.name.startsWith(homeDirPrefix)
-      const bIsUserHome = b.name.startsWith(homeDirPrefix)
-      if (aIsUserHome && !bIsUserHome) return -1
-      if (!aIsUserHome && bIsUserHome) return 1
-    }
-
-    // Finally sort by display name
-    return a.displayName.localeCompare(b.displayName)
-  })
-}
-
-/**
  * Get sort timestamp for session (Unix timestamp ms)
  * Priority: summaries[0].timestamp > createdAt > 0
  */
@@ -245,3 +202,51 @@ export const getSessionSortTimestamp = (session: {
   const timestampStr = session.summaries?.[0]?.timestamp ?? session.createdAt
   return timestampStr ? new Date(timestampStr).getTime() : 0
 }
+
+/**
+ * Try to parse a single JSON line, returning null on failure with optional warning log
+ * Use this when you want to skip invalid lines instead of throwing
+ */
+export const tryParseJsonLine = <T = Record<string, unknown>>(
+  line: string,
+  lineNumber: number,
+  filePath?: string
+): T | null => {
+  try {
+    return JSON.parse(line) as T
+  } catch {
+    if (filePath) {
+      console.warn(`Skipping invalid JSON at line ${lineNumber} in ${filePath}`)
+    }
+    return null
+  }
+}
+
+/**
+ * Parse JSONL lines with detailed error messages including file path and line number
+ * @throws Error with "Failed to parse line X in /path/to/file: original error"
+ */
+export const parseJsonlLines = <T = Record<string, unknown>>(
+  lines: string[],
+  filePath: string
+): T[] => {
+  return lines.map((line, idx) => {
+    try {
+      return JSON.parse(line) as T
+    } catch (e) {
+      const err = e as Error
+      throw new Error(`Failed to parse line ${idx + 1} in ${filePath}: ${err.message}`)
+    }
+  })
+}
+
+/**
+ * Read and parse JSONL file (Effect wrapper)
+ * Combines file reading and JSONL parsing with proper error messages
+ */
+export const readJsonlFile = <T = Record<string, unknown>>(filePath: string) =>
+  Effect.gen(function* () {
+    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const lines = content.trim().split('\n').filter(Boolean)
+    return parseJsonlLines<T>(lines, filePath)
+  })

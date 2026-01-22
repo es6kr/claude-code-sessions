@@ -54,6 +54,9 @@ export {
   findProjectByWorkspacePath,
 } from './paths.js'
 
+// Project utilities
+export { sortProjects } from './projects.js'
+
 // Message utilities
 export {
   extractTextContent,
@@ -63,8 +66,10 @@ export {
   parseCommandMessage,
   getDisplayTitle,
   maskHomePath,
-  sortProjects,
   getSessionSortTimestamp,
+  tryParseJsonLine,
+  parseJsonlLines,
+  readJsonlFile,
 } from './utils.js'
 
 // Agent management
