@@ -25,10 +25,16 @@ export const DELETE: RequestHandler = async ({ url }) => {
   const projectName = url.searchParams.get('project')
   const sessionId = url.searchParams.get('session')
   const messageUuid = url.searchParams.get('uuid')
+  const targetType = url.searchParams.get('targetType') as
+    | 'file-history-snapshot'
+    | 'summary'
+    | null
   if (!projectName || !sessionId || !messageUuid) {
     throw error(400, 'project, session, and uuid parameters required')
   }
-  const result = await Effect.runPromise(session.deleteMessage(projectName, sessionId, messageUuid))
+  const result = await Effect.runPromise(
+    session.deleteMessage(projectName, sessionId, messageUuid, targetType ?? undefined)
+  )
   return json(result)
 }
 

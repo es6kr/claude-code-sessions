@@ -121,9 +121,14 @@ export const deleteSession = (project: string, id: string) =>
 export const renameSession = (project: string, id: string, title: string) =>
   post<{ success: boolean }>('/session/rename', { project, id, title })
 
-export const deleteMessage = (project: string, session: string, uuid: string) =>
+export const deleteMessage = (
+  project: string,
+  session: string,
+  uuid: string,
+  targetType?: 'file-history-snapshot' | 'summary'
+) =>
   del<{ success: boolean; deletedMessage?: Message }>(
-    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&uuid=${encodeURIComponent(uuid)}`
+    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&uuid=${encodeURIComponent(uuid)}${targetType ? `&targetType=${targetType}` : ''}`
   )
 
 export const restoreMessage = (

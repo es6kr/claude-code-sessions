@@ -150,6 +150,14 @@
     const msgId = msg.uuid || msg.messageId || msg.leafUuid
     if (!msgId) return
 
+    // Determine targetType for disambiguation when uuid/messageId collision exists
+    const targetType =
+      msg.type === 'file-history-snapshot'
+        ? ('file-history-snapshot' as const)
+        : msg.type === 'summary'
+          ? ('summary' as const)
+          : undefined
+
     const targetSessionId = isAgent && selectedAgentId ? selectedAgentId : session.id
     let index: number
 
@@ -163,7 +171,7 @@
 
     try {
       // Delete immediately via API
-      await api.deleteMessage(session.projectName, targetSessionId, msgId)
+      await api.deleteMessage(session.projectName, targetSessionId, msgId, targetType)
 
       // Remove from UI
       if (isAgent) {
