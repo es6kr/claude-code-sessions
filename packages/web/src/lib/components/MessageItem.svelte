@@ -255,6 +255,7 @@
   <div
     data-msg-id={msgId}
     class="p-4 rounded-lg bg-amber-500/10 border-l-3 border-l-amber-500 group relative"
+    title="messageId: {messageId}"
   >
     <div class="flex justify-between mb-2 text-xs text-gh-text-secondary">
       <span class="uppercase font-semibold text-amber-400">

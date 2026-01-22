@@ -1,78 +1,31 @@
 <script lang="ts">
-  import type { Message, SessionMeta } from '$lib/api'
-  import * as api from '$lib/api'
-  import { truncate } from '$lib/utils'
+  import type { Message } from '$lib/api'
   import MessageItem from './MessageItem.svelte'
 
   interface Props {
-    session: SessionMeta | null
+    sessionId: string
     messages: Message[]
     onDeleteMessage: (msg: Message) => void
-    onEditTitle: (msg: Message) => void
-    onSplitSession: (msg: Message) => void
-    showHeader?: boolean
+    onEditTitle?: (msg: Message) => void
+    onSplitSession?: (msg: Message) => void
     enableScroll?: boolean
-    externalScrollContainer?: HTMLElement | null
     fullWidth?: boolean
   }
 
   let {
-    session,
+    sessionId,
     messages,
     onDeleteMessage,
     onEditTitle,
     onSplitSession,
-    showHeader = true,
     enableScroll = true,
-    externalScrollContainer = null,
     fullWidth = false,
   }: Props = $props()
-
-  const openSessionFile = async () => {
-    if (!session) return
-    const filePath = `~/.claude/projects/${session.projectName}/${session.id}.jsonl`
-    try {
-      await api.openFile(filePath)
-    } catch (e) {
-      console.error('Failed to open file:', e)
-    }
-  }
 
   // Find index of first meaningful message (user/assistant, not metadata)
   const firstMeaningfulIndex = $derived(
     messages.findIndex((m) => m.type === 'user' || m.type === 'assistant' || m.type === 'human')
   )
-
-  // Find last compact summary (context continuation point)
-  const lastCompactIndex = $derived.by(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if ((messages[i] as Message & { isCompactSummary?: boolean }).isCompactSummary) {
-        return i
-      }
-    }
-    return -1
-  })
-
-  // Scroll container reference for navigation (internal or external)
-  let internalScrollContainer: HTMLDivElement | undefined = $state()
-  const scrollContainer = $derived(externalScrollContainer ?? internalScrollContainer)
-
-  const scrollToTop = () => {
-    scrollContainer?.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  const scrollToBottom = () => {
-    scrollContainer?.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' })
-  }
-
-  const scrollToCompact = () => {
-    if (lastCompactIndex < 0 || !scrollContainer) return
-    const msgId = messages[lastCompactIndex].uuid ?? `idx-${lastCompactIndex}`
-    const element = scrollContainer.querySelector(`[data-msg-id="${msgId}"]`)
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
 </script>
 
 <section
@@ -80,83 +33,16 @@
     ? ''
     : 'border border-gh-border rounded-lg'}"
 >
-  <!-- Header -->
-  {#if showHeader}
-    <div
-      class="p-4 border-b border-gh-border bg-gh-bg flex flex-wrap justify-between items-start gap-2"
-    >
-      <div class="flex-1 min-w-[340px]">
-        {#if session}
-          <h2 class="text-base font-semibold flex items-center gap-2">
-            <span>{truncate(session.title ?? 'Untitled', 50)}</span>
-            <span
-              class="text-sm text-gh-text-secondary font-normal"
-              title="{messages.length} messages">💬 {messages.length}</span
-            >
-          </h2>
-          <button
-            class="text-xs text-gh-text-secondary font-mono mt-1 hover:text-gh-accent
-                   hover:underline cursor-pointer bg-transparent border-none p-0 text-left"
-            onclick={openSessionFile}
-            title="Open session file in VSCode"
-          >
-            {session.id}
-          </button>
-        {:else}
-          <h2 class="text-base font-semibold">Messages</h2>
-        {/if}
-      </div>
-      {#if messages.length > 0}
-        <div class="flex gap-1 flex-shrink-0">
-          <button
-            class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
-                   text-gh-text-secondary hover:text-gh-text transition-colors"
-            onclick={scrollToTop}
-            title="Go to top"
-          >
-            ↑ Top
-          </button>
-          {#if session && lastCompactIndex >= 0}
-            <button
-              class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
-                     text-gh-text-secondary hover:text-gh-text transition-colors"
-              onclick={scrollToCompact}
-              title="Jump to last compacted point (context continuation)"
-            >
-              📍 Last Compacted
-            </button>
-          {/if}
-          <button
-            class="px-2 py-1 text-xs rounded border border-gh-border hover:bg-gh-border-subtle
-                   text-gh-text-secondary hover:text-gh-text transition-colors"
-            onclick={scrollToBottom}
-            title="Go to bottom"
-          >
-            ↓ Bottom
-          </button>
-        </div>
-      {/if}
-    </div>
-  {/if}
-
-  <!-- Messages -->
-  {#if session}
-    <div
-      bind:this={internalScrollContainer}
-      class="{enableScroll ? 'overflow-y-auto' : ''} flex-1 p-4 flex flex-col gap-4"
-    >
-      {#each messages as msg, i (msg.uuid ?? `idx-${i}`)}
-        <MessageItem
-          {msg}
-          sessionId={session.id}
-          isFirst={i === 0 || i === firstMeaningfulIndex}
-          onDelete={onDeleteMessage}
-          {onEditTitle}
-          onSplit={onSplitSession}
-        />
-      {/each}
-    </div>
-  {:else}
-    <p class="p-8 text-center text-gh-text-secondary">Select a session</p>
-  {/if}
+  <div class="{enableScroll ? 'overflow-y-auto' : ''} flex-1 p-4 flex flex-col gap-4">
+    {#each messages as msg, i (msg.uuid ?? `idx-${i}`)}
+      <MessageItem
+        {msg}
+        {sessionId}
+        isFirst={i === 0 || i === firstMeaningfulIndex}
+        onDelete={onDeleteMessage}
+        {onEditTitle}
+        onSplit={onSplitSession}
+      />
+    {/each}
+  </div>
 </section>

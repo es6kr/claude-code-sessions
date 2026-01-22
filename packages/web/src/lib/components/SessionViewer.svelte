@@ -2,7 +2,7 @@
   import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
   import { getDisplayTitle, truncate } from '$lib/utils'
-  import MessageItem from './MessageItem.svelte'
+  import MessageList from './MessageList.svelte'
   import ScrollButtons from './ScrollButtons.svelte'
 
   // Tab type - messages, todos, or agent:<agentId>
@@ -219,11 +219,6 @@
     }
   }
 
-  // Find index of first meaningful message (user/assistant, not metadata)
-  const firstMeaningfulIndex = $derived(
-    messages.findIndex((m) => m.type === 'user' || m.type === 'assistant' || m.type === 'human')
-  )
-
   // Scroll container reference for navigation (internal or external)
   let internalScrollContainer: HTMLDivElement | undefined = $state()
   const scrollContainer = $derived(externalScrollContainer ?? internalScrollContainer)
@@ -330,18 +325,15 @@
           No messages
         </div>
       {:else}
-        <div class="p-4 flex flex-col gap-4">
-          {#each messages as msg, i (msg.uuid ?? `idx-${i}`)}
-            <MessageItem
-              {msg}
-              sessionId={session?.id ?? ''}
-              onDelete={handleSessionMessageDelete}
-              {onEditTitle}
-              onSplit={onSplitSession}
-              isFirst={i === firstMeaningfulIndex}
-            />
-          {/each}
-        </div>
+        <MessageList
+          sessionId={session.id}
+          {messages}
+          onDeleteMessage={handleSessionMessageDelete}
+          {onEditTitle}
+          {onSplitSession}
+          enableScroll={false}
+          fullWidth={true}
+        />
       {/if}
     {:else if activeTab === 'todos'}
       <div class="p-4">
@@ -379,16 +371,13 @@
           No messages
         </div>
       {:else}
-        <div class="p-4 flex flex-col gap-4">
-          {#each agentMessages as msg, i (msg.uuid)}
-            <MessageItem
-              {msg}
-              sessionId={selectedAgentId}
-              onDelete={handleAgentMessageDelete}
-              isFirst={i === 0}
-            />
-          {/each}
-        </div>
+        <MessageList
+          sessionId={session.id}
+          messages={agentMessages}
+          onDeleteMessage={handleAgentMessageDelete}
+          enableScroll={false}
+          fullWidth={true}
+        />
       {/if}
     {/if}
   </div>
