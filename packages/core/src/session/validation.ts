@@ -179,6 +179,45 @@ export function validateToolUseResult(messages: readonly GenericMessage[]): Vali
 }
 
 /**
+ * Repair parentUuid chain after removing messages
+ *
+ * When a message is removed, any message that had the removed message as its
+ * parentUuid needs to be updated to point to the removed message's parentUuid.
+ * Handles chained removals (e.g., a -> p1 -> p2 -> b, removing p1 and p2 should result in a -> b).
+ *
+ * @param messages - Array of messages (will be mutated)
+ * @param removedMessages - Messages that were removed (need uuid and parentUuid)
+ */
+export function repairParentUuidChain<T extends GenericMessage>(
+  messages: T[],
+  removedMessages: T[]
+): void {
+  // Build a map of removed uuid -> parentUuid for chain resolution
+  const removedMap = new Map<string, string | null | undefined>()
+  for (const removed of removedMessages) {
+    if (removed.uuid && removed.type !== 'file-history-snapshot') {
+      removedMap.set(removed.uuid, removed.parentUuid)
+    }
+  }
+
+  // Resolve final parent by following the chain through removed messages
+  const resolveParent = (parentUuid: string | null | undefined): string | null | undefined => {
+    let current = parentUuid
+    while (current && removedMap.has(current)) {
+      current = removedMap.get(current)
+    }
+    return current
+  }
+
+  // Update all messages pointing to removed messages
+  for (const msg of messages) {
+    if (msg.parentUuid && removedMap.has(msg.parentUuid)) {
+      msg.parentUuid = resolveParent(msg.parentUuid)
+    }
+  }
+}
+
+/**
  * Delete a message and repair the parentUuid chain
  *
  * This is a pure function for client-side use (without file I/O)
@@ -265,25 +304,12 @@ export function deleteMessageWithChainRepair<T extends GenericMessage>(
   // All indices to delete (sorted descending for safe splice)
   const indicesToDelete = [targetIndex, ...toolResultIndices].sort((a, b) => b - a)
 
-  // Repair parentUuid chain for all messages being deleted
-  for (const idx of indicesToDelete) {
-    const msg = messages[idx]
-    const isInParentChain = msg.type !== 'file-history-snapshot' && msg.uuid
-    if (isInParentChain) {
-      const deletedUuid = msg.uuid as string
-      const parentUuid = msg.parentUuid
-
-      // Update all messages pointing to this message
-      for (const m of messages) {
-        if (m.parentUuid === deletedUuid) {
-          m.parentUuid = parentUuid
-        }
-      }
-    }
-  }
-
-  // Collect deleted messages before removing
+  // Collect messages to delete before removing
+  const messagesToDelete = indicesToDelete.map((i) => messages[i])
   const alsoDeleted = toolResultIndices.map((i) => messages[i])
+
+  // Repair parentUuid chain using the extracted utility
+  repairParentUuidChain(messages, messagesToDelete)
 
   // Remove messages in reverse order
   for (const idx of indicesToDelete) {

@@ -5,8 +5,6 @@ import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir } from '../paths.js'
-import { extractTextContent, parseJsonlLines } from '../utils.js'
-import { readSession } from './crud.js'
 import type {
   CompressSessionOptions,
   CompressSessionResult,
@@ -18,6 +16,9 @@ import type {
   SummarizeSessionOptions,
   SummarizeSessionResult,
 } from '../types.js'
+import { extractTextContent, parseJsonlLines } from '../utils.js'
+import { readSession } from './crud.js'
+import { repairParentUuidChain } from './validation.js'
 
 // Helper: Check if item is a tool_use content item
 const isToolUse = (
@@ -226,17 +227,22 @@ export const compressSession = (
       }
     })
 
+    // Collect messages to remove
+    const messagesToRemove: Record<string, unknown>[] = []
+
     // Filter messages based on keepSnapshots option and remove progress messages
     const filteredMessages = messages.filter((msg, idx) => {
       // Always remove progress messages (hook progress, etc.)
       if (msg.type === 'progress') {
         removedProgress++
+        messagesToRemove.push(msg)
         return false
       }
 
       if (msg.type === 'file-history-snapshot') {
         if (keepSnapshots === 'none') {
           removedSnapshots++
+          messagesToRemove.push(msg)
           return false
         }
         if (keepSnapshots === 'first_last') {
@@ -244,12 +250,16 @@ export const compressSession = (
           const isLast = idx === snapshotIndices[snapshotIndices.length - 1]
           if (!isFirst && !isLast) {
             removedSnapshots++
+            messagesToRemove.push(msg)
             return false
           }
         }
       }
       return true
     })
+
+    // Repair parentUuid chain after removing messages
+    repairParentUuidChain(filteredMessages, messagesToRemove)
 
     // Truncate long tool outputs
     for (const msg of filteredMessages) {

@@ -134,4 +134,5 @@ export {
   validateChain,
   validateToolUseResult,
   deleteMessageWithChainRepair,
+  repairParentUuidChain,
 } from './session/validation.js'

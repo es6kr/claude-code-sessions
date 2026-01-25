@@ -3,6 +3,7 @@ import {
   validateChain,
   validateToolUseResult,
   deleteMessageWithChainRepair,
+  repairParentUuidChain,
 } from '../session/validation.js'
 
 describe('validateChain', () => {
@@ -496,5 +497,83 @@ describe('deleteMessageWithChainRepair', () => {
     expect(result.deleted).toBeNull()
     expect(result.alsoDeleted).toHaveLength(0)
     expect(messages).toHaveLength(1)
+  })
+})
+
+describe('repairParentUuidChain', () => {
+  it('should repair chain when progress message is removed', () => {
+    // assistant -> user -> progress -> assistant
+    // After removing progress: assistant -> user -> assistant
+    const messages = [
+      { type: 'assistant', uuid: 'a1', parentUuid: null },
+      { type: 'user', uuid: 'u1', parentUuid: 'a1' },
+      { type: 'assistant', uuid: 'a2', parentUuid: 'p1' }, // was pointing to progress
+    ]
+    const removed = [{ type: 'progress', uuid: 'p1', parentUuid: 'u1' }]
+
+    repairParentUuidChain(messages, removed)
+
+    expect(messages[2].parentUuid).toBe('u1')
+    expect(validateChain(messages).valid).toBe(true)
+  })
+
+  it('should repair chain when multiple messages are removed', () => {
+    // a1 -> u1 -> p1 -> p2 -> a2
+    // Remove p1 and p2: a1 -> u1 -> a2
+    const messages = [
+      { type: 'assistant', uuid: 'a1', parentUuid: null },
+      { type: 'user', uuid: 'u1', parentUuid: 'a1' },
+      { type: 'assistant', uuid: 'a2', parentUuid: 'p2' },
+    ]
+    const removed = [
+      { type: 'progress', uuid: 'p1', parentUuid: 'u1' },
+      { type: 'progress', uuid: 'p2', parentUuid: 'p1' },
+    ]
+
+    repairParentUuidChain(messages, removed)
+
+    expect(messages[2].parentUuid).toBe('u1')
+    expect(validateChain(messages).valid).toBe(true)
+  })
+
+  it('should skip file-history-snapshot in removed messages', () => {
+    const messages = [
+      { type: 'assistant', uuid: 'a1', parentUuid: null },
+      { type: 'user', uuid: 'u1', parentUuid: 'a1' },
+    ]
+    // file-history-snapshot has messageId instead of uuid - skipped in repair
+    const removed = [{ type: 'file-history-snapshot', messageId: 'a1' }]
+
+    // Should not throw and messages should be unchanged
+    repairParentUuidChain(messages, removed as unknown as typeof messages)
+
+    expect(messages[0].parentUuid).toBe(null)
+    expect(messages[1].parentUuid).toBe('a1')
+  })
+
+  it('should handle removed message without uuid', () => {
+    const messages = [
+      { type: 'user', uuid: 'u1', parentUuid: null },
+      { type: 'assistant', uuid: 'a1', parentUuid: 'u1' },
+    ]
+    // Message without uuid - skipped in repair
+    const removed = [{ type: 'progress' }]
+
+    // Should not throw
+    repairParentUuidChain(messages, removed as unknown as typeof messages)
+
+    expect(messages[1].parentUuid).toBe('u1')
+  })
+
+  it('should handle empty removed array', () => {
+    const messages = [
+      { type: 'user', uuid: 'u1', parentUuid: null },
+      { type: 'assistant', uuid: 'a1', parentUuid: 'u1' },
+    ]
+
+    repairParentUuidChain(messages, [])
+
+    expect(messages[0].parentUuid).toBe(null)
+    expect(messages[1].parentUuid).toBe('u1')
   })
 })
