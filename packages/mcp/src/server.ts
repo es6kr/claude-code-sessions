@@ -5,9 +5,32 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/**
+ * Determine the npm tag for @claude-sessions/web based on current MCP package version.
+ * Beta MCP should use beta web, alpha MCP should use alpha web.
+ */
+export function getWebPackageTag(version: string): 'latest' | 'beta' | 'alpha' {
+  if (version.includes('-beta')) return 'beta'
+  if (version.includes('-alpha')) return 'alpha'
+  return 'latest'
+}
+
+/**
+ * Get the current package version from package.json
+ */
+function getCurrentVersion(): string {
+  const packageJsonPath = resolve(__dirname, '../package.json')
+  try {
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'))
+    return packageJson.version || '0.0.0'
+  } catch {
+    return '0.0.0'
+  }
+}
 
 export interface WebServer {
   process: ChildProcess
@@ -41,12 +64,13 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
     cliArgs.push('--project', project)
   }
 
+  const webPackageTag = getWebPackageTag(getCurrentVersion())
   const child = useLocal
     ? spawn('node', [localCliPath, ...cliArgs], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env },
       })
-    : spawn('npx', ['@claude-sessions/web@latest', ...cliArgs], {
+    : spawn('npx', [`@claude-sessions/web@${webPackageTag}`, ...cliArgs], {
         stdio: ['ignore', 'pipe', 'pipe'],
         env: { ...process.env },
       })

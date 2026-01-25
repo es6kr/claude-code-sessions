@@ -12,14 +12,17 @@ Monorepo for Claude Code session management tools
 
 ## Installation
 
-### MCP Server
+### Stable (`@latest`)
 
 ```bash
-# Add to Claude Code
+# MCP Server
 claude mcp add claude-sessions -- npx claude-sessions-mcp
+
+# Web UI
+npx @claude-sessions/web
 ```
 
-Or add directly to `~/.claude.json`:
+Or add MCP server directly to `~/.claude.json`:
 
 ```json
 {
@@ -32,10 +35,27 @@ Or add directly to `~/.claude.json`:
 }
 ```
 
-### Web UI (standalone)
+### Beta (`@beta`)
 
 ```bash
-npx @claude-sessions/web --port 5173
+# MCP Server
+claude mcp add claude-sessions -- npx claude-sessions-mcp@beta
+
+# Web UI
+npx @claude-sessions/web@beta
+```
+
+Or add MCP server directly to `~/.claude.json`:
+
+```json
+{
+  "mcpServers": {
+    "claude-sessions": {
+      "command": "npx",
+      "args": ["claude-sessions-mcp@beta"]
+    }
+  }
+}
 ```
 
 ## Development

@@ -32,6 +32,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsx watch src/index.ts",
+    "publish": "pnpm build && pnpm publish --tag beta",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
