@@ -461,6 +461,7 @@ export interface CompressSessionResult {
   originalSize: number
   compressedSize: number
   removedSnapshots: number
+  removedProgress: number
   truncatedOutputs: number
   error?: string
 }

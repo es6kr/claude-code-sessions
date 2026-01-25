@@ -24,6 +24,9 @@ export default tseslint.config(
         ...globals.node,
       },
     },
+    rules: {
+      'max-depth': ['warn', 4],
+    },
   },
   {
     files: ['**/*.svelte'],

@@ -8,14 +8,50 @@ import { getSessionsDir } from '../paths.js'
 import { extractTextContent, parseJsonlLines } from '../utils.js'
 import { readSession } from './crud.js'
 import type {
-  SessionAnalysis,
   CompressSessionOptions,
   CompressSessionResult,
-  ProjectKnowledge,
+  ContentItem,
   ConversationLine,
+  Message,
+  ProjectKnowledge,
+  SessionAnalysis,
   SummarizeSessionOptions,
   SummarizeSessionResult,
 } from '../types.js'
+
+// Helper: Check if item is a tool_use content item
+const isToolUse = (
+  item: unknown
+): item is { type: 'tool_use'; name?: string; id?: string; input?: { file_path?: string } } =>
+  item !== null &&
+  typeof item === 'object' &&
+  'type' in item &&
+  (item as ContentItem).type === 'tool_use'
+
+// Helper: Check if item is a tool_result with error
+const isToolResultError = (
+  item: unknown
+): item is { type: 'tool_result'; tool_use_id?: string; is_error: true } =>
+  item !== null &&
+  typeof item === 'object' &&
+  'type' in item &&
+  (item as ContentItem).type === 'tool_result' &&
+  'is_error' in item &&
+  (item as { is_error?: boolean }).is_error === true
+
+// Helper: Find tool_use by ID across all messages
+const findToolUseById = (messages: Message[], toolUseId: string): string | null => {
+  for (const msg of messages) {
+    const content = msg.message?.content
+    if (!Array.isArray(content)) continue
+    for (const item of content) {
+      if (isToolUse(item) && item.id === toolUseId) {
+        return item.name ?? 'unknown'
+      }
+    }
+  }
+  return null
+}
 
 // Analyze session for optimization insights
 export const analyzeSession = (projectName: string, sessionId: string) =>
@@ -59,20 +95,18 @@ export const analyzeSession = (projectName: string, sessionId: string) =>
         assistantMessages++
 
         // Track tool usage
-        if (msg.message?.content && Array.isArray(msg.message.content)) {
-          for (const item of msg.message.content) {
-            if (item && typeof item === 'object' && 'type' in item && item.type === 'tool_use') {
-              const toolUse = item as { name?: string; input?: { file_path?: string } }
-              const toolName = toolUse.name ?? 'unknown'
-              const existing = toolUsageMap.get(toolName) ?? { count: 0, errorCount: 0 }
-              existing.count++
-              toolUsageMap.set(toolName, existing)
+        const content = msg.message?.content
+        if (!Array.isArray(content)) continue
+        for (const item of content) {
+          if (!isToolUse(item)) continue
+          const toolName = item.name ?? 'unknown'
+          const existing = toolUsageMap.get(toolName) ?? { count: 0, errorCount: 0 }
+          existing.count++
+          toolUsageMap.set(toolName, existing)
 
-              // Track file changes
-              if ((toolName === 'Write' || toolName === 'Edit') && toolUse.input?.file_path) {
-                filesChanged.add(toolUse.input.file_path)
-              }
-            }
+          // Track file changes
+          if ((toolName === 'Write' || toolName === 'Edit') && item.input?.file_path) {
+            filesChanged.add(item.input.file_path)
           }
         }
       } else if (msg.type === 'summary') {
@@ -101,44 +135,13 @@ export const analyzeSession = (projectName: string, sessionId: string) =>
 
     // Track tool errors from tool_result messages
     for (const msg of messages) {
-      if (msg.type === 'user' && msg.content && Array.isArray(msg.content)) {
-        for (const item of msg.content) {
-          if (
-            item &&
-            typeof item === 'object' &&
-            'type' in item &&
-            item.type === 'tool_result' &&
-            'is_error' in item &&
-            item.is_error
-          ) {
-            // Find the corresponding tool_use to get the tool name
-            const toolResultItem = item as { tool_use_id?: string }
-            const toolUseId = toolResultItem.tool_use_id
-            if (toolUseId) {
-              // Search for the tool_use with this ID
-              for (const prevMsg of messages) {
-                if (prevMsg.message?.content && Array.isArray(prevMsg.message.content)) {
-                  for (const prevItem of prevMsg.message.content) {
-                    if (
-                      prevItem &&
-                      typeof prevItem === 'object' &&
-                      'type' in prevItem &&
-                      prevItem.type === 'tool_use' &&
-                      'id' in prevItem &&
-                      prevItem.id === toolUseId
-                    ) {
-                      const toolName = (prevItem as { name?: string }).name ?? 'unknown'
-                      const existing = toolUsageMap.get(toolName)
-                      if (existing) {
-                        existing.errorCount++
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
+      if (msg.type !== 'user' || !Array.isArray(msg.content)) continue
+      for (const item of msg.content) {
+        if (!isToolResultError(item) || !item.tool_use_id) continue
+        const toolName = findToolUseById(messages, item.tool_use_id)
+        if (!toolName) continue
+        const existing = toolUsageMap.get(toolName)
+        if (existing) existing.errorCount++
       }
     }
 
@@ -211,6 +214,7 @@ export const compressSession = (
     const lines = content.trim().split('\n').filter(Boolean)
     const messages = parseJsonlLines<Record<string, unknown>>(lines, filePath)
 
+    let removedProgress = 0
     let removedSnapshots = 0
     let truncatedOutputs = 0
 
@@ -222,8 +226,14 @@ export const compressSession = (
       }
     })
 
-    // Filter messages based on keepSnapshots option
+    // Filter messages based on keepSnapshots option and remove progress messages
     const filteredMessages = messages.filter((msg, idx) => {
+      // Always remove progress messages (hook progress, etc.)
+      if (msg.type === 'progress') {
+        removedProgress++
+        return false
+      }
+
       if (msg.type === 'file-history-snapshot') {
         if (keepSnapshots === 'none') {
           removedSnapshots++
@@ -265,6 +275,7 @@ export const compressSession = (
       success: true,
       originalSize,
       compressedSize,
+      removedProgress,
       removedSnapshots,
       truncatedOutputs,
     } satisfies CompressSessionResult
