@@ -16,6 +16,7 @@ export {
   moveSession,
   splitSession,
   updateSessionSummary,
+  repairChain,
 } from './crud.js'
 
 // Tree data operations

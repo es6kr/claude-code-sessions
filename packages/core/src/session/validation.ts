@@ -71,8 +71,8 @@ export function validateChain(messages: readonly GenericMessage[]): ValidationRe
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
 
-    // Skip file-history-snapshot (has no uuid, uses messageId for reference)
-    if (msg.type === 'file-history-snapshot') {
+    // Skip file-history-snapshot and summary (no uuid chain participation)
+    if (msg.type === 'file-history-snapshot' || msg.type === 'summary') {
       continue
     }
 
@@ -81,13 +81,11 @@ export function validateChain(messages: readonly GenericMessage[]): ValidationRe
       continue
     }
 
-    // First message can have null parentUuid (but not undefined)
+    // First message can have null parentUuid or orphan_parent (compacted session)
+    // Only undefined is an error for first message
     if (!foundFirstMessage) {
       foundFirstMessage = true
-      if (msg.parentUuid === null) {
-        continue
-      }
-      // undefined is still an error even for first message
+      // undefined is an error
       if (msg.parentUuid === undefined) {
         errors.push({
           type: 'broken_chain',
@@ -97,6 +95,8 @@ export function validateChain(messages: readonly GenericMessage[]): ValidationRe
         })
         continue
       }
+      // null or orphan_parent is OK for first message
+      continue
     }
 
     // Check for broken chain (null/undefined parentUuid for non-first message)
@@ -176,6 +176,75 @@ export function validateToolUseResult(messages: readonly GenericMessage[]): Vali
     valid: errors.length === 0,
     errors,
   }
+}
+
+/**
+ * Auto-repair chain errors by linking messages to their previous message
+ *
+ * Fixes:
+ * - broken_chain: Sets parentUuid to the previous message's uuid
+ * - orphan_parent: Sets parentUuid to the previous message's uuid
+ *
+ * @param messages - Array of messages (will be mutated)
+ * @returns Number of repairs made
+ */
+export function autoRepairChain<T extends GenericMessage>(messages: T[]): number {
+  let repairCount = 0
+
+  // Build uuid set for validation
+  const uuids = new Set<string>()
+  for (const msg of messages) {
+    if (msg.uuid) {
+      uuids.add(msg.uuid)
+    }
+  }
+
+  // Track last valid uuid and state
+  let lastUuid: string | null = null
+  let isFirstWithUuid = true
+
+  for (const msg of messages) {
+    // Skip file-history-snapshot and summary (no uuid chain participation)
+    if (msg.type === 'file-history-snapshot' || msg.type === 'summary') {
+      continue
+    }
+
+    // Skip messages without uuid
+    if (!msg.uuid) {
+      continue
+    }
+
+    // First message with uuid: only fix undefined -> null
+    // null and orphan_parent are valid for first message (compacted session)
+    if (isFirstWithUuid) {
+      isFirstWithUuid = false
+      if (msg.parentUuid === undefined) {
+        msg.parentUuid = null
+        repairCount++
+      }
+      lastUuid = msg.uuid
+      continue
+    }
+
+    // Check for broken_chain (null/undefined parentUuid)
+    if (msg.parentUuid === null || msg.parentUuid === undefined) {
+      if (lastUuid) {
+        msg.parentUuid = lastUuid
+        repairCount++
+      }
+    }
+    // Check for orphan_parent (parentUuid points to non-existent uuid)
+    else if (!uuids.has(msg.parentUuid)) {
+      if (lastUuid) {
+        msg.parentUuid = lastUuid
+        repairCount++
+      }
+    }
+
+    lastUuid = msg.uuid
+  }
+
+  return repairCount
 }
 
 /**

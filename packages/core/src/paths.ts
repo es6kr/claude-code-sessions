@@ -165,12 +165,6 @@ export const tryGetCwdFromFile = (
     const cwd = extractCwdFromContent(content)
 
     if (cwd === null) {
-      const lines = content.split('\n').filter((l) => l.trim())
-      if (lines.length === 0) {
-        logger.debug(`tryGetCwdFromFile: ${basename} -> empty file`)
-      } else {
-        logger.debug(`tryGetCwdFromFile: ${basename} -> no cwd found in ${lines.length} lines`)
-      }
       return null
     }
 

@@ -4,11 +4,17 @@
  */
 export * from '@claude-sessions/core'
 
-// Additional web-specific function: update custom-title message
+// Additional web-specific functions
 import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { getSessionsDir, type Message } from '@claude-sessions/core'
+import {
+  getSessionsDir,
+  autoRepairChain,
+  validateChain,
+  getLogger,
+  type Message,
+} from '@claude-sessions/core'
 
 export const updateCustomTitle = (
   projectName: string,
@@ -39,4 +45,41 @@ export const updateCustomTitle = (
     yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
 
     return { success: true }
+  })
+
+/**
+ * Repair broken parentUuid chain in a session
+ * Returns number of repairs made
+ */
+export const repairChain = (projectName: string, sessionId: string) =>
+  Effect.gen(function* () {
+    const logger = getLogger()
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const lines = content.trim().split('\n').filter(Boolean)
+    const messages = lines.map((line) => JSON.parse(line) as Message)
+
+    logger.info(`[repairChain] ${sessionId}: ${messages.length} messages`)
+
+    // Log validation errors before repair
+    const beforeResult = validateChain(messages)
+    logger.info(
+      `[repairChain] validateChain: valid=${beforeResult.valid}, errors=${beforeResult.errors.length}`
+    )
+    for (const e of beforeResult.errors) {
+      logger.warn(`[repairChain] error: ${JSON.stringify(e)}`)
+    }
+
+    const repairCount = autoRepairChain(messages)
+    logger.info(`[repairChain] autoRepairChain returned: ${repairCount}`)
+
+    if (repairCount > 0) {
+      const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+      yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+      logger.info(`[repairChain] ${sessionId}: Repaired ${repairCount} chain error(s)`)
+    } else {
+      logger.info(`[repairChain] ${sessionId}: No repairs needed`)
+    }
+
+    return { success: true, repairCount }
   })

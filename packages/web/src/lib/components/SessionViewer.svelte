@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { deleteMessageWithChainRepair } from '@claude-sessions/core'
+  import { deleteMessageWithChainRepair, validateChain } from '@claude-sessions/core'
   import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
   import { getDisplayTitle, truncate } from '$lib/utils'
@@ -48,6 +48,26 @@
 
   // Get display title: customTitle > currentSummary > session.title > 'Untitled'
   const displayTitle = $derived(getDisplayTitle(customTitle, currentSummary, session?.title, 50))
+
+  // Chain validation (logging is done server-side in /api/session)
+  const chainResult = $derived(validateChain(messages))
+  let isRepairing = $state(false)
+
+  const handleRepairChain = async () => {
+    if (!session || isRepairing) return
+    isRepairing = true
+    try {
+      const result = await api.repairChain(session.projectName, session.id)
+      if (result.success && result.repairCount > 0) {
+        // Refresh messages from server
+        await syncFromServer()
+      }
+    } catch (e) {
+      console.error('Failed to repair chain:', e)
+    } finally {
+      isRepairing = false
+    }
+  }
 
   let activeTab = $state<TabType>('messages')
   let agentMessages = $state<Message[]>([])
@@ -277,14 +297,61 @@
         <h2 class="text-base font-semibold">
           {truncate(displayTitle, 50)}
         </h2>
-        <button
-          class="text-xs text-gh-text-secondary font-mono mt-1 hover:text-gh-accent
-                   hover:underline cursor-pointer bg-transparent border-none p-0 text-left"
-          onclick={openSessionFile}
-          title="Open session file in VSCode"
-        >
-          {session.id}
-        </button>
+        <div class="flex items-center gap-2 mt-1">
+          <button
+            class="text-xs text-gh-text-secondary font-mono hover:text-gh-accent
+                     hover:underline cursor-pointer bg-transparent border-none p-0 text-left"
+            onclick={openSessionFile}
+            title="Open session file in VSCode"
+          >
+            {session.id}
+          </button>
+          {#if !chainResult.valid}
+            <div class="relative group">
+              <button
+                class="text-xs px-2 py-0.5 rounded bg-red-900/30 text-red-400 border border-red-700
+                       hover:bg-red-900/50 transition-colors flex items-center gap-1"
+                onclick={handleRepairChain}
+                disabled={isRepairing}
+              >
+                {#if isRepairing}
+                  <span class="animate-spin">⟳</span>
+                {:else}
+                  ⚠️
+                {/if}
+                {chainResult.errors.length} chain error{chainResult.errors.length > 1 ? 's' : ''}
+                {#if !isRepairing}
+                  - Repair
+                {/if}
+              </button>
+              <!-- Tooltip with error details -->
+              <div
+                class="absolute left-0 top-full mt-1 z-50 hidden group-hover:block
+                       bg-gh-bg border border-gh-border rounded-lg shadow-xl p-2 min-w-[250px] max-w-[400px]"
+              >
+                <div class="text-xs text-gh-text-secondary mb-1">Chain errors:</div>
+                <ul class="text-xs space-y-1">
+                  {#each chainResult.errors as error}
+                    <li class="text-red-400">
+                      <span class="text-gh-text-secondary">L{error.line}:</span>
+                      {error.type === 'broken_chain'
+                        ? 'Broken chain (null parentUuid)'
+                        : 'Orphan parent'}
+                      {#if error.type === 'orphan_parent' && error.parentUuid}
+                        <span class="text-gh-text-secondary"
+                          >→ {error.parentUuid.slice(0, 8)}...</span
+                        >
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+                <div class="text-xs text-gh-text-secondary mt-2 pt-1 border-t border-gh-border">
+                  Click to auto-repair by linking to previous message
+                </div>
+              </div>
+            </div>
+          {/if}
+        </div>
       {:else}
         <h2 class="text-base font-semibold">Messages</h2>
       {/if}

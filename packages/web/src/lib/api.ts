@@ -332,3 +332,16 @@ export interface ResumeSessionResult {
 // Resume session - spawn claude CLI with --resume
 export const resumeSession = (projectName: string, sessionId: string) =>
   post<ResumeSessionResult>('/session/resume', { projectName, sessionId })
+
+// Repair chain types
+export interface RepairChainResult {
+  success: boolean
+  repairCount: number
+}
+
+// Repair broken parentUuid chain in session
+export const repairChain = (projectName: string, sessionId: string) =>
+  post<RepairChainResult>(
+    `/session/repair-chain?project=${encodeURIComponent(projectName)}&session=${encodeURIComponent(sessionId)}`,
+    {}
+  )

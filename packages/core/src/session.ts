@@ -19,6 +19,7 @@ export {
   moveSession,
   splitSession,
   updateSessionSummary,
+  repairChain,
   // Tree data
   loadSessionTreeData,
   loadProjectTreeData,

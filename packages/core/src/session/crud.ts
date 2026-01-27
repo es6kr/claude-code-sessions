@@ -14,6 +14,7 @@ import {
   parseJsonlLines,
   readJsonlFile,
 } from '../utils.js'
+import { validateChain, autoRepairChain } from './validation.js'
 import { findLinkedAgents } from '../agents.js'
 import { deleteLinkedTodos } from '../todos.js'
 import type {
@@ -586,4 +587,29 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
       movedMessageCount: movedMessages.length,
       duplicatedSummary: shouldDuplicate,
     } satisfies SplitSessionResult
+  })
+
+// Repair broken parentUuid chain in a session
+export const repairChain = (projectName: string, sessionId: string) =>
+  Effect.gen(function* () {
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const messages = yield* readJsonlFile<Message>(filePath)
+
+    // Validate before repair
+    const beforeResult = validateChain(messages)
+
+    // Repair chain
+    const repairCount = autoRepairChain(messages)
+
+    if (repairCount > 0) {
+      const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+      yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+    }
+
+    return {
+      success: true,
+      repairCount,
+      errorsBefore: beforeResult.errors.length,
+      errorsAfter: validateChain(messages).errors.length,
+    }
   })

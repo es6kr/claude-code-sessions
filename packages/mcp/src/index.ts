@@ -252,6 +252,22 @@ server.tool(
   }
 )
 
+// Repair chain
+server.tool(
+  'repair_chain',
+  'Repair broken parentUuid chain in a session (auto-links messages sequentially)',
+  {
+    project_name: z.string().describe('Project folder name'),
+    session_id: z.string().describe('Session ID'),
+  },
+  async ({ project_name, session_id }) => {
+    const result = await runEffect(session.repairChain(project_name, session_id))
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    }
+  }
+)
+
 // Split session
 server.tool(
   'split_session',

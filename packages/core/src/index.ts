@@ -111,6 +111,7 @@ export {
   loadSessionTreeData,
   loadProjectTreeData,
   updateSessionSummary,
+  repairChain,
 } from './session.js'
 
 // Note: resumeSession is exported from '@claude-sessions/core/server'
@@ -135,4 +136,5 @@ export {
   validateToolUseResult,
   deleteMessageWithChainRepair,
   repairParentUuidChain,
+  autoRepairChain,
 } from './session/validation.js'
