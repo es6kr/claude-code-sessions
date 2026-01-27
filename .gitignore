@@ -1,16 +1,18 @@
-node_modules/
-dist/
-build/
-.svelte-kit/
-*.vsix
+.claude/
+.DS_Store
 .env
 .env.local
+.mcp.json
 .npmrc.local
-*.log
-.DS_Store
-packages/web/test-results/
-.claude/
 .playwright-mcp/
+.serena/
+.svelte-kit/
+*.log
+*.vsix
+build/
+dist/
+node_modules/
+packages/web/test-results/
 
 # Storybook
 *storybook.log
