@@ -16,8 +16,10 @@ vi.mock('node:fs/promises')
 describe('extractTitle', () => {
   it('should extract command name from slash command message', () => {
     const text =
-      '<command-message>session</command-message>\n<command-name>/session</command-name>\n<command-args>  repair --dry-run e15f9f9a-db7a-4729-965c-c0beb8d75039</command-args>'
-    expect(extractTitle(text)).toBe('/session')
+      '<command-message>session</command-message>\n<command-name>/session</command-name>\n<command-args> repair --dry-run e15f9f9a-db7a-4729-965c-c0beb8d75039</command-args>'
+    expect(extractTitle(text)).toBe(
+      '/session repair --dry-run e15f9f9a-db7a-4729-965c-c0beb8d75039'
+    )
   })
 
   it('should return first line as title for normal text', () => {

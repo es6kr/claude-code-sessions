@@ -9,6 +9,7 @@
   } from '@claude-sessions/core'
   import { appConfig } from '$lib/stores/config'
   import TooltipButton from './TooltipButton.svelte'
+  import CommandTitle from './CommandTitle.svelte'
 
   interface Props {
     projects: Project[]
@@ -278,7 +279,7 @@
                           ? 'italic text-gh-text-secondary'
                           : ''}"
                       >
-                        {displayTitle}
+                        <CommandTitle title={displayTitle} />
                       </span>
                       <span
                         class="flex-shrink-0 flex items-center gap-2 text-xs text-gh-text-secondary"
@@ -323,7 +324,7 @@
                             ? data.currentSummary.slice(0, 47) + '...'
                             : data.currentSummary}
                         {:else}
-                          {displayTitle}
+                          <CommandTitle title={displayTitle} />
                         {/if}
                       </span>
 

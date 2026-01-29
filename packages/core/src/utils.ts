@@ -45,10 +45,13 @@ export const extractTextContent = (message: MessagePayload | undefined): string 
  * Parse command message content (e.g., slash commands like /commit)
  * Returns the command name and message extracted from XML tags
  */
-export const parseCommandMessage = (content?: string): { name: string; message: string } => {
+export const parseCommandMessage = (
+  content?: string
+): { name: string; message: string; args: string } => {
   const name = content?.match(/<command-name>([^<]+)<\/command-name>/)?.[1] ?? ''
   const message = content?.match(/<command-message>([^<]+)<\/command-message>/)?.[1] ?? ''
-  return { name, message }
+  const args = content?.match(/<command-args>([^<]+)<\/command-args>/)?.[1]?.trim() ?? ''
+  return { name, message, args }
 }
 
 // Extract title from text content (remove IDE tags, use first line)
@@ -56,8 +59,8 @@ export const extractTitle = (text: string): string => {
   if (!text) return 'Untitled'
 
   // Check for slash command format (e.g., <command-name>/session</command-name>)
-  const { name } = parseCommandMessage(text)
-  if (name) return name
+  const { name, args } = parseCommandMessage(text)
+  if (name) return args ? `${name} ${args}` : name
 
   // Remove IDE tags (<ide_opened_file>, <ide_selection>, etc.)
   let cleaned = text.replace(/<ide_[^>]*>[\s\S]*?<\/ide_[^>]*>/g, '').trim()
@@ -130,8 +133,8 @@ export const getDisplayTitle = (
   if (title && title !== 'Untitled') {
     // Check if title contains command-name tag (slash command)
     if (title.includes('<command-name>')) {
-      const { name } = parseCommandMessage(title)
-      if (name) return name
+      const { name, args } = parseCommandMessage(title)
+      if (name) return args ? `${name} ${args}` : name
     }
     return title
   }

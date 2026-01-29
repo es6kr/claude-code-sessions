@@ -10,6 +10,7 @@
   import MessageList from './MessageList.svelte'
   import ScrollButtons from './ScrollButtons.svelte'
   import ValidationBadge from './ValidationBadge.svelte'
+  import CommandTitle from './CommandTitle.svelte'
 
   // Tab type - messages, todos, or agent:<agentId>
   type TabType = 'messages' | 'todos' | `agent:${string}`
@@ -321,7 +322,7 @@
     <div class="flex-1 min-w-[200px]">
       {#if session}
         <h2 class="text-base font-semibold">
-          {truncate(displayTitle, 50)}
+          <CommandTitle title={truncate(displayTitle, 50)} />
         </h2>
         <div class="flex items-center gap-2 mt-1">
           <button
