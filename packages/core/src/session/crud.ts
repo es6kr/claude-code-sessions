@@ -7,7 +7,6 @@ import * as path from 'node:path'
 import * as crypto from 'node:crypto'
 import { getSessionsDir } from '../paths.js'
 import {
-  extractTextContent,
   extractTitle,
   isContinuationSummary,
   cleanupSplitFirstMessage,
@@ -87,10 +86,7 @@ export const listSessions = (projectName: string) =>
           const title = pipe(
             messages,
             A.findFirst((m) => m.type === 'user'),
-            O.map((m) => {
-              const text = extractTextContent(m.message)
-              return extractTitle(text)
-            }),
+            O.map((m) => extractTitle(m.message)),
             O.getOrElse(() => (hasSummary ? '[Summary Only]' : `Session ${sessionId.slice(0, 8)}`))
           )
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   cleanupSplitFirstMessage,
+  extractTextContent,
   extractTitle,
   getDisplayTitle,
   maskHomePath,
@@ -28,6 +29,46 @@ describe('extractTitle', () => {
 
   it('should return Untitled for empty text', () => {
     expect(extractTitle('')).toBe('Untitled')
+  })
+
+  it('should strip IDE tags when stripIdeTags option is true', () => {
+    const message = {
+      role: 'user' as const,
+      content: [
+        {
+          type: 'text' as const,
+          text: "<ide_selection>The user selected the lines ... '<command-message>test</command-message>\\n<command-name>/test</command-name>\\n<command-args></command-args>'</ide_selection>",
+        },
+        { type: 'text' as const, text: 'Fix incorrect test case TDD' },
+      ],
+    }
+    expect(extractTitle(message)).toBe('Fix incorrect test case TDD')
+  })
+})
+
+describe('extractTextContent', () => {
+  it('should return string content directly', () => {
+    const message = { role: 'user' as const, content: 'Hello world' }
+    expect(extractTextContent(message)).toBe('Hello world')
+  })
+
+  it('should join multiple text content items', () => {
+    // Real data: two separate text objects in content array
+    const message = {
+      role: 'user' as const,
+      content: [
+        { type: 'text' as const, text: '<ide_selection>Selected code...</ide_selection>' },
+        { type: 'text' as const, text: 'Fix incorrect test case TDD' },
+      ],
+    }
+    // extractTextContent joins all text, IDE tag removal is done by extractTitle
+    expect(extractTextContent(message)).toBe(
+      '<ide_selection>Selected code...</ide_selection>Fix incorrect test case TDD'
+    )
+  })
+
+  it('should return empty string for undefined message', () => {
+    expect(extractTextContent(undefined)).toBe('')
   })
 })
 

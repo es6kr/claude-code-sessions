@@ -60,8 +60,7 @@ const searchSessionContent = (
       return {
         sessionId,
         projectName,
-        title:
-          extractTitle(extractTextContent(match.msg.message)) || `Session ${sessionId.slice(0, 8)}`,
+        title: extractTitle(match.msg.message) || `Session ${sessionId.slice(0, 8)}`,
         matchType: 'content' as const,
         snippet: match.snippet,
         messageUuid: match.msg.uuid,

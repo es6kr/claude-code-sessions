@@ -14,19 +14,27 @@ import { createLogger } from './logger.js'
 
 const logger = createLogger('utils')
 
+// IDE tag pattern for removal
+const IDE_TAG_PATTERN = /<ide_[^>]*>[\s\S]*?<\/ide_[^>]*>/g
+
 // Extract text content from message payload
-export const extractTextContent = (message: MessagePayload | undefined): string => {
+export const extractTextContent = (
+  message: MessagePayload | undefined,
+  options: { stripIdeTags?: boolean } = {}
+): string => {
   if (!message) return ''
 
   const content = message.content
   if (!content) return ''
 
-  // If content is string, return directly
-  if (typeof content === 'string') return content
+  let result: string
 
-  // If content is array, extract text items
-  if (Array.isArray(content)) {
-    return content
+  // If content is string, return directly
+  if (typeof content === 'string') {
+    result = content
+  } else if (Array.isArray(content)) {
+    // If content is array, extract text items
+    result = content
       .filter((item): item is TextContent => typeof item === 'object' && item?.type === 'text')
       .map((item) => {
         if (item.text == null) {
@@ -36,9 +44,16 @@ export const extractTextContent = (message: MessagePayload | undefined): string 
         return item.text
       })
       .join('')
+  } else {
+    result = ''
   }
 
-  return ''
+  // Optionally strip IDE tags
+  if (options.stripIdeTags) {
+    result = result.replace(IDE_TAG_PATTERN, '').trim()
+  }
+
+  return result
 }
 
 /**
@@ -54,17 +69,25 @@ export const parseCommandMessage = (
   return { name, message, args }
 }
 
-// Extract title from text content (remove IDE tags, use first line)
-export const extractTitle = (text: string): string => {
+// Extract title from message or text (strips IDE tags, uses first line)
+export const extractTitle = (input: MessagePayload | string | undefined): string => {
+  if (!input) return 'Untitled'
+
+  // Extract text content with IDE tags stripped
+  let text: string
+  if (typeof input === 'string') {
+    text = input.replace(IDE_TAG_PATTERN, '').trim()
+  } else {
+    text = extractTextContent(input, { stripIdeTags: true })
+  }
+
   if (!text) return 'Untitled'
 
   // Check for slash command format (e.g., <command-name>/session</command-name>)
   const { name, args } = parseCommandMessage(text)
   if (name) return args ? `${name} ${args}` : name
 
-  // Remove IDE tags (<ide_opened_file>, <ide_selection>, etc.)
-  let cleaned = text.replace(/<ide_[^>]*>[\s\S]*?<\/ide_[^>]*>/g, '').trim()
-
+  let cleaned = text.trim()
   if (!cleaned) return 'Untitled'
 
   // Use only content before \n\n or \n as title

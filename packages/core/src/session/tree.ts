@@ -180,7 +180,7 @@ const loadSessionTreeDataInternal = (
 
     // Get title from first user message
     const title = firstUserMsg
-      ? extractTitle(extractTextContent(firstUserMsg.message))
+      ? extractTitle(firstUserMsg.message)
       : summaries.length > 0
         ? '[Summary Only]'
         : `Session ${sessionId.slice(0, 8)}`
