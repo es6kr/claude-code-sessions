@@ -10,16 +10,6 @@ MCP (Model Context Protocol) server for managing Claude Code sessions.
 - **Cleanup**: Clear empty sessions and remove invalid API key messages
 - **Web UI**: Launch built-in web interface for visual session management
 
-## Installation
-
-```bash
-# Using npx (recommended)
-npx claude-sessions-mcp
-
-# Or install globally
-npm install -g claude-sessions-mcp
-```
-
 ## Usage
 
 ### Claude Code MCP Integration
@@ -32,14 +22,25 @@ claude mcp add claude-sessions -- npx claude-sessions-mcp
 
 Or manually edit `~/.claude.json`:
 
-```json
+```jsonc
 {
   "mcpServers": {
+    // default (uses cached version if available)
     "claude-sessions": {
       "command": "npx",
-      "args": ["claude-sessions-mcp"]
-    }
-  }
+      "args": ["-y", "claude-sessions-mcp"],
+    },
+    // always fetch latest stable version
+    "claude-sessions-latest": {
+      "command": "npx",
+      "args": ["-y", "claude-sessions-mcp@latest"],
+    },
+    // beta version for latest features
+    "claude-sessions-beta": {
+      "command": "npx",
+      "args": ["-y", "claude-sessions-mcp@beta"],
+    },
+  },
 }
 ```
 
@@ -61,19 +62,19 @@ The GUI opens at `http://localhost:5173` with features:
 
 ## MCP Tools
 
-| Tool | Description |
-|------|-------------|
-| `list_projects` | List Claude Code projects |
-| `list_sessions` | List sessions in a project |
-| `rename_session` | Rename a session |
-| `delete_session` | Delete a session (moves to backup folder) |
-| `delete_message` | Delete a message and repair UUID chain |
-| `preview_cleanup` | Preview sessions to be cleaned |
-| `clear_sessions` | Clear empty sessions and invalid messages |
-| `get_session_files` | Get files changed in a session |
-| `split_session` | Split session at a specific message |
-| `start_gui` | Start the web UI |
-| `stop_gui` | Stop the web UI |
+| Tool                | Description                               |
+| ------------------- | ----------------------------------------- |
+| `list_projects`     | List Claude Code projects                 |
+| `list_sessions`     | List sessions in a project                |
+| `rename_session`    | Rename a session                          |
+| `delete_session`    | Delete a session (moves to backup folder) |
+| `delete_message`    | Delete a message and repair UUID chain    |
+| `preview_cleanup`   | Preview sessions to be cleaned            |
+| `clear_sessions`    | Clear empty sessions and invalid messages |
+| `get_session_files` | Get files changed in a session            |
+| `split_session`     | Split session at a specific message       |
+| `start_gui`         | Start the web UI                          |
+| `stop_gui`          | Stop the web UI                           |
 
 ## Related Packages
 

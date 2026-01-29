@@ -37,6 +37,9 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Check reserved script names
+        run: pnpm lint:scripts
+
       - name: Test (core, mcp, web)
         run: pnpm test:core && pnpm test:mcp && pnpm test:web
 

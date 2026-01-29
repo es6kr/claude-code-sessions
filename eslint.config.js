@@ -29,6 +29,16 @@ export default tseslint.config(
     },
   },
   {
+    files: ['**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
     files: ['**/*.svelte'],
     plugins: {
       svelte,
