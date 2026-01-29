@@ -18,6 +18,8 @@
     "build:web": "pnpm --filter @claude-sessions/web build",
     "lint": "pnpm -r lint",
     "storybook": "pnpm --filter @claude-sessions/web storybook",
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "test:act": "act push --job test -P ubuntu-latest=-self-hosted",
     "test:core": "pnpm --filter @claude-sessions/core test",
     "test:mcp": "pnpm --filter claude-sessions-mcp test",
     "test:web": "pnpm --filter @claude-sessions/web test",

@@ -1,2 +1,1 @@
-pnpm --filter @claude-sessions/core typecheck
-pnpm --filter claude-sessions-mcp typecheck
+pnpm test:act

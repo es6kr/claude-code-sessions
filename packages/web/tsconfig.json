@@ -11,5 +11,5 @@
     "strict": true,
     "moduleResolution": "bundler"
   },
-  "exclude": ["node_modules/**/node_modules"]
+  "exclude": ["node_modules/**/node_modules", "**/*.stories.svelte"]
 }

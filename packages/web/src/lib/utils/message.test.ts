@@ -76,7 +76,7 @@ describe('parseCommandMessage', () => {
     // Real data from session
     const content = '<command-message>vsix</command-message>\n<command-name>/vsix</command-name>'
     const result = parseCommandMessage(content)
-    expect(result).toEqual({ name: '/vsix', message: 'vsix' })
+    expect(result).toEqual({ name: '/vsix', message: 'vsix', args: '' })
   })
 
   it('should return empty strings when tags are missing', () => {

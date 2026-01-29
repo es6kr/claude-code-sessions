@@ -56,8 +56,10 @@
   const displayTitle = $derived(getDisplayTitle(customTitle, currentSummary, session?.title, 50))
 
   // Validation (logging is done server-side in /api/session)
-  const chainResult = $derived(validateChain(messages))
-  const progressResult = $derived(validateProgressMessages(messages))
+  const chainResult = $derived(validateChain(messages as Parameters<typeof validateChain>[0]))
+  const progressResult = $derived(
+    validateProgressMessages(messages as Parameters<typeof validateProgressMessages>[0])
+  )
   let isRepairing = $state(false)
 
   const handleRepairChain = async () => {

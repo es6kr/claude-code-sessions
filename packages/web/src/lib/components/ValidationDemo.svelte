@@ -164,7 +164,12 @@
   <!-- Message List -->
   <div class="flex-1 space-y-2 overflow-y-auto">
     {#each messages as msg, i (`${msg.type}-${msg.uuid ?? (msg as unknown as { messageId?: string }).messageId ?? i}`)}
-      <MessageItem {msg} sessionId="demo" isFirst={i === 0} onDelete={handleDelete} />
+      <MessageItem
+        msg={msg as Message}
+        sessionId="demo"
+        isFirst={i === 0}
+        onDelete={handleDelete}
+      />
     {/each}
     {#if messages.length === 0}
       <div class="text-center text-gh-text-secondary py-8">

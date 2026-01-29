@@ -31,17 +31,15 @@ jobs:
       - name: Build
         run: pnpm build
 
-      - name: Typecheck (core)
-        run: pnpm --filter @claude-sessions/core typecheck
-
-      - name: Typecheck (mcp)
-        run: pnpm --filter claude-sessions-mcp typecheck
+      - name: Typecheck
+        run: pnpm typecheck
 
       - name: Lint
         run: pnpm lint
 
-      - name: Test (core)
-        run: pnpm --filter @claude-sessions/core test
+      - name: Test (core, mcp, web)
+        run: pnpm test:core && pnpm test:mcp && pnpm test:web
 
       - name: Test (vscode extension)
+        if: ${{ !env.ACT }}
         run: xvfb-run -a pnpm --filter claude-sessions test
