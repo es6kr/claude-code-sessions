@@ -75,6 +75,26 @@
     }
   }
 
+  const handleRepairProgress = async () => {
+    if (!session || isRepairing) return
+    isRepairing = true
+    try {
+      // Delete each progress message with chain repair
+      for (const error of progressResult.errors) {
+        const msg = messages[error.line - 1]
+        if (msg?.uuid) {
+          await api.deleteMessage(session.projectName, session.id, msg.uuid)
+        }
+      }
+      // Refresh messages from server
+      await syncFromServer()
+    } catch (e) {
+      console.error('Failed to remove progress messages:', e)
+    } finally {
+      isRepairing = false
+    }
+  }
+
   let activeTab = $state<TabType>('messages')
   let agentMessages = $state<Message[]>([])
   let loadingAgent = $state(false)
@@ -317,6 +337,7 @@
             progressErrors={progressResult.errors}
             {isRepairing}
             onRepair={handleRepairChain}
+            onRepairProgress={handleRepairProgress}
           />
         </div>
       {:else}

@@ -91,6 +91,46 @@ describe('validateChain', () => {
     expect(result.errors.some((e) => e.type === 'orphan_parent')).toBe(true)
   })
 
+  it('should not error when parentUuid is null but logicalParentUuid exists', () => {
+    const compactBoundary = [
+      {
+        type: 'user',
+        uuid: 'first-user',
+        parentUuid: null,
+        timestamp: '2026-01-20T04:35:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+      },
+      {
+        type: 'assistant',
+        uuid: 'assistant-1',
+        parentUuid: 'first-user',
+        timestamp: '2026-01-20T04:35:01.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Hi' }] },
+      },
+      {
+        type: 'system',
+        subtype: 'compact_boundary',
+        uuid: 'compact-1',
+        parentUuid: null, // null but has logicalParentUuid
+        logicalParentUuid: 'assistant-1',
+        timestamp: '2026-01-20T04:36:00.000Z',
+        content: 'Conversation compacted',
+      },
+      {
+        type: 'user',
+        uuid: 'user-after-compact',
+        parentUuid: 'compact-1',
+        timestamp: '2026-01-20T04:37:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Continue' }] },
+      },
+    ]
+
+    const result = validateChain(compactBoundary)
+
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+
   it('should skip file-history-snapshot in chain validation', () => {
     // file-history-snapshot has no uuid
     const result = validateChain(messages)

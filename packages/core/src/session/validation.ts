@@ -48,6 +48,7 @@ export interface GenericMessage {
   type?: string
   uuid?: string
   parentUuid?: string | null
+  logicalParentUuid?: string | null
   message?: MessagePayload
   messageId?: string
 }
@@ -109,13 +110,16 @@ export function validateChain(
     }
 
     // Check for broken chain (null/undefined parentUuid for non-first message)
+    // Skip if logicalParentUuid exists (e.g., compact_boundary messages)
     if (msg.parentUuid === null || msg.parentUuid === undefined) {
-      errors.push({
-        type: 'broken_chain',
-        uuid: msg.uuid,
-        line: i + 1,
-        parentUuid: null,
-      })
+      if (!msg.logicalParentUuid) {
+        errors.push({
+          type: 'broken_chain',
+          uuid: msg.uuid,
+          line: i + 1,
+          parentUuid: null,
+        })
+      }
       continue
     }
 
