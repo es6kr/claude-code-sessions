@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   validateChain,
   validateToolUseResult,
+  validateProgressMessages,
   deleteMessageWithChainRepair,
   repairParentUuidChain,
 } from '../session/validation.js'
@@ -344,6 +345,122 @@ describe('validateToolUseResult', () => {
 
     expect(result.valid).toBe(true)
     expect(result.errors).toHaveLength(0)
+  })
+})
+
+describe('validateProgressMessages', () => {
+  it('should detect Stop hookEvent as error', () => {
+    const messages = [
+      { type: 'user', uuid: 'u1', parentUuid: null },
+      { type: 'progress', uuid: 'p1', parentUuid: 'u1', hookEvent: 'Stop' },
+      { type: 'assistant', uuid: 'a1', parentUuid: 'p1' },
+    ]
+
+    const result = validateProgressMessages(messages)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toMatchObject({
+      type: 'unwanted_progress',
+      line: 2,
+      hookEvent: 'Stop',
+    })
+  })
+
+  it('should ignore non-Stop and non-SessionStart:resume progress messages', () => {
+    const messages = [
+      { type: 'user', uuid: 'u1', parentUuid: null },
+      {
+        type: 'progress',
+        uuid: 'p1',
+        parentUuid: 'u1',
+        hookEvent: 'SessionStart',
+        hookName: 'SessionStart:init', // not :resume
+      },
+      { type: 'assistant', uuid: 'a1', parentUuid: 'p1' },
+      { type: 'progress', uuid: 'p2', parentUuid: 'a1', hookEvent: 'PostToolUse' },
+    ]
+
+    const result = validateProgressMessages(messages)
+
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('should detect SessionStart:resume as error', () => {
+    const messages = [
+      { type: 'user', uuid: 'u1', parentUuid: null },
+      {
+        type: 'progress',
+        uuid: 'p1',
+        parentUuid: 'u1',
+        hookEvent: 'SessionStart',
+        hookName: 'SessionStart:resume',
+      },
+    ]
+
+    const result = validateProgressMessages(messages)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].hookName).toBe('SessionStart:resume')
+  })
+
+  it('should only count Stop among multiple progress messages', () => {
+    const messages = [
+      { type: 'user', uuid: 'u1', parentUuid: null },
+      { type: 'progress', uuid: 'p1', parentUuid: 'u1', hookEvent: 'SessionStart' },
+      { type: 'progress', uuid: 'p2', parentUuid: 'p1', hookEvent: 'Stop' },
+      { type: 'assistant', uuid: 'a1', parentUuid: 'p2' },
+    ]
+
+    const result = validateProgressMessages(messages)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0].hookEvent).toBe('Stop')
+  })
+
+  it('should return valid when no progress messages', () => {
+    const messages = [
+      { type: 'user', uuid: 'u1', parentUuid: null },
+      { type: 'assistant', uuid: 'a1', parentUuid: 'u1' },
+    ]
+
+    const result = validateProgressMessages(messages)
+
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('should handle empty messages array', () => {
+    const result = validateProgressMessages([])
+
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
+  })
+
+  it('should detect Stop in nested data.hookEvent format', () => {
+    const messages = [
+      { type: 'user', uuid: 'u1', parentUuid: null },
+      {
+        type: 'progress',
+        uuid: 'p1',
+        parentUuid: 'u1',
+        data: { type: 'hook_progress', hookEvent: 'Stop' },
+      },
+      { type: 'assistant', uuid: 'a1', parentUuid: 'p1' },
+    ]
+
+    const result = validateProgressMessages(messages)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toMatchObject({
+      type: 'unwanted_progress',
+      line: 2,
+      hookEvent: 'Stop',
+    })
   })
 })
 

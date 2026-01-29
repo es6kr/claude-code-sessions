@@ -21,9 +21,16 @@ export interface ToolUseResultError {
   toolUseId: string
 }
 
+export interface ProgressError {
+  type: 'unwanted_progress'
+  line: number
+  hookEvent?: string
+  hookName?: string
+}
+
 export interface ValidationResult {
   valid: boolean
-  errors: (ChainError | ToolUseResultError)[]
+  errors: (ChainError | ToolUseResultError | ProgressError)[]
 }
 
 interface MessageContent {
@@ -37,7 +44,7 @@ interface MessagePayload {
   content?: unknown // Can be string | MessageContent[] | etc.
 }
 
-interface GenericMessage {
+export interface GenericMessage {
   type?: string
   uuid?: string
   parentUuid?: string | null
@@ -54,7 +61,9 @@ interface GenericMessage {
  * - First message can have null parentUuid
  * - Subsequent messages must have valid parentUuid pointing to existing uuid
  */
-export function validateChain(messages: readonly GenericMessage[]): ValidationResult {
+export function validateChain(
+  messages: readonly GenericMessage[]
+): ValidationResult & { errors: ChainError[] } {
   const errors: ChainError[] = []
 
   // Collect all uuids for validation
@@ -128,13 +137,55 @@ export function validateChain(messages: readonly GenericMessage[]): ValidationRe
 }
 
 /**
+ * Validate for unwanted progress messages (hook outputs)
+ *
+ * Only 'Stop' hookEvent is treated as an error (should be removed)
+ */
+export function validateProgressMessages(
+  messages: readonly GenericMessage[]
+): ValidationResult & { errors: ProgressError[] } {
+  const errors: ProgressError[] = []
+
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i]
+    if (msg.type === 'progress') {
+      const progressMsg = msg as GenericMessage & {
+        hookEvent?: string
+        hookName?: string
+        data?: { hookEvent?: string; hookName?: string }
+      }
+      // Support both flat (hookEvent) and nested (data.hookEvent) formats
+      const hookEvent = progressMsg.hookEvent ?? progressMsg.data?.hookEvent
+      const hookName = progressMsg.hookName ?? progressMsg.data?.hookName
+
+      // 'Stop' hookEvent or 'SessionStart:resume' hookName is an error
+      if (hookEvent === 'Stop' || hookName === 'SessionStart:resume') {
+        errors.push({
+          type: 'unwanted_progress',
+          line: i + 1,
+          hookEvent,
+          hookName,
+        })
+      }
+    }
+  }
+
+  return {
+    valid: errors.length === 0,
+    errors,
+  }
+}
+
+/**
  * Validate tool_use_id / tool_result matching
  *
  * Rules:
  * - All tool_result blocks must have a corresponding tool_use block in the session
  * - tool_use blocks are collected from all messages (not just previous)
  */
-export function validateToolUseResult(messages: readonly GenericMessage[]): ValidationResult {
+export function validateToolUseResult(
+  messages: readonly GenericMessage[]
+): ValidationResult & { errors: ToolUseResultError[] } {
   const errors: ToolUseResultError[] = []
 
   // Collect all tool_use IDs

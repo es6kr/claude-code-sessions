@@ -57,7 +57,7 @@
       uuid: '30e9bb84-a7b8-4e56-9f0b-01b00541b3e9',
       parentUuid: 'da7e4183-fedd-4075-81ca-7ba40aa162e8',
       timestamp: '2026-01-20T04:35:23.354Z',
-      data: { type: 'hook_progress', hookEvent: 'PostToolUse' },
+      data: { type: 'hook_progress', hookEvent: 'Stop' },
     },
     {
       type: 'assistant',

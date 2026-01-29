@@ -219,14 +219,14 @@ export function activate(context: vscode.ExtensionContext) {
           `Delete session "${item.label}"?`,
           { modal: true },
           'Delete',
-          'Delete & Restart Extension Host'
+          'Delete & Restart Extensions'
         )
 
-        if (confirm === 'Delete' || confirm === 'Delete & Restart Extension Host') {
+        if (confirm === 'Delete' || confirm === 'Delete & Restart Extensions') {
           await Effect.runPromise(session.deleteSession(item.projectName, item.sessionId))
           treeProvider.refresh()
 
-          if (confirm === 'Delete & Restart Extension Host') {
+          if (confirm === 'Delete & Restart Extensions') {
             await vscode.commands.executeCommand('workbench.action.restartExtensionHost')
           } else {
             vscode.window.showInformationMessage('Session deleted')
