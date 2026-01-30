@@ -477,11 +477,6 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
     // Generate new session ID for the OLD messages (before split point)
     const newSessionId = crypto.randomUUID()
 
-    // Find all summary messages and get the last (most recent) one
-    const summaryMessages = allMessages.filter((m) => m.type === 'summary')
-    const summaryMessage =
-      summaryMessages.length > 0 ? summaryMessages[summaryMessages.length - 1] : null
-
     // Check if the split message is a continuation summary
     const splitMessage = allMessages[splitIndex]
     const shouldDuplicate = isContinuationSummary(splitMessage)
@@ -521,17 +516,6 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
       ...msg,
       sessionId: newSessionId,
     }))
-
-    // Clone summary message to new session (old messages) if exists
-    if (summaryMessage) {
-      const clonedSummary = {
-        ...summaryMessage,
-        sessionId: newSessionId,
-        leafUuid: updatedMovedMessages[0]?.uuid ?? null,
-      } as Message
-      // Add summary at the beginning of moved messages
-      updatedMovedMessages.unshift(clonedSummary)
-    }
 
     // Write kept messages (newer) to original file (keeps original ID)
     const keptContent = keptMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
