@@ -85,7 +85,12 @@
   // Get tooltip text based on what's displayed as title (using core utility)
   const getTooltipText = (session: SessionMeta): string => {
     const data = getSessionData(session.projectName, session.id)
-    return getSessionTooltip(data?.customTitle, data?.currentSummary, session.title)
+    return getSessionTooltip({
+      id: session.id,
+      title: session.title,
+      customTitle: data?.customTitle,
+      currentSummary: data?.currentSummary,
+    })
   }
 
   // Check if session has agents or todos (using core utilities)

@@ -96,11 +96,6 @@ export const extractTitle = (input: MessagePayload | string | undefined): string
     cleaned = cleaned.split('\n\n')[0]
   }
 
-  // Limit to 100 characters
-  if (cleaned.length > 100) {
-    return cleaned.slice(0, 100) + '...'
-  }
-
   return cleaned || 'Untitled'
 }
 
@@ -329,31 +324,41 @@ export const sessionHasSubItems = (data: {
 
 /**
  * Get session tooltip text based on what's displayed as title
- * Shows complementary information to the displayed title
+ * Shows complementary information to the displayed title + session ID
  *
  * Logic:
  * - If customTitle is displayed → show currentSummary
  * - If currentSummary is displayed → show original title
  * - If title is displayed → show currentSummary
+ * - Always append session ID at the end
  */
-export const getSessionTooltip = (
-  customTitle: string | undefined,
-  currentSummary: string | undefined,
-  title: string | undefined
-): string => {
+export const getSessionTooltip = (session: {
+  id: string
+  title?: string
+  customTitle?: string
+  currentSummary?: string
+}): string => {
+  const { id, title, customTitle, currentSummary } = session
+  let text: string
   // If customTitle is displayed, show currentSummary in tooltip
   if (customTitle && currentSummary) {
-    return currentSummary
+    text = currentSummary
   }
   // If currentSummary is displayed as title, show original title in tooltip
-  if (currentSummary && title && title !== 'Untitled') {
-    return title
+  else if (currentSummary && title && title !== 'Untitled') {
+    text = title
   }
   // If title is displayed, show currentSummary if available
-  if (currentSummary) {
-    return currentSummary
+  else if (currentSummary) {
+    text = currentSummary
+  } else {
+    text = title ?? 'No title'
   }
-  return title ?? 'No summary available'
+
+  // Append session ID
+  text += `\n\nID: ${id}`
+
+  return text
 }
 
 /**

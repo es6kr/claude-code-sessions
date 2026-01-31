@@ -8,6 +8,7 @@ import {
   getTotalTodoCount,
   sessionHasSubItems,
   canMoveSession,
+  getSessionTooltip,
   TREE_ICONS,
   getTodoIcon,
   generateTreeNodeId,
@@ -260,7 +261,8 @@ export class SessionTreeProvider
           s.sortTimestamp,
           undefined, // todo
           undefined, // agentId
-          undefined // itemIndex
+          undefined, // itemIndex
+          getSessionTooltip(s) // tooltip
         )
       })
     }
@@ -432,7 +434,8 @@ export class SessionTreeItem extends vscode.TreeItem {
     public readonly sortTimestamp?: number,
     public readonly todo?: TodoItem,
     public readonly agentId?: string,
-    public readonly itemIndex?: number
+    public readonly itemIndex?: number,
+    public readonly sessionTooltipText?: string
   ) {
     super(label, collapsibleState)
 
@@ -452,6 +455,11 @@ export class SessionTreeItem extends vscode.TreeItem {
         parts.push(formatRelativeTime(sortTimestamp))
       }
       this.description = parts.join(' · ')
+
+      // Set tooltip with session info and ID
+      if (sessionTooltipText) {
+        this.tooltip = sessionTooltipText
+      }
 
       this.command = {
         command: 'claudeSessions.openSession',
