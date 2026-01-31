@@ -1,1 +1,33 @@
-pnpm test:act
+#!/bin/sh
+
+# Get the current branch
+current_branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Read stdin to check what's being pushed (branch or tag)
+while read local_ref local_sha remote_ref remote_sha; do
+  # Check if pushing a tag
+  if echo "$remote_ref" | grep -q "^refs/tags/"; then
+    tag_name=$(echo "$remote_ref" | sed 's|refs/tags/||')
+
+    if echo "$tag_name" | grep -q "^vscode-v"; then
+      echo "📦 VSCode tag detected: $tag_name"
+      echo "Running VSCode extension tests only..."
+      pnpm --filter claude-sessions test
+      exit $?
+    elif echo "$tag_name" | grep -q "^v"; then
+      echo "📦 Version tag detected: $tag_name"
+      echo "Running core/mcp/web tests (excluding VSCode)..."
+      pnpm test:core && pnpm test:mcp && pnpm test:web
+      exit $?
+    fi
+  fi
+done
+
+# Branch push
+if [ "$current_branch" = "main" ]; then
+  echo "🔍 Main branch: running full CI with act..."
+  pnpm test:act
+else
+  echo "🧪 Branch $current_branch: running quick tests..."
+  pnpm test
+fi
