@@ -70,7 +70,17 @@ export {
   tryParseJsonLine,
   parseJsonlLines,
   readJsonlFile,
+  // UI shared utilities
+  formatRelativeTime,
+  getTotalTodoCount,
+  sessionHasSubItems,
+  getSessionTooltip,
+  canMoveSession,
 } from './utils.js'
+
+// Tree view constants and utilities
+export type { TreeItemType } from './tree-constants.js'
+export { TREE_ICONS, getTodoIcon, generateTreeNodeId, parseTreeNodeId } from './tree-constants.js'
 
 // Agent management
 export {

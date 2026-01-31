@@ -4,6 +4,11 @@
   import {
     sortProjects,
     getDisplayTitle as coreGetDisplayTitle,
+    getSessionTooltip,
+    getTotalTodoCount,
+    sessionHasSubItems,
+    canMoveSession,
+    TREE_ICONS,
     type SessionSortField,
     type SessionSortOrder,
   } from '@claude-sessions/core'
@@ -77,38 +82,30 @@
     return coreGetDisplayTitle(data?.customTitle, data?.currentSummary, session.title)
   }
 
-  // Get tooltip text based on what's displayed as title
+  // Get tooltip text based on what's displayed as title (using core utility)
   const getTooltipText = (session: SessionMeta): string => {
     const data = getSessionData(session.projectName, session.id)
-    // If customTitle is displayed, show currentSummary in tooltip
-    if (data?.customTitle && data?.currentSummary) {
-      return data.currentSummary
-    }
-    // If currentSummary is displayed as title, show original title in tooltip
-    if (data?.currentSummary && session.title && session.title !== 'Untitled') {
-      return session.title
-    }
-    // If title is displayed, show currentSummary if available
-    if (data?.currentSummary) {
-      return data.currentSummary
-    }
-    return session.title ?? 'No summary available'
+    return getSessionTooltip(data?.customTitle, data?.currentSummary, session.title)
   }
 
-  // Check if session has agents or todos
+  // Check if session has agents or todos (using core utilities)
   const getSessionInfo = (
     session: SessionMeta
   ): { agents: number; todos: number; summaries: number } => {
     const data = getSessionData(session.projectName, session.id)
-    const todoCount = data?.todos
-      ? data.todos.sessionTodos.length +
-        data.todos.agentTodos.reduce((acc, at) => acc + at.todos.length, 0)
-      : 0
+    const todoCount = data?.todos ? getTotalTodoCount(data.todos) : 0
     return {
       agents: data?.agents.length ?? 0,
       todos: todoCount,
       summaries: data?.summaries.length ?? 0,
     }
+  }
+
+  // Check if session has sub-items (using core utility)
+  const hasSessionSubItems = (session: SessionMeta): boolean => {
+    const data = getSessionData(session.projectName, session.id)
+    if (!data) return false
+    return sessionHasSubItems(data)
   }
 
   // Sort projects: current project first, then user's home paths, then others
@@ -155,7 +152,7 @@
   }
 
   const handleDragOver = (e: DragEvent, projectName: string) => {
-    if (!draggedSession || draggedSession.projectName === projectName) return
+    if (!draggedSession || !canMoveSession(draggedSession.projectName, projectName)) return
     e.preventDefault()
     if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
     dropTargetProject = projectName
@@ -168,7 +165,7 @@
   const handleDrop = (e: DragEvent, targetProject: string) => {
     e.preventDefault()
     dropTargetProject = null
-    if (!draggedSession || draggedSession.projectName === targetProject) return
+    if (!draggedSession || !canMoveSession(draggedSession.projectName, targetProject)) return
     onMoveSession?.(draggedSession, targetProject)
     draggedSession = null
   }
@@ -246,8 +243,7 @@
                 {@const data = getSessionData(session.projectName, session.id)}
                 {@const isSummaryFallback = !data?.customTitle && !data?.currentSummary}
                 {@const isExpanded = expandedSessions.has(session.id)}
-                {@const hasSubItems =
-                  sessionInfo.summaries > 0 || sessionInfo.agents > 0 || sessionInfo.todos > 0}
+                {@const hasSubItems = hasSessionSubItems(session)}
                 <li
                   class="relative border-t border-gh-border-subtle group {isSelected
                     ? 'bg-gh-accent/20 border-l-3 border-l-gh-accent'
@@ -288,14 +284,14 @@
                           class="flex items-center gap-0.5"
                           title="{session.messageCount} messages"
                         >
-                          <span>💬</span><span>{session.messageCount}</span>
+                          <span>{TREE_ICONS.session.emoji}</span><span>{session.messageCount}</span>
                         </span>
                         {#if sessionInfo.agents > 0}
                           <span
                             class="flex items-center gap-0.5"
                             title="{sessionInfo.agents} agent(s)"
                           >
-                            <span>🤖</span><span>{sessionInfo.agents}</span>
+                            <span>{TREE_ICONS.agent.emoji}</span><span>{sessionInfo.agents}</span>
                           </span>
                         {/if}
                         {#if sessionInfo.todos > 0}
@@ -303,7 +299,9 @@
                             class="flex items-center gap-0.5"
                             title="{sessionInfo.todos} todo(s)"
                           >
-                            <span>📋</span><span>{sessionInfo.todos}</span>
+                            <span>{TREE_ICONS['todos-group'].emoji}</span><span
+                              >{sessionInfo.todos}</span
+                            >
                           </span>
                         {/if}
                       </span>
@@ -371,7 +369,7 @@
                             title={summary.summary}
                           >
                             <div class="flex items-start gap-2">
-                              <span class="flex-shrink-0">📝</span>
+                              <span class="flex-shrink-0">{TREE_ICONS.summary.emoji}</span>
                               <span class="overflow-hidden text-ellipsis line-clamp-2">
                                 {summary.summary.length > 100
                                   ? summary.summary.slice(0, 97) + '...'
@@ -391,7 +389,7 @@
                         <li
                           class="py-1.5 px-4 pl-8 text-gh-text-secondary hover:bg-gh-border-subtle/50 flex items-start gap-2"
                         >
-                          <span class="flex-shrink-0">📋</span>
+                          <span class="flex-shrink-0">{TREE_ICONS['todos-group'].emoji}</span>
                           <span>Session Todos ({data.todos.sessionTodos.length})</span>
                         </li>
                       {/if}
@@ -400,7 +398,7 @@
                           <li
                             class="py-1.5 px-4 pl-8 text-gh-text-secondary hover:bg-gh-border-subtle/50 flex items-start gap-2"
                           >
-                            <span class="flex-shrink-0">📋</span>
+                            <span class="flex-shrink-0">{TREE_ICONS['todos-group'].emoji}</span>
                             <span>Agent Todos ({agentTodo.todos.length})</span>
                           </li>
                         {/each}
@@ -412,7 +410,7 @@
                             class="py-1.5 px-4 pl-8 text-gh-text-secondary hover:bg-gh-border-subtle/50 flex items-start gap-2"
                             title={agent.name ?? agent.id}
                           >
-                            <span class="flex-shrink-0">🤖</span>
+                            <span class="flex-shrink-0">{TREE_ICONS.agent.emoji}</span>
                             <span class="overflow-hidden text-ellipsis whitespace-nowrap">
                               {agent.name ?? agent.id.slice(0, 12) + '...'} ({agent.messageCount} msgs)
                             </span>

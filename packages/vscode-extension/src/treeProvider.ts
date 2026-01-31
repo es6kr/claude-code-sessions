@@ -1,7 +1,17 @@
 import * as vscode from 'vscode'
 import * as session from '@claude-sessions/core'
-import type { TodoItem, SessionSortOptions } from '@claude-sessions/core'
-import { maskHomePath, sortProjects } from '@claude-sessions/core'
+import type { TodoItem, SessionSortOptions, TreeItemType } from '@claude-sessions/core'
+import {
+  maskHomePath,
+  sortProjects,
+  formatRelativeTime,
+  getTotalTodoCount,
+  sessionHasSubItems,
+  canMoveSession,
+  TREE_ICONS,
+  getTodoIcon,
+  generateTreeNodeId,
+} from '@claude-sessions/core'
 import { Effect } from 'effect'
 import { homedir } from 'os'
 
@@ -148,7 +158,7 @@ export class SessionTreeProvider
         to: target.projectName,
       })
 
-      if (sessionItem.projectName === target.projectName) {
+      if (!canMoveSession(sessionItem.projectName, target.projectName)) {
         debug('skipping: same project')
         continue
       }
@@ -231,10 +241,7 @@ export class SessionTreeProvider
 
       return projectData.sessions.map((s, index) => {
         // Calculate if session has sub-items (summaries, agents, todos)
-        const todoCount =
-          s.todos.sessionTodos.length +
-          s.todos.agentTodos.reduce((sum, a) => sum + a.todos.length, 0)
-        const hasSubItems = s.summaries.length > 0 || s.agents.length > 0 || todoCount > 0
+        const hasSubItems = sessionHasSubItems(s)
 
         // Auto-expand first session in current project
         const shouldExpand = isCurrentProject && index === 0 && hasSubItems
@@ -281,9 +288,7 @@ export class SessionTreeProvider
       }
 
       // Todos group
-      const totalTodos =
-        sessionData.todos.sessionTodos.length +
-        sessionData.todos.agentTodos.reduce((sum, a) => sum + a.todos.length, 0)
+      const totalTodos = getTotalTodoCount(sessionData.todos)
       if (totalTodos > 0) {
         items.push(
           new SessionTreeItem(
@@ -416,16 +421,6 @@ export class SessionTreeProvider
   }
 }
 
-type TreeItemType =
-  | 'project'
-  | 'session'
-  | 'summaries-group'
-  | 'todos-group'
-  | 'agents-group'
-  | 'summary'
-  | 'todo'
-  | 'agent'
-
 export class SessionTreeItem extends vscode.TreeItem {
   constructor(
     public readonly label: string,
@@ -442,27 +437,19 @@ export class SessionTreeItem extends vscode.TreeItem {
     super(label, collapsibleState)
 
     // Set unique ID for drag and drop to work (required by VSCode)
-    // Include itemIndex and agentId for uniqueness in lists
-    let uniqueId = `${type}:${projectName}:${sessionId}`
-    if (agentId) {
-      uniqueId += `:${agentId}`
-    }
-    if (itemIndex !== undefined) {
-      uniqueId += `:${itemIndex}`
-    }
-    this.id = uniqueId
+    this.id = generateTreeNodeId(type, projectName, sessionId, agentId, itemIndex)
     this.contextValue = type
 
     if (type === 'project') {
-      this.iconPath = new vscode.ThemeIcon('folder')
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS.project.codicon)
       this.description = `${count ?? 0} sessions`
     } else if (type === 'session') {
-      this.iconPath = new vscode.ThemeIcon('comment-discussion')
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS.session.codicon)
 
       // Simple description: count + timestamp
       const parts: string[] = [`${count ?? 0}`]
       if (sortTimestamp) {
-        parts.push(formatDate(sortTimestamp))
+        parts.push(formatRelativeTime(sortTimestamp))
       }
       this.description = parts.join(' · ')
 
@@ -472,47 +459,32 @@ export class SessionTreeItem extends vscode.TreeItem {
         arguments: [this],
       }
     } else if (type === 'summaries-group') {
-      this.iconPath = new vscode.ThemeIcon('history')
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS['summaries-group'].codicon)
       this.description = `${count ?? 0}`
     } else if (type === 'todos-group') {
-      this.iconPath = new vscode.ThemeIcon('checklist')
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS['todos-group'].codicon)
       this.description = `${count ?? 0}`
     } else if (type === 'agents-group') {
-      this.iconPath = new vscode.ThemeIcon('hubot')
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS['agents-group'].codicon)
       this.description = `${count ?? 0}`
     } else if (type === 'summary') {
-      this.iconPath = new vscode.ThemeIcon('note')
-      this.description = sortTimestamp ? formatDate(sortTimestamp) : undefined
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS.summary.codicon)
+      this.description = sortTimestamp ? formatRelativeTime(sortTimestamp) : undefined
     } else if (type === 'todo') {
       const status = todo?.status ?? 'pending'
-      if (status === 'completed') {
-        this.iconPath = new vscode.ThemeIcon('pass-filled', new vscode.ThemeColor('charts.green'))
-      } else if (status === 'in_progress') {
-        this.iconPath = new vscode.ThemeIcon('sync~spin', new vscode.ThemeColor('charts.yellow'))
+      const todoIcon = getTodoIcon(status)
+      if (todoIcon.color) {
+        this.iconPath = new vscode.ThemeIcon(
+          todoIcon.codicon,
+          new vscode.ThemeColor(`charts.${todoIcon.color}`)
+        )
       } else {
-        this.iconPath = new vscode.ThemeIcon('circle-outline')
+        this.iconPath = new vscode.ThemeIcon(todoIcon.codicon)
       }
-      this.description = agentId ? `🤖 ${agentId.slice(0, 8)}` : undefined
+      this.description = agentId ? `${TREE_ICONS.agent.emoji} ${agentId.slice(0, 8)}` : undefined
     } else if (type === 'agent') {
-      this.iconPath = new vscode.ThemeIcon('hubot')
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS.agent.codicon)
       this.tooltip = agentId
     }
   }
-}
-
-function formatDate(timestamp: number): string {
-  const date = new Date(timestamp)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-
-  const minutes = Math.floor(diff / 60000)
-  const hours = Math.floor(diff / 3600000)
-  const days = Math.floor(diff / 86400000)
-
-  if (minutes < 1) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
-  if (hours < 24) return `${hours}h ago`
-  if (days < 7) return `${days}d ago`
-
-  return date.toLocaleDateString()
 }

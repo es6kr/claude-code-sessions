@@ -1,20 +1,18 @@
+import type {
+  Project,
+  SessionMeta,
+  SummaryInfo,
+  TodoItem,
+  SessionTodos,
+  AgentInfo,
+  SessionSortField,
+  SessionSortOrder,
+} from '@claude-sessions/core'
+
+// Re-export core types
+export type { Project, SessionMeta, SummaryInfo, TodoItem, SessionTodos, AgentInfo }
+
 const BASE_URL = '/api'
-
-export interface Project {
-  name: string
-  displayName: string
-  path: string
-  sessionCount: number
-}
-
-export interface SessionMeta {
-  id: string
-  projectName: string
-  title?: string
-  messageCount: number
-  createdAt?: string
-  updatedAt?: string
-}
 
 // Content item with recursive content support
 export interface ContentItem {
@@ -251,35 +249,6 @@ export const searchSessions = (
   return get<SearchResult[]>(`/search?${params}`)
 }
 
-// Summary info for session tree
-export interface SummaryInfo {
-  summary: string
-  leafUuid?: string
-  timestamp?: string
-}
-
-// Todo item
-export interface TodoItem {
-  content: string
-  status: 'pending' | 'in_progress' | 'completed'
-  activeForm?: string
-}
-
-// Session todos
-export interface SessionTodos {
-  sessionId: string
-  sessionTodos: TodoItem[]
-  agentTodos: { agentId: string; todos: TodoItem[] }[]
-  hasTodos: boolean
-}
-
-// Agent info for tree display
-export interface AgentInfo {
-  id: string
-  name?: string
-  messageCount: number
-}
-
 // Extended session data with agents, todos, summaries (from core.SessionTreeData)
 export interface SessionData {
   id: string
@@ -296,10 +265,10 @@ export interface SessionData {
   lastCompactBoundaryUuid?: string
 }
 
-// Sort options for session list
+// Sort options for session list (use core types)
 export interface SessionSortOptions {
-  field?: 'summary' | 'modified' | 'created' | 'updated' | 'messageCount' | 'title'
-  order?: 'asc' | 'desc'
+  field?: SessionSortField
+  order?: SessionSortOrder
 }
 
 // Expand project - loads all session data including agents, todos, summaries

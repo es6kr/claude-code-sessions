@@ -45,4 +45,15 @@ export const renderMarkdown = (text: string): string => {
 }
 
 // Re-export from core
-export { getDisplayTitle } from '@claude-sessions/core'
+export {
+  getDisplayTitle,
+  formatRelativeTime,
+  getTotalTodoCount,
+  sessionHasSubItems,
+  getSessionTooltip,
+  canMoveSession,
+} from '@claude-sessions/core'
+
+// Re-export tree constants
+export { TREE_ICONS, getTodoIcon, generateTreeNodeId } from '@claude-sessions/core'
+export type { TreeItemType } from '@claude-sessions/core'

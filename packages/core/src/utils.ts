@@ -9,6 +9,7 @@ import type {
   TextContent,
   AskUserQuestionResult,
   SummaryInfo,
+  SessionTodos,
 } from './types.js'
 import { createLogger } from './logger.js'
 
@@ -276,3 +277,89 @@ export const readJsonlFile = <T = Record<string, unknown>>(filePath: string) =>
     const lines = content.trim().split('\n').filter(Boolean)
     return parseJsonlLines<T>(lines, filePath)
   })
+
+// ============================================================================
+// UI Shared Utilities (VSCode Extension & Web UI)
+// ============================================================================
+
+/**
+ * Format timestamp as relative time (e.g., "2h ago", "3d ago")
+ * Used by both VSCode Extension tree view and Web UI
+ *
+ * @param timestamp - Unix timestamp (ms) or ISO date string
+ * @returns Relative time string
+ */
+export const formatRelativeTime = (timestamp: number | string): string => {
+  const date = typeof timestamp === 'string' ? new Date(timestamp) : new Date(timestamp)
+  const now = new Date()
+  const diff = now.getTime() - date.getTime()
+
+  const minutes = Math.floor(diff / 60000)
+  const hours = Math.floor(diff / 3600000)
+  const days = Math.floor(diff / 86400000)
+
+  if (minutes < 1) return 'just now'
+  if (minutes < 60) return `${minutes}m ago`
+  if (hours < 24) return `${hours}h ago`
+  if (days < 7) return `${days}d ago`
+
+  return date.toLocaleDateString()
+}
+
+/**
+ * Calculate total todo count from session todos
+ * Includes both session-level and agent-level todos
+ */
+export const getTotalTodoCount = (todos: SessionTodos): number => {
+  return todos.sessionTodos.length + todos.agentTodos.reduce((sum, a) => sum + a.todos.length, 0)
+}
+
+/**
+ * Check if session has sub-items (summaries, agents, or todos)
+ * Used to determine if tree item should be expandable
+ */
+export const sessionHasSubItems = (data: {
+  summaries: { length: number }
+  agents: { length: number }
+  todos: SessionTodos
+}): boolean => {
+  const todoCount = getTotalTodoCount(data.todos)
+  return data.summaries.length > 0 || data.agents.length > 0 || todoCount > 0
+}
+
+/**
+ * Get session tooltip text based on what's displayed as title
+ * Shows complementary information to the displayed title
+ *
+ * Logic:
+ * - If customTitle is displayed → show currentSummary
+ * - If currentSummary is displayed → show original title
+ * - If title is displayed → show currentSummary
+ */
+export const getSessionTooltip = (
+  customTitle: string | undefined,
+  currentSummary: string | undefined,
+  title: string | undefined
+): string => {
+  // If customTitle is displayed, show currentSummary in tooltip
+  if (customTitle && currentSummary) {
+    return currentSummary
+  }
+  // If currentSummary is displayed as title, show original title in tooltip
+  if (currentSummary && title && title !== 'Untitled') {
+    return title
+  }
+  // If title is displayed, show currentSummary if available
+  if (currentSummary) {
+    return currentSummary
+  }
+  return title ?? 'No summary available'
+}
+
+/**
+ * Check if session can be moved to target project
+ * Returns false if source and target are the same project
+ */
+export const canMoveSession = (sourceProject: string, targetProject: string): boolean => {
+  return sourceProject !== targetProject
+}
