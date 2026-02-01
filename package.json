@@ -36,14 +36,14 @@
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-svelte": "^3.14.0",
-    "globals": "^17.0.0",
+    "globals": "^17.3.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
-    "prettier": "^3.8.0",
+    "prettier": "^3.8.1",
     "prettier-plugin-svelte": "^3.3.3",
     "svelte-eslint-parser": "^1.4.1",
     "typescript": "^5.7.0",
-    "typescript-eslint": "^8.53.0"
+    "typescript-eslint": "^8.54.0"
   },
   "lint-staged": {
     "*.svelte": [
