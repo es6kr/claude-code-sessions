@@ -337,8 +337,10 @@ export const getSessionTooltip = (session: {
   title?: string
   customTitle?: string
   currentSummary?: string
+  createdAt?: string
+  updatedAt?: string
 }): string => {
-  const { id, title, customTitle, currentSummary } = session
+  const { id, title, customTitle, currentSummary, createdAt, updatedAt } = session
   let text: string
   // If customTitle is displayed, show currentSummary in tooltip
   if (customTitle && currentSummary) {
@@ -355,8 +357,16 @@ export const getSessionTooltip = (session: {
     text = title ?? 'No title'
   }
 
-  // Append session ID
-  text += `\n\nID: ${id}`
+  // Append metadata
+  const lines: string[] = [`ID: ${id}`]
+  if (createdAt) {
+    lines.push(`Created: ${new Date(createdAt).toLocaleString()}`)
+  }
+  if (updatedAt) {
+    lines.push(`Updated: ${new Date(updatedAt).toLocaleString()}`)
+  }
+
+  text += '\n\n' + lines.join('\n')
 
   return text
 }

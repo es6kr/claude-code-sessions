@@ -14,6 +14,7 @@
   } from '@claude-sessions/core'
   import { appConfig } from '$lib/stores/config'
   import TooltipButton from './TooltipButton.svelte'
+  import FloatingTooltip from './FloatingTooltip.svelte'
   import CommandTitle from './CommandTitle.svelte'
 
   interface Props {
@@ -82,17 +83,6 @@
     return coreGetDisplayTitle(data?.customTitle, data?.currentSummary, session.title)
   }
 
-  // Get tooltip text based on what's displayed as title (using core utility)
-  const getTooltipText = (session: SessionMeta): string => {
-    const data = getSessionData(session.projectName, session.id)
-    return getSessionTooltip({
-      id: session.id,
-      title: session.title,
-      customTitle: data?.customTitle,
-      currentSummary: data?.currentSummary,
-    })
-  }
-
   // Check if session has agents or todos (using core utilities)
   const getSessionInfo = (
     session: SessionMeta
@@ -111,6 +101,33 @@
     const data = getSessionData(session.projectName, session.id)
     if (!data) return false
     return sessionHasSubItems(data)
+  }
+
+  // Tooltip cache - invalidated when projectSessionData changes
+  const tooltipCache = new Map<string, string>()
+  $effect(() => {
+    // Clear cache when session data changes
+    void projectSessionData.size
+    tooltipCache.clear()
+  })
+
+  // Get cached tooltip text
+  const getCachedTooltip = (session: SessionMeta): string => {
+    const key = `${session.projectName}:${session.id}`
+    let tooltip = tooltipCache.get(key)
+    if (!tooltip) {
+      const data = getSessionData(session.projectName, session.id)
+      tooltip = getSessionTooltip({
+        id: session.id,
+        title: session.title,
+        customTitle: data?.customTitle,
+        currentSummary: data?.currentSummary,
+        createdAt: data?.createdAt,
+        updatedAt: data?.updatedAt,
+      })
+      tooltipCache.set(key, tooltip)
+    }
+    return tooltip
   }
 
   // Sort projects: current project first, then user's home paths, then others
@@ -244,7 +261,6 @@
                 {@const isDragging = draggedSession?.id === session.id}
                 {@const sessionInfo = getSessionInfo(session)}
                 {@const displayTitle = getDisplayTitle(session)}
-                {@const tooltipText = getTooltipText(session)}
                 {@const data = getSessionData(session.projectName, session.id)}
                 {@const isSummaryFallback = !data?.customTitle && !data?.currentSummary}
                 {@const isExpanded = expandedSessions.has(session.id)}
@@ -270,93 +286,72 @@
                     {:else}
                       <span class="w-5 ml-1"></span>
                     {/if}
-                    <button
-                      class="flex-1 min-w-0 py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm"
-                      onclick={() => onSelectSession(session)}
-                      title={tooltipText}
+                    <FloatingTooltip
+                      content={getCachedTooltip(session)}
+                      class="flex-1 min-w-0 flex"
                     >
-                      <span
-                        class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap {isSummaryFallback
-                          ? 'italic text-gh-text-secondary'
-                          : ''}"
-                      >
-                        <CommandTitle title={displayTitle} />
-                      </span>
-                      <span
-                        class="flex-shrink-0 flex items-center gap-2 text-xs text-gh-text-secondary"
+                      <button
+                        class="w-full py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm"
+                        onclick={() => onSelectSession(session)}
                       >
                         <span
-                          class="flex items-center gap-0.5"
-                          title="{session.messageCount} messages"
+                          class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap {isSummaryFallback
+                            ? 'italic text-gh-text-secondary'
+                            : ''}"
                         >
-                          <span>{TREE_ICONS.session.emoji}</span><span>{session.messageCount}</span>
+                          <CommandTitle title={displayTitle} />
                         </span>
-                        {#if sessionInfo.agents > 0}
-                          <span
-                            class="flex items-center gap-0.5"
-                            title="{sessionInfo.agents} agent(s)"
-                          >
-                            <span>{TREE_ICONS.agent.emoji}</span><span>{sessionInfo.agents}</span>
-                          </span>
-                        {/if}
-                        {#if sessionInfo.todos > 0}
-                          <span
-                            class="flex items-center gap-0.5"
-                            title="{sessionInfo.todos} todo(s)"
-                          >
-                            <span>{TREE_ICONS['todos-group'].emoji}</span><span
-                              >{sessionInfo.todos}</span
+                        <span
+                          class="flex-shrink-0 flex items-center gap-2 text-xs text-gh-text-secondary"
+                        >
+                          <span class="flex items-center gap-0.5">
+                            <span>{TREE_ICONS.session.emoji}</span><span
+                              >{session.messageCount}</span
                             >
                           </span>
-                        {/if}
-                      </span>
-                    </button>
+                          {#if sessionInfo.agents > 0}
+                            <span class="flex items-center gap-0.5">
+                              <span>{TREE_ICONS.agent.emoji}</span><span>{sessionInfo.agents}</span>
+                            </span>
+                          {/if}
+                          {#if sessionInfo.todos > 0}
+                            <span class="flex items-center gap-0.5">
+                              <span>{TREE_ICONS['todos-group'].emoji}</span><span
+                                >{sessionInfo.todos}</span
+                              >
+                            </span>
+                          {/if}
+                        </span>
+                      </button>
+                    </FloatingTooltip>
 
-                    <!-- Hover overlay: summary on left, actions on right (only covers session row, not nested items) -->
+                    <!-- Action buttons (visible on hover, absolute positioned) -->
                     <div
-                      class="absolute left-0 right-0 top-0 h-8 flex items-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none {isSelected
-                        ? 'bg-gradient-to-r from-[color-mix(in_srgb,var(--color-gh-accent)_20%,var(--color-gh-bg))] via-[color-mix(in_srgb,var(--color-gh-accent)_20%,var(--color-gh-bg))] to-[color-mix(in_srgb,var(--color-gh-accent)_20%,var(--color-gh-bg))]'
-                        : 'bg-gradient-to-r from-gh-bg via-gh-bg to-gh-bg'}"
+                      class="absolute right-0 top-0 h-full flex items-center gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gh-bg"
                     >
-                      <span
-                        class="flex-1 min-w-0 pl-7 pr-2 text-xs text-gh-text-secondary italic overflow-hidden text-ellipsis whitespace-nowrap"
+                      {#if onResumeSession}
+                        <TooltipButton
+                          class="p-1 rounded hover:bg-gh-green/20 text-xs"
+                          onclick={(e) => onResumeSession(e, session)}
+                          title="Resume session"
+                        >
+                          ▶️
+                        </TooltipButton>
+                      {/if}
+                      <TooltipButton
+                        class="p-1 rounded hover:bg-gh-border text-xs"
+                        onclick={(e) => onRenameSession(e, session)}
+                        title="Rename"
                       >
-                        <!-- Left: Summary text on hover -->
-                        {#if data?.currentSummary}
-                          {data.currentSummary.length > 50
-                            ? data.currentSummary.slice(0, 47) + '...'
-                            : data.currentSummary}
-                        {:else}
-                          <CommandTitle title={displayTitle} />
-                        {/if}
-                      </span>
-
-                      <!-- Right: Action buttons -->
-                      <div class="flex-shrink-0 flex gap-0.5 pr-2 pointer-events-auto">
-                        {#if onResumeSession}
-                          <TooltipButton
-                            class="p-1 rounded hover:bg-gh-green/20 text-xs"
-                            onclick={(e) => onResumeSession(e, session)}
-                            title="Resume session"
-                          >
-                            ▶️
-                          </TooltipButton>
-                        {/if}
-                        <TooltipButton
-                          class="p-1 rounded hover:bg-gh-border text-xs"
-                          onclick={(e) => onRenameSession(e, session)}
-                          title="Rename"
-                        >
-                          ✏️
-                        </TooltipButton>
-                        <TooltipButton
-                          class="p-1 rounded hover:bg-gh-red/20 text-xs"
-                          onclick={(e) => onDeleteSession(e, session)}
-                          title="Delete"
-                        >
-                          🗑️
-                        </TooltipButton>
-                      </div>
+                        ✏️
+                      </TooltipButton>
+                      <TooltipButton
+                        class="p-1 rounded hover:bg-gh-red/20 text-xs"
+                        onclick={(e) => onDeleteSession(e, session)}
+                        title="Delete"
+                      >
+                        🗑️
+                      </TooltipButton>
                     </div>
                   </div>
 
