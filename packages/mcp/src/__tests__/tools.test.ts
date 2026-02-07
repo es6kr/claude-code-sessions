@@ -142,7 +142,7 @@ describe('MCP Tools - Integration Tests', () => {
   })
 
   describe('renameSession', () => {
-    it('should rename a session by adding title prefix', async () => {
+    it('should rename a session by adding custom-title record', async () => {
       const sessionId = 'session-to-rename'
       const newTitle = 'New Title'
       const messages = [
@@ -164,11 +164,12 @@ describe('MCP Tools - Integration Tests', () => {
       // renameSession returns { success: true } or { success: false, error: string }
       expect(result.success).toBe(true)
 
-      // Read the file and verify the title was added (custom-title record or title prefix)
+      // Read the file and verify custom-title record was appended at the end
       const content = await fs.readFile(sessionPath, 'utf-8')
       const lines = content.trim().split('\n')
-      const firstMessage = JSON.parse(lines[0])
-      expect(firstMessage.customTitle).toBe(newTitle)
+      const lastMessage = JSON.parse(lines[lines.length - 1])
+      expect(lastMessage.type).toBe('custom-title')
+      expect(lastMessage.customTitle).toBe(newTitle)
     })
   })
 

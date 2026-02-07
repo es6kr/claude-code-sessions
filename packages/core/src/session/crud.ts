@@ -23,7 +23,6 @@ import type {
   RenameSessionResult,
   SplitSessionResult,
   MoveSessionResult,
-  JsonlRecord,
 } from '../types.js'
 
 // Update summary message in session
@@ -274,114 +273,19 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
 
     const messages = parseJsonlLines<Record<string, unknown>>(lines, filePath)
 
-    // Build uuid set for this session's messages
-    const sessionUuids = new Set<string>()
-    for (const msg of messages) {
-      if (msg.uuid && typeof msg.uuid === 'string') {
-        sessionUuids.add(msg.uuid)
-      }
-    }
-
-    // Update or add custom-title in this session file
+    // Remove existing custom-title (may be at wrong position) and append to end
     const customTitleIdx = messages.findIndex((m) => m.type === 'custom-title')
-    const customTitleRecord = {
+    if (customTitleIdx >= 0) {
+      messages.splice(customTitleIdx, 1)
+    }
+    messages.push({
       type: 'custom-title',
       customTitle: newTitle,
       sessionId,
-    }
-    if (customTitleIdx >= 0) {
-      messages[customTitleIdx] = customTitleRecord
-    } else {
-      messages.unshift(customTitleRecord)
-    }
+    })
 
     const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
     yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
-
-    // Find and update first summary in OTHER session files
-    // Summary's leafUuid points to a message in THIS session
-    const projectFiles = yield* Effect.tryPromise(() => fs.readdir(projectPath))
-    const allJsonlFiles = projectFiles.filter((f) => f.endsWith('.jsonl'))
-
-    // Collect all summaries targeting this session with their file info
-    const summariesTargetingThis: {
-      file: string
-      idx: number
-      timestamp?: string
-    }[] = []
-
-    for (const file of allJsonlFiles) {
-      const otherFilePath = path.join(projectPath, file)
-      try {
-        const otherMessages = yield* readJsonlFile<Record<string, unknown>>(otherFilePath)
-
-        for (let i = 0; i < otherMessages.length; i++) {
-          const msg = otherMessages[i]
-          if (
-            msg.type === 'summary' &&
-            typeof msg.leafUuid === 'string' &&
-            sessionUuids.has(msg.leafUuid)
-          ) {
-            // Find target message timestamp
-            const targetMsg = messages.find((m) => m.uuid === msg.leafUuid)
-            summariesTargetingThis.push({
-              file,
-              idx: i,
-              timestamp: (targetMsg?.timestamp as string) ?? (msg.timestamp as string | undefined),
-            })
-          }
-        }
-      } catch {
-        // Skip unreadable files
-      }
-    }
-
-    if (summariesTargetingThis.length > 0) {
-      // Sort by timestamp ascending (oldest first), update the first one
-      summariesTargetingThis.sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
-      const firstSummary = summariesTargetingThis[0]
-
-      const summaryFilePath = path.join(projectPath, firstSummary.file)
-      const summaryMessages = yield* readJsonlFile<Record<string, unknown>>(summaryFilePath)
-
-      summaryMessages[firstSummary.idx] = {
-        ...summaryMessages[firstSummary.idx],
-        summary: newTitle,
-      }
-
-      const newSummaryContent = summaryMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
-      yield* Effect.tryPromise(() => fs.writeFile(summaryFilePath, newSummaryContent, 'utf-8'))
-    } else {
-      // No summary exists - use legacy method: add title prefix to first user message content
-      // This is recognized by Claude Code extension
-      const currentMessages = yield* readJsonlFile<Record<string, unknown>>(filePath)
-
-      const firstUserIdx = currentMessages.findIndex((m) => m.type === 'user')
-      if (firstUserIdx >= 0) {
-        const firstMsg = currentMessages[firstUserIdx] as JsonlRecord
-        const msgPayload = firstMsg.message as { content?: unknown } | undefined
-        if (msgPayload?.content && Array.isArray(msgPayload.content)) {
-          // Find first non-IDE text content
-          const textIdx = (msgPayload.content as Array<{ type?: string; text?: string }>).findIndex(
-            (item) =>
-              typeof item === 'object' &&
-              item?.type === 'text' &&
-              !item.text?.trim().startsWith('<ide_')
-          )
-
-          if (textIdx >= 0) {
-            const item = (msgPayload.content as Array<{ type?: string; text?: string }>)[textIdx]
-            const oldText = item.text ?? ''
-            // Remove existing title pattern (first line ending with \n\n)
-            const cleanedText = oldText.replace(/^[^\n]+\n\n/, '')
-            item.text = `${newTitle}\n\n${cleanedText}`
-
-            const updatedContent = currentMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
-            yield* Effect.tryPromise(() => fs.writeFile(filePath, updatedContent, 'utf-8'))
-          }
-        }
-      }
-    }
 
     return { success: true } satisfies RenameSessionResult
   })
