@@ -215,13 +215,18 @@ export const compressSession = (
     const lines = content.trim().split('\n').filter(Boolean)
     const messages = parseJsonlLines<Record<string, unknown>>(lines, filePath)
 
+    let removedCustomTitles = 0
     let removedProgress = 0
     let removedSnapshots = 0
     let truncatedOutputs = 0
 
-    // Find snapshot indices
+    // Find snapshot indices and custom-title indices
+    const customTitleIndices: number[] = []
     const snapshotIndices: number[] = []
     messages.forEach((msg, idx) => {
+      if (msg.type === 'custom-title') {
+        customTitleIndices.push(idx)
+      }
       if (msg.type === 'file-history-snapshot') {
         snapshotIndices.push(idx)
       }
@@ -230,13 +235,25 @@ export const compressSession = (
     // Collect messages to remove
     const messagesToRemove: Record<string, unknown>[] = []
 
-    // Filter messages based on keepSnapshots option and remove progress messages
+    // Filter messages based on keepSnapshots option, remove progress and duplicate custom-titles
     const filteredMessages = messages.filter((msg, idx) => {
       // Always remove progress messages (hook progress, etc.)
       if (msg.type === 'progress') {
         removedProgress++
         messagesToRemove.push(msg)
         return false
+      }
+
+      // Keep only the last custom-title record
+      if (msg.type === 'custom-title') {
+        if (
+          customTitleIndices.length > 1 &&
+          idx !== customTitleIndices[customTitleIndices.length - 1]
+        ) {
+          removedCustomTitles++
+          messagesToRemove.push(msg)
+          return false
+        }
       }
 
       if (msg.type === 'file-history-snapshot') {
@@ -285,6 +302,7 @@ export const compressSession = (
       success: true,
       originalSize,
       compressedSize,
+      removedCustomTitles,
       removedProgress,
       removedSnapshots,
       truncatedOutputs,

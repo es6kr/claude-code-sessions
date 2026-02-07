@@ -460,8 +460,9 @@ export interface CompressSessionResult {
   success: boolean
   originalSize: number
   compressedSize: number
-  removedSnapshots: number
+  removedCustomTitles: number
   removedProgress: number
+  removedSnapshots: number
   truncatedOutputs: number
   error?: string
 }
