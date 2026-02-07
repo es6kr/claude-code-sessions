@@ -4,6 +4,7 @@ import {
   folderNameToDisplayPath,
   displayPathToFolderName,
   toRelativePath,
+  folderNameToPath,
   findProjectByWorkspacePath,
   extractCwdFromContent,
   isSessionFile,
@@ -173,6 +174,29 @@ describe('toRelativePath', () => {
     expect(toRelativePath('C:\\Users\\other\\projects', 'C:\\Users\\david')).toBe(
       'C:\\Users\\other\\projects'
     )
+  })
+})
+
+describe('resumeSession path expansion (issue #14)', () => {
+  it('should produce consistent path separators after ~ expansion', async () => {
+    const nodePath = await import('path')
+
+    // Same as extension.ts line 471
+    const homeDir = process.env.HOME || process.env.USERPROFILE || ''
+    const originalPath = nodePath.join(homeDir, 'projects', 'work')
+
+    // Step 1: Convert path to folder name (what Claude Code stores)
+    const projectName = pathToFolderName(originalPath)
+
+    // Step 2: folderNameToPath (what extension calls) - extension.ts line 470
+    const folderPath = folderNameToPath(projectName)
+
+    // Step 3: extension.ts line 472
+    const cwd = folderPath.startsWith('~') ? folderPath.replace('~', homeDir) : folderPath
+
+    // macOS/Linux: PASS (forward slashes throughout)
+    // Windows: FAIL - produces C:\Users\david/projects/work (mixed slashes)
+    expect(cwd).toBe(originalPath)
   })
 })
 
