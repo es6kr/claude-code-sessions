@@ -29,7 +29,7 @@
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
-    "effect": "^3.19.14",
+    "effect": "^3.19.15",
     "marked": "^17.0.1"
   },
   "devDependencies": {
