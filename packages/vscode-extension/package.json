@@ -239,11 +239,11 @@
   "devDependencies": {
     "@types/glob": "^9.0.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.0.9",
+    "@types/node": "^25.2.1",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.0.0",
-    "glob": "^13.0.0",
+    "glob": "^13.0.1",
     "mocha": "^11.7.5",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"
