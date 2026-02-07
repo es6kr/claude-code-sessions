@@ -162,8 +162,8 @@ export function validateProgressMessages(
       const hookEvent = progressMsg.hookEvent ?? progressMsg.data?.hookEvent
       const hookName = progressMsg.hookName ?? progressMsg.data?.hookName
 
-      // 'Stop' hookEvent or 'SessionStart:resume' hookName is an error
-      if (hookEvent === 'Stop' || hookName === 'SessionStart:resume') {
+      // 'Stop' hookEvent is an error
+      if (hookEvent === 'Stop') {
         errors.push({
           type: 'unwanted_progress',
           line: i + 1,

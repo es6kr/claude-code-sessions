@@ -427,7 +427,7 @@ describe('validateProgressMessages', () => {
     expect(result.errors).toHaveLength(0)
   })
 
-  it('should detect SessionStart:resume as error', () => {
+  it('should not treat SessionStart:resume as error', () => {
     const messages = [
       { type: 'user', uuid: 'u1', parentUuid: null },
       {
@@ -441,9 +441,8 @@ describe('validateProgressMessages', () => {
 
     const result = validateProgressMessages(messages)
 
-    expect(result.valid).toBe(false)
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].hookName).toBe('SessionStart:resume')
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
   })
 
   it('should only count Stop among multiple progress messages', () => {
