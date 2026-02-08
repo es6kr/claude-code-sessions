@@ -34,6 +34,7 @@
     onkeydown={handleKeydown}
     role="dialog"
     aria-modal="true"
+    tabindex="-1"
   >
     <div
       class="bg-gh-bg-secondary border border-gh-border rounded-lg p-6 w-[380px] shadow-xl text-gh-text"

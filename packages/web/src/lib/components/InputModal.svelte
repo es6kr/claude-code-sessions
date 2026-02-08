@@ -25,7 +25,7 @@
     onCancel,
   }: Props = $props()
 
-  let inputValue = $state(initialValue)
+  let inputValue = $state('')
   let inputRef: HTMLInputElement | undefined = $state()
 
   $effect(() => {
@@ -55,6 +55,7 @@
     onkeydown={handleKeydown}
     role="dialog"
     aria-modal="true"
+    tabindex="-1"
   >
     <div
       class="bg-gh-bg-secondary border border-gh-border rounded-lg p-6 w-[400px] shadow-xl text-gh-text"
