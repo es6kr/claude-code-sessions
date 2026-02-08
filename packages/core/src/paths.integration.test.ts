@@ -78,7 +78,7 @@ describe('folderNameToPath (mocked)', () => {
     })
 
     const { folderNameToPath } = await import('./paths.js')
-    const displayPath = folderNameToPath('-home-user-nonexistent-folder')
+    const displayPath = await folderNameToPath('-home-user-nonexistent-folder')
 
     // Falls back to pattern-based conversion (under home dir shows ~/)
     expect(displayPath).toBe('~/nonexistent/folder')
@@ -95,7 +95,7 @@ describe('folderNameToPath (mocked)', () => {
     vi.mocked(fs.readFileSync).mockReturnValue(sessionContent)
 
     const { folderNameToPath } = await import('./paths.js')
-    const displayPath = folderNameToPath(folderName)
+    const displayPath = await folderNameToPath(folderName)
 
     // Should return ~/example.com (not ~/example/com)
     expect(displayPath).toBe('~/example.com')

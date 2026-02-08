@@ -4,11 +4,13 @@ import {
   folderNameToDisplayPath,
   displayPathToFolderName,
   toRelativePath,
+  expandHomePath,
   folderNameToPath,
   findProjectByWorkspacePath,
   extractCwdFromContent,
   isSessionFile,
   tryGetCwdFromFile,
+  resolvePathFromClaudeConfig,
   type FileSystem,
   type Logger,
 } from './paths.js'
@@ -36,20 +38,20 @@ describe('pathToFolderName', () => {
 
   describe('Windows paths', () => {
     it('converts Windows absolute path to folder name', () => {
-      // Drive letter is normalized to lowercase (Claude Code convention)
-      expect(pathToFolderName('C:\\Users\\david\\projects')).toBe('c--Users-david-projects')
+      // Official Claude Code keeps drive letter case as-is
+      expect(pathToFolderName('C:\\Users\\david\\projects')).toBe('C--Users-david-projects')
     })
 
     it('handles Windows path with forward slashes', () => {
-      expect(pathToFolderName('C:/Users/david/projects')).toBe('c--Users-david-projects')
+      expect(pathToFolderName('C:/Users/david/projects')).toBe('C--Users-david-projects')
     })
 
     it('handles Windows dot-prefixed folders', () => {
-      expect(pathToFolderName('C:\\Users\\david\\.vscode')).toBe('c--Users-david--vscode')
+      expect(pathToFolderName('C:\\Users\\david\\.vscode')).toBe('C--Users-david--vscode')
     })
 
     it('handles Windows path with domain (example.com)', () => {
-      expect(pathToFolderName('C:\\Users\\david\\example.com')).toBe('c--Users-david-example-com')
+      expect(pathToFolderName('C:\\Users\\david\\example.com')).toBe('C--Users-david-example-com')
     })
   })
 
@@ -67,7 +69,8 @@ describe('pathToFolderName', () => {
     })
 
     it('handles emoji in path', () => {
-      expect(pathToFolderName('/home/user/📁project')).toBe('-home-user--project')
+      // Emoji is a surrogate pair (2 code units) -> 2 dashes
+      expect(pathToFolderName('/home/user/📁project')).toBe('-home-user---project')
     })
   })
 })
@@ -167,7 +170,8 @@ describe('toRelativePath', () => {
   })
 
   it('handles Windows paths', () => {
-    expect(toRelativePath('C:\\Users\\david\\projects', 'C:\\Users\\david')).toBe('~/projects')
+    // Windows paths return backslash after ~
+    expect(toRelativePath('C:\\Users\\david\\projects', 'C:\\Users\\david')).toBe('~\\projects')
   })
 
   it('does not convert other Windows user paths', () => {
@@ -191,30 +195,19 @@ describe('Windows path separator issue (issue #14)', () => {
 
     const homeDir = os.homedir()
 
-    if (nodePath.sep === '\\') {
-      // Windows: pathToFolderName normalizes drive to lowercase
-      // C:\Users\david → c--Users-david → c:\Users\david
-      const lowercaseHome = homeDir.replace(/^([A-Z]):/, (_, d) => d.toLowerCase() + ':')
-      const testPath = lowercaseHome + '\\projects\\work'
+    // pathToFolderName lowercases drive, folderNameToDisplayPath converts back
+    const displayHome = folderNameToDisplayPath(pathToFolderName(homeDir))
+    const testPath = displayHome + nodePath.sep + 'projects' + nodePath.sep + 'work'
 
-      // Current: case-sensitive comparison fails → returns full path
-      // Expected: case-insensitive comparison succeeds → returns ~/projects/work
-      const result = toRelativePath(testPath, homeDir)
-      expect(result).toBe('~/projects/work')
-    } else {
-      // macOS/Linux: normal behavior
-      const testPath = nodePath.join(homeDir, 'projects', 'work')
-      const result = toRelativePath(testPath, homeDir)
-      expect(result).toBe('~/projects/work')
-    }
+    const result = toRelativePath(testPath, homeDir)
+    expect(result).toBe('~' + nodePath.sep + 'projects' + nodePath.sep + 'work')
   })
 
   /**
    * Bug 2: Mixed slashes after ~ expansion
    * - toRelativePath returns ~/projects/work (forward slashes)
-   * - extension.ts:472 does folderPath.replace('~', homeDir)
-   * - Windows homeDir = C:\Users\david (backslash)
-   * - Result: C:\Users\david/projects/work (MIXED!)
+   * - Simple string replace creates mixed slashes
+   * - expandHomePath uses path.join for OS-native separators
    */
   it('should produce consistent path separators after ~ expansion', async () => {
     const nodePath = await import('path')
@@ -222,17 +215,17 @@ describe('Windows path separator issue (issue #14)', () => {
 
     const homeDir = os.homedir()
 
-    // toRelativePath always returns ~/path with forward slashes
+    // ~/path with forward slashes (common input format)
     const folderPath = '~/projects/work'
 
-    // extension.ts:472 logic
-    const cwd = folderPath.startsWith('~') ? folderPath.replace('~', homeDir) : folderPath
+    // Use expandHomePath instead of simple replace
+    const cwd = expandHomePath(folderPath, homeDir)
 
     // Expected: OS-native separators only
     const expected = nodePath.join(homeDir, 'projects', 'work')
 
     // macOS: /Users/david/projects/work ✓
-    // Windows: C:\Users\david/projects/work ✗ (mixed slashes)
+    // Windows: C:\Users\david\projects\work ✓ (expandHomePath fixes this)
     expect(cwd).toBe(expected)
   })
 
@@ -273,13 +266,12 @@ describe('Windows path separator issue (issue #14)', () => {
     const projectName = pathToFolderName(originalPath)
 
     // Step 2: folderNameToPath (what extension calls) - extension.ts line 470
-    const folderPath = folderNameToPath(projectName)
+    const folderPath = await folderNameToPath(projectName)
 
-    // Step 3: extension.ts line 472
-    const cwd = folderPath.startsWith('~') ? folderPath.replace('~', homeDir) : folderPath
+    // Step 3: Use expandHomePath instead of simple replace
+    const cwd = expandHomePath(folderPath, homeDir)
 
-    // macOS/Linux: PASS (forward slashes throughout)
-    // Windows: FAIL - produces C:\Users\david/projects/work (mixed slashes)
+    // Both macOS/Linux and Windows should produce correct path
     expect(cwd).toBe(originalPath)
   })
 })
@@ -546,5 +538,81 @@ describe('findProjectByWorkspacePath', () => {
 
     // Should return direct match without even reading files
     expect(result).toBe('-home-user-projects')
+  })
+})
+
+describe('resolvePathFromClaudeConfig', () => {
+  it('resolves path with space in folder name from config', async () => {
+    // ~/.claude.json contains project paths, we look up which one matches
+    // pathToFolderName converts space to dash, so "New folder" becomes "New-folder"
+    const mockFs = {
+      readFile: vi.fn(async () =>
+        JSON.stringify({
+          projects: {
+            '/home/user/New folder/project': {},
+            '/home/user/other': {},
+          },
+        })
+      ),
+    }
+
+    // folderName has dash where original path had space
+    const folderName = '-home-user-New-folder-project'
+    const result = await resolvePathFromClaudeConfig(folderName, mockFs)
+
+    expect(result).toBe('/home/user/New folder/project')
+  })
+
+  it('resolves path with dot in folder name from config', async () => {
+    const mockFs = {
+      readFile: vi.fn(async () =>
+        JSON.stringify({
+          projects: {
+            '/home/user/my.project': {},
+          },
+        })
+      ),
+    }
+
+    // Note: pathToFolderName converts dots to dashes
+    const folderName = '-home-user-my-project'
+    const result = await resolvePathFromClaudeConfig(folderName, mockFs)
+
+    expect(result).toBe('/home/user/my.project')
+  })
+
+  it('returns null when no matching project in config', async () => {
+    const mockFs = {
+      readFile: vi.fn(async () =>
+        JSON.stringify({
+          projects: {
+            '/home/user/other': {},
+          },
+        })
+      ),
+    }
+
+    const result = await resolvePathFromClaudeConfig('-nonexistent-path', mockFs)
+    expect(result).toBeNull()
+  })
+
+  it('returns null when config file not found', async () => {
+    const mockFs = {
+      readFile: vi.fn(async () => {
+        throw new Error('ENOENT')
+      }),
+    }
+
+    const result = await resolvePathFromClaudeConfig('-some-path', mockFs)
+    expect(result).toBeNull()
+  })
+
+  it('returns null when config has no projects key', async () => {
+    const mockFs = {
+      readFile: vi.fn(async () => JSON.stringify({ numStartups: 1 })),
+    }
+
+    const result = await resolvePathFromClaudeConfig('-some-path', mockFs)
+    expect(result).toBeNull()
   })
 })

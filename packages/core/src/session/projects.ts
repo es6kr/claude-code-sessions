@@ -33,10 +33,11 @@ export const listProjects = Effect.gen(function* () {
           const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
           // Exclude agent- files (subagent logs)
           const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+          const displayName = yield* Effect.tryPromise(() => folderNameToPath(entry.name))
 
           return {
             name: entry.name,
-            displayName: folderNameToPath(entry.name),
+            displayName,
             path: projectPath,
             sessionCount: sessionFiles.length,
           } satisfies Project
