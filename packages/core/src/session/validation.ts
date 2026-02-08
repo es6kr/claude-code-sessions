@@ -352,36 +352,50 @@ export function repairParentUuidChain<T extends GenericMessage>(
  * @param targetType - Optional: 'file-history-snapshot' or 'summary' to disambiguate collisions
  * @returns Object with deleted message and messages to also delete (orphan tool_results)
  */
+// Helper: find target message index by type or priority
+function findTargetIndex<T extends GenericMessage>(
+  messages: T[],
+  targetId: string,
+  targetType?: 'file-history-snapshot' | 'summary'
+): number {
+  if (targetType === 'file-history-snapshot') {
+    return messages.findIndex((m) => m.type === 'file-history-snapshot' && m.messageId === targetId)
+  }
+  if (targetType === 'summary') {
+    return messages.findIndex(
+      (m) => (m as GenericMessage & { leafUuid?: string }).leafUuid === targetId
+    )
+  }
+  // Priority: uuid > leafUuid > messageId
+  let idx = messages.findIndex((m) => m.uuid === targetId)
+  if (idx === -1) {
+    idx = messages.findIndex(
+      (m) => (m as GenericMessage & { leafUuid?: string }).leafUuid === targetId
+    )
+  }
+  if (idx === -1) {
+    idx = messages.findIndex((m) => m.type === 'file-history-snapshot' && m.messageId === targetId)
+  }
+  return idx
+}
+
+// Helper: check if user message contains tool_result matching any toolUseId
+function hasMatchingToolResult(msg: GenericMessage, toolUseIds: string[]): boolean {
+  if (msg.type !== 'user') return false
+  const content = msg.message?.content
+  if (!Array.isArray(content)) return false
+  return (content as MessageContent[]).some(
+    (item) =>
+      item.type === 'tool_result' && item.tool_use_id && toolUseIds.includes(item.tool_use_id)
+  )
+}
+
 export function deleteMessageWithChainRepair<T extends GenericMessage>(
   messages: T[],
   targetId: string,
   targetType?: 'file-history-snapshot' | 'summary'
 ): { deleted: T | null; alsoDeleted: T[] } {
-  let targetIndex = -1
-
-  // Find target message
-  if (targetType === 'file-history-snapshot') {
-    targetIndex = messages.findIndex(
-      (m) => m.type === 'file-history-snapshot' && m.messageId === targetId
-    )
-  } else if (targetType === 'summary') {
-    targetIndex = messages.findIndex(
-      (m) => (m as GenericMessage & { leafUuid?: string }).leafUuid === targetId
-    )
-  } else {
-    // Priority: uuid > leafUuid > messageId
-    targetIndex = messages.findIndex((m) => m.uuid === targetId)
-    if (targetIndex === -1) {
-      targetIndex = messages.findIndex(
-        (m) => (m as GenericMessage & { leafUuid?: string }).leafUuid === targetId
-      )
-    }
-    if (targetIndex === -1) {
-      targetIndex = messages.findIndex(
-        (m) => m.type === 'file-history-snapshot' && m.messageId === targetId
-      )
-    }
-  }
+  const targetIndex = findTargetIndex(messages, targetId, targetType)
 
   if (targetIndex === -1) {
     return { deleted: null, alsoDeleted: [] }
@@ -406,21 +420,8 @@ export function deleteMessageWithChainRepair<T extends GenericMessage>(
   const toolResultIndices: number[] = []
   if (toolUseIds.length > 0) {
     for (let i = 0; i < messages.length; i++) {
-      const msg = messages[i]
-      if (msg.type === 'user') {
-        const content = msg.message?.content
-        if (Array.isArray(content)) {
-          for (const item of content as MessageContent[]) {
-            if (
-              item.type === 'tool_result' &&
-              item.tool_use_id &&
-              toolUseIds.includes(item.tool_use_id)
-            ) {
-              toolResultIndices.push(i)
-              break
-            }
-          }
-        }
+      if (hasMatchingToolResult(messages[i], toolUseIds)) {
+        toolResultIndices.push(i)
       }
     }
   }

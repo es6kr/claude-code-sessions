@@ -28,6 +28,6 @@ if [ "$current_branch" = "main" ]; then
   echo "🔍 Main branch: running full CI with act..."
   pnpm test:act
 else
-  echo "🧪 Branch $current_branch: running quick tests..."
-  pnpm test
+  echo "🧪 Branch $current_branch: running typecheck and tests..."
+  pnpm typecheck && pnpm test
 fi

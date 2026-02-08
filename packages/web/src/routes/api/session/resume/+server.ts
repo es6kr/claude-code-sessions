@@ -14,7 +14,7 @@ export const POST: RequestHandler = async ({ request }) => {
     }
 
     // Get project path for cwd
-    const folderPath = folderNameToPath(projectName)
+    const folderPath = await folderNameToPath(projectName)
     const homeDir = os.homedir()
     const cwd = folderPath.startsWith('~') ? folderPath.replace('~', homeDir) : folderPath
 

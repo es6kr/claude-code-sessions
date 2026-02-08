@@ -1,3 +1,4 @@
+.agent/
 .claude/
 .DS_Store
 .env

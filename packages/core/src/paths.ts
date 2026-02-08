@@ -6,6 +6,7 @@
  * - I/O Functions: tryGetCwdFromFile, getRealPathFromSession (with optional DI for testing)
  */
 import * as fs from 'node:fs'
+import * as fsp from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { createLogger } from './logger.js'
@@ -27,6 +28,10 @@ export interface FileSystem {
   readdirSync: (path: string) => string[]
 }
 
+export interface AsyncFileSystem {
+  readFile: (path: string, encoding: 'utf-8') => Promise<string>
+}
+
 // ============================================
 // Directory Paths
 // ============================================
@@ -39,6 +44,39 @@ export const getSessionsDir = (): string =>
 
 /** Get Claude todos directory (~/.claude/todos) */
 export const getTodosDir = (): string => path.join(os.homedir(), '.claude', 'todos')
+
+// ============================================
+// Internal Path Utilities
+// ============================================
+
+/** Windows path detection patterns */
+const WINDOWS_PATTERNS = {
+  /** Matches Windows absolute path: C:\ or C:/ */
+  absolutePath: /^([A-Za-z]):[/\\]/,
+  /** Matches Windows folder name format: C-- */
+  folderName: /^([A-Za-z])--/,
+} as const
+
+type WindowsPathResult = { isWindows: true; drive: string; rest: string } | { isWindows: false }
+
+/** Parse Windows absolute path, extracting drive letter and rest */
+const parseWindowsAbsPath = (p: string): WindowsPathResult => {
+  const match = p.match(WINDOWS_PATTERNS.absolutePath)
+  return match ? { isWindows: true, drive: match[1], rest: p.slice(3) } : { isWindows: false }
+}
+
+/** Parse Windows folder name format, extracting drive letter and rest */
+const parseWindowsFolderName = (name: string): WindowsPathResult => {
+  const match = name.match(WINDOWS_PATTERNS.folderName)
+  return match ? { isWindows: true, drive: match[1], rest: name.slice(3) } : { isWindows: false }
+}
+
+/** Check if path looks like Windows format */
+const isWindowsPath = (p: string): boolean => WINDOWS_PATTERNS.absolutePath.test(p)
+
+/** Convert separators to folder name format (no dot handling) */
+const separatorsToFolderName = (str: string): string =>
+  str.replace(/[/\\]\./g, '--').replace(/[/\\]/g, '-')
 
 // ============================================
 // Pure Functions (No I/O)
@@ -62,17 +100,38 @@ export const extractCwdFromContent = (content: string, filePath?: string): strin
 export const isSessionFile = (filename: string): boolean =>
   filename.endsWith('.jsonl') && !filename.startsWith('agent-')
 
+/** Expand ~ path to absolute path with OS-native separators */
+export const expandHomePath = (tildePath: string, homeDir: string): string => {
+  if (!tildePath.startsWith('~')) return tildePath
+  const relativePart = tildePath.slice(1)
+  // path.join uses OS-native separator
+  return path.join(homeDir, ...relativePart.split('/').filter(Boolean))
+}
+
 /** Convert path to relative form if under home directory */
 export const toRelativePath = (absolutePath: string, homeDir: string): string => {
   const normalizedPath = absolutePath.replace(/\\/g, '/')
   const normalizedHome = homeDir.replace(/\\/g, '/')
 
+  // Windows: case-insensitive comparison (C: vs c:)
+  const isWin = isWindowsPath(homeDir)
+  const pathLower = normalizedPath.toLowerCase()
+  const homeLower = normalizedHome.toLowerCase()
+
   // Check for exact match or path with separator after home dir
-  if (normalizedPath === normalizedHome) {
+  if (isWin ? pathLower === homeLower : normalizedPath === normalizedHome) {
     return '~'
   }
-  if (normalizedPath.startsWith(normalizedHome + '/')) {
-    return '~' + normalizedPath.slice(normalizedHome.length)
+
+  const startsWithHome = isWin
+    ? pathLower.startsWith(homeLower + '/')
+    : normalizedPath.startsWith(normalizedHome + '/')
+
+  if (startsWithHome) {
+    // Use OS-native separator in return value
+    const sep = isWin ? '\\' : '/'
+    const relativePart = absolutePath.slice(homeDir.length)
+    return '~' + relativePart.replace(/[\\/]/g, sep)
   }
   return absolutePath
 }
@@ -88,25 +147,24 @@ export const toRelativePath = (absolutePath: string, homeDir: string): string =>
  * Handle dot-prefixed folders: --claude -> /.claude
  */
 export const folderNameToDisplayPath = (folderName: string): string => {
-  // Check if Windows path (starts with drive letter pattern like "C--")
-  const windowsDriveMatch = folderName.match(/^([A-Za-z])--/)
-  if (windowsDriveMatch) {
-    const driveLetter = windowsDriveMatch[1]
-    const rest = folderName.slice(3)
-    return driveLetter + ':\\' + rest.replace(/--/g, '\\.').replace(/-/g, '\\')
+  const parsed = parseWindowsFolderName(folderName)
+  if (parsed.isWindows) {
+    return parsed.drive + ':\\' + parsed.rest.replace(/--/g, '\\.').replace(/-/g, '\\')
   }
 
   // Unix path
   return folderName.replace(/^-/, '/').replace(/--/g, '/.').replace(/-/g, '/')
 }
 
-/** Convert display path to folder name (reverse of above) */
+/**
+ * Convert display path to folder name (reverse of folderNameToDisplayPath)
+ * @deprecated Use pathToFolderName for absolute paths. This function exists
+ * for roundtrip testing and does not handle non-ASCII or normalize drive case.
+ */
 export const displayPathToFolderName = (displayPath: string): string => {
-  const windowsDriveMatch = displayPath.match(/^([A-Za-z]):[/\\]/)
-  if (windowsDriveMatch) {
-    const driveLetter = windowsDriveMatch[1]
-    const rest = displayPath.slice(3)
-    return driveLetter + '--' + rest.replace(/[/\\]\./g, '--').replace(/[/\\]/g, '-')
+  const parsed = parseWindowsAbsPath(displayPath)
+  if (parsed.isWindows) {
+    return parsed.drive + '--' + separatorsToFolderName(parsed.rest)
   }
 
   return displayPath.replace(/^\//g, '-').replace(/\/\./g, '--').replace(/\//g, '-')
@@ -114,34 +172,11 @@ export const displayPathToFolderName = (displayPath: string): string => {
 
 /**
  * Convert absolute path to project folder name
- * Non-ASCII characters are converted to '-' per character
- * Windows drive letter is normalized to lowercase (C: -> c--)
+ * All non-alphanumeric characters are converted to '-'
+ * Matches official Claude Code: A.replace(/[^a-zA-Z0-9]/g, '-')
  */
-export const pathToFolderName = (absolutePath: string): string => {
-  const convertNonAscii = (str: string): string =>
-    [...str].map((char) => (char.charCodeAt(0) <= 127 ? char : '-')).join('')
-
-  const windowsDriveMatch = absolutePath.match(/^([A-Za-z]):[/\\]/)
-  if (windowsDriveMatch) {
-    // Normalize drive letter to lowercase (Claude Code uses lowercase)
-    const driveLetter = windowsDriveMatch[1].toLowerCase()
-    const rest = absolutePath.slice(3)
-    return (
-      driveLetter +
-      '--' +
-      convertNonAscii(rest)
-        .replace(/[/\\]\./g, '--')
-        .replace(/[/\\]/g, '-')
-        .replace(/\./g, '-')
-    )
-  }
-
-  return convertNonAscii(absolutePath)
-    .replace(/^\//g, '-')
-    .replace(/\/\./g, '--')
-    .replace(/\//g, '-')
-    .replace(/\./g, '-')
-}
+export const pathToFolderName = (absolutePath: string): string =>
+  absolutePath.replace(/[^a-zA-Z0-9]/g, '-')
 
 // ============================================
 // I/O Functions (with optional DI for testing)
@@ -225,11 +260,48 @@ export const getRealPathFromSession = (
 // Public API
 // ============================================
 
+/** Get Claude config file path (~/.claude.json) */
+const getClaudeConfigPath = (): string => path.join(os.homedir(), '.claude.json')
+
+/**
+ * Resolve folder name to actual path using ~/.claude.json projects list.
+ * Since pathToFolderName converts space/dot/separator all to dash,
+ * we can't reverse it reliably. Instead, we look up known project paths
+ * from Claude's config and find which one matches when converted.
+ *
+ * @param folderName - The folder name to resolve (e.g., "C--Users-david-New-folder")
+ * @param fileSystem - Optional AsyncFileSystem for testing
+ * @returns The actual absolute path or null if not found
+ */
+export const resolvePathFromClaudeConfig = async (
+  folderName: string,
+  fileSystem: AsyncFileSystem = fsp
+): Promise<string | null> => {
+  try {
+    const configPath = getClaudeConfigPath()
+    const content = await fileSystem.readFile(configPath, 'utf-8')
+    const config = JSON.parse(content) as { projects?: Record<string, unknown> }
+
+    if (!config.projects) return null
+
+    // Check each registered project path
+    for (const projectPath of Object.keys(config.projects)) {
+      if (pathToFolderName(projectPath) === folderName) {
+        return projectPath
+      }
+    }
+
+    return null
+  } catch {
+    return null
+  }
+}
+
 /**
  * Convert folder name to relative or absolute path for display
  * If path is under home directory, show relative (~/...)
  */
-export const folderNameToPath = (folderName: string): string => {
+export const folderNameToPath = async (folderName: string): Promise<string> => {
   const homeDir = os.homedir()
 
   // First try to get real path from session cwd
@@ -238,7 +310,13 @@ export const folderNameToPath = (folderName: string): string => {
     return toRelativePath(realPath, homeDir)
   }
 
-  // Fallback to pattern-based conversion
+  // Second, try Claude config lookup (handles spaces, dots in folder names)
+  const configPath = await resolvePathFromClaudeConfig(folderName)
+  if (configPath) {
+    return toRelativePath(configPath, homeDir)
+  }
+
+  // Fallback to pattern-based conversion (may be incorrect for special chars)
   const absolutePath = folderNameToDisplayPath(folderName)
   return toRelativePath(absolutePath, homeDir)
 }
