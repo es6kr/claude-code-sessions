@@ -4,6 +4,7 @@ import {
   folderNameToDisplayPath,
   displayPathToFolderName,
   toRelativePath,
+  folderNameToPath,
   findProjectByWorkspacePath,
   extractCwdFromContent,
   isSessionFile,
@@ -173,6 +174,113 @@ describe('toRelativePath', () => {
     expect(toRelativePath('C:\\Users\\other\\projects', 'C:\\Users\\david')).toBe(
       'C:\\Users\\other\\projects'
     )
+  })
+})
+
+describe('Windows path separator issue (issue #14)', () => {
+  /**
+   * Bug 1: Drive letter case sensitivity
+   * - pathToFolderName lowercases drive: C: → c--
+   * - folderNameToDisplayPath returns: c:\Users\...
+   * - toRelativePath compares case-sensitively with os.homedir() (C:\Users\...)
+   * - Comparison fails, returns full path instead of ~/...
+   */
+  it('toRelativePath should handle drive letter case insensitively on Windows', async () => {
+    const nodePath = await import('path')
+    const os = await import('os')
+
+    const homeDir = os.homedir()
+
+    if (nodePath.sep === '\\') {
+      // Windows: pathToFolderName normalizes drive to lowercase
+      // C:\Users\david → c--Users-david → c:\Users\david
+      const lowercaseHome = homeDir.replace(/^([A-Z]):/, (_, d) => d.toLowerCase() + ':')
+      const testPath = lowercaseHome + '\\projects\\work'
+
+      // Current: case-sensitive comparison fails → returns full path
+      // Expected: case-insensitive comparison succeeds → returns ~/projects/work
+      const result = toRelativePath(testPath, homeDir)
+      expect(result).toBe('~/projects/work')
+    } else {
+      // macOS/Linux: normal behavior
+      const testPath = nodePath.join(homeDir, 'projects', 'work')
+      const result = toRelativePath(testPath, homeDir)
+      expect(result).toBe('~/projects/work')
+    }
+  })
+
+  /**
+   * Bug 2: Mixed slashes after ~ expansion
+   * - toRelativePath returns ~/projects/work (forward slashes)
+   * - extension.ts:472 does folderPath.replace('~', homeDir)
+   * - Windows homeDir = C:\Users\david (backslash)
+   * - Result: C:\Users\david/projects/work (MIXED!)
+   */
+  it('should produce consistent path separators after ~ expansion', async () => {
+    const nodePath = await import('path')
+    const os = await import('os')
+
+    const homeDir = os.homedir()
+
+    // toRelativePath always returns ~/path with forward slashes
+    const folderPath = '~/projects/work'
+
+    // extension.ts:472 logic
+    const cwd = folderPath.startsWith('~') ? folderPath.replace('~', homeDir) : folderPath
+
+    // Expected: OS-native separators only
+    const expected = nodePath.join(homeDir, 'projects', 'work')
+
+    // macOS: /Users/david/projects/work ✓
+    // Windows: C:\Users\david/projects/work ✗ (mixed slashes)
+    expect(cwd).toBe(expected)
+  })
+
+  /**
+   * Bug 3: toRelativePath returns forward slashes on Windows
+   * - normalizedPath uses forward slashes for comparison
+   * - Return value uses normalizedPath, not original separators
+   */
+  it('toRelativePath should return OS-native separators in relative path', async () => {
+    const nodePath = await import('path')
+    const os = await import('os')
+
+    const homeDir = os.homedir()
+    const testPath = nodePath.join(homeDir, 'projects', 'work')
+
+    const result = toRelativePath(testPath, homeDir)
+
+    // The part after ~ should use OS-native separators
+    if (result.startsWith('~')) {
+      const relativePart = result.slice(1)
+      const hasWrongSeparator =
+        nodePath.sep === '\\' ? relativePart.includes('/') : relativePart.includes('\\')
+      expect(hasWrongSeparator).toBe(false)
+    }
+  })
+
+  /**
+   * Full integration test: extension.ts resumeSession flow
+   */
+  it('resumeSession should produce correct cwd path', async () => {
+    const nodePath = await import('path')
+
+    // Same as extension.ts line 471
+    const homeDir = process.env.HOME || process.env.USERPROFILE || ''
+    const originalPath = nodePath.join(homeDir, 'projects', 'work')
+
+    // Step 1: Convert path to folder name (what Claude Code stores)
+    const projectName = pathToFolderName(originalPath)
+
+    // Step 2: folderNameToPath (what extension calls) - extension.ts line 470
+    const folderPath = folderNameToPath(projectName)
+
+    // Step 3: extension.ts line 472
+    const cwd = folderPath.startsWith('~') ? folderPath.replace('~', homeDir) : folderPath
+
+    // macOS/Linux: PASS (forward slashes throughout)
+    // Windows: FAIL - produces C:\Users\david/projects/work (mixed slashes)
+    expect(cwd).toBe(originalPath)
   })
 })
 
