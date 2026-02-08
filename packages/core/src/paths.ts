@@ -41,6 +41,50 @@ export const getSessionsDir = (): string =>
 export const getTodosDir = (): string => path.join(os.homedir(), '.claude', 'todos')
 
 // ============================================
+// Internal Path Utilities
+// ============================================
+
+/** Windows path detection patterns */
+const WINDOWS_PATTERNS = {
+  /** Matches Windows absolute path: C:\ or C:/ */
+  absolutePath: /^([A-Za-z]):[/\\]/,
+  /** Matches Windows folder name format: C-- */
+  folderName: /^([A-Za-z])--/,
+} as const
+
+type WindowsPathResult = { isWindows: true; drive: string; rest: string } | { isWindows: false }
+
+/** Parse Windows absolute path, extracting drive letter and rest */
+const parseWindowsAbsPath = (p: string): WindowsPathResult => {
+  const match = p.match(WINDOWS_PATTERNS.absolutePath)
+  return match ? { isWindows: true, drive: match[1], rest: p.slice(3) } : { isWindows: false }
+}
+
+/** Parse Windows folder name format, extracting drive letter and rest */
+const parseWindowsFolderName = (name: string): WindowsPathResult => {
+  const match = name.match(WINDOWS_PATTERNS.folderName)
+  return match ? { isWindows: true, drive: match[1], rest: name.slice(3) } : { isWindows: false }
+}
+
+/** Check if path looks like Windows format */
+const isWindowsPath = (p: string): boolean => WINDOWS_PATTERNS.absolutePath.test(p)
+
+/** Convert non-ASCII characters to '-' */
+const convertNonAscii = (str: string): string =>
+  [...str].map((c) => (c.charCodeAt(0) <= 127 ? c : '-')).join('')
+
+/** Convert path chars to folder name format (handles dots) */
+const pathCharsToFolderName = (str: string): string =>
+  str
+    .replace(/[/\\]\./g, '--')
+    .replace(/[/\\]/g, '-')
+    .replace(/\./g, '-')
+
+/** Convert separators to folder name format (no dot handling) */
+const separatorsToFolderName = (str: string): string =>
+  str.replace(/[/\\]\./g, '--').replace(/[/\\]/g, '-')
+
+// ============================================
 // Pure Functions (No I/O)
 // ============================================
 
@@ -62,17 +106,38 @@ export const extractCwdFromContent = (content: string, filePath?: string): strin
 export const isSessionFile = (filename: string): boolean =>
   filename.endsWith('.jsonl') && !filename.startsWith('agent-')
 
+/** Expand ~ path to absolute path with OS-native separators */
+export const expandHomePath = (tildePath: string, homeDir: string): string => {
+  if (!tildePath.startsWith('~')) return tildePath
+  const relativePart = tildePath.slice(1)
+  // path.join uses OS-native separator
+  return path.join(homeDir, ...relativePart.split('/').filter(Boolean))
+}
+
 /** Convert path to relative form if under home directory */
 export const toRelativePath = (absolutePath: string, homeDir: string): string => {
   const normalizedPath = absolutePath.replace(/\\/g, '/')
   const normalizedHome = homeDir.replace(/\\/g, '/')
 
+  // Windows: case-insensitive comparison (C: vs c:)
+  const isWin = isWindowsPath(homeDir)
+  const pathLower = normalizedPath.toLowerCase()
+  const homeLower = normalizedHome.toLowerCase()
+
   // Check for exact match or path with separator after home dir
-  if (normalizedPath === normalizedHome) {
+  if (isWin ? pathLower === homeLower : normalizedPath === normalizedHome) {
     return '~'
   }
-  if (normalizedPath.startsWith(normalizedHome + '/')) {
-    return '~' + normalizedPath.slice(normalizedHome.length)
+
+  const startsWithHome = isWin
+    ? pathLower.startsWith(homeLower + '/')
+    : normalizedPath.startsWith(normalizedHome + '/')
+
+  if (startsWithHome) {
+    // Use OS-native separator in return value
+    const sep = isWin ? '\\' : '/'
+    const relativePart = absolutePath.slice(homeDir.length)
+    return '~' + relativePart.replace(/[\\/]/g, sep)
   }
   return absolutePath
 }
@@ -88,25 +153,24 @@ export const toRelativePath = (absolutePath: string, homeDir: string): string =>
  * Handle dot-prefixed folders: --claude -> /.claude
  */
 export const folderNameToDisplayPath = (folderName: string): string => {
-  // Check if Windows path (starts with drive letter pattern like "C--")
-  const windowsDriveMatch = folderName.match(/^([A-Za-z])--/)
-  if (windowsDriveMatch) {
-    const driveLetter = windowsDriveMatch[1]
-    const rest = folderName.slice(3)
-    return driveLetter + ':\\' + rest.replace(/--/g, '\\.').replace(/-/g, '\\')
+  const parsed = parseWindowsFolderName(folderName)
+  if (parsed.isWindows) {
+    return parsed.drive + ':\\' + parsed.rest.replace(/--/g, '\\.').replace(/-/g, '\\')
   }
 
   // Unix path
   return folderName.replace(/^-/, '/').replace(/--/g, '/.').replace(/-/g, '/')
 }
 
-/** Convert display path to folder name (reverse of above) */
+/**
+ * Convert display path to folder name (reverse of folderNameToDisplayPath)
+ * @deprecated Use pathToFolderName for absolute paths. This function exists
+ * for roundtrip testing and does not handle non-ASCII or normalize drive case.
+ */
 export const displayPathToFolderName = (displayPath: string): string => {
-  const windowsDriveMatch = displayPath.match(/^([A-Za-z]):[/\\]/)
-  if (windowsDriveMatch) {
-    const driveLetter = windowsDriveMatch[1]
-    const rest = displayPath.slice(3)
-    return driveLetter + '--' + rest.replace(/[/\\]\./g, '--').replace(/[/\\]/g, '-')
+  const parsed = parseWindowsAbsPath(displayPath)
+  if (parsed.isWindows) {
+    return parsed.drive + '--' + separatorsToFolderName(parsed.rest)
   }
 
   return displayPath.replace(/^\//g, '-').replace(/\/\./g, '--').replace(/\//g, '-')
@@ -118,22 +182,10 @@ export const displayPathToFolderName = (displayPath: string): string => {
  * Windows drive letter is normalized to lowercase (C: -> c--)
  */
 export const pathToFolderName = (absolutePath: string): string => {
-  const convertNonAscii = (str: string): string =>
-    [...str].map((char) => (char.charCodeAt(0) <= 127 ? char : '-')).join('')
-
-  const windowsDriveMatch = absolutePath.match(/^([A-Za-z]):[/\\]/)
-  if (windowsDriveMatch) {
+  const parsed = parseWindowsAbsPath(absolutePath)
+  if (parsed.isWindows) {
     // Normalize drive letter to lowercase (Claude Code uses lowercase)
-    const driveLetter = windowsDriveMatch[1].toLowerCase()
-    const rest = absolutePath.slice(3)
-    return (
-      driveLetter +
-      '--' +
-      convertNonAscii(rest)
-        .replace(/[/\\]\./g, '--')
-        .replace(/[/\\]/g, '-')
-        .replace(/\./g, '-')
-    )
+    return parsed.drive.toLowerCase() + '--' + pathCharsToFolderName(convertNonAscii(parsed.rest))
   }
 
   return convertNonAscii(absolutePath)
