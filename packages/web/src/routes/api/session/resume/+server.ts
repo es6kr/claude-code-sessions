@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import { folderNameToPath } from '@claude-sessions/core'
+import { folderNameToPath, expandHomePath } from '@claude-sessions/core'
 import { resumeSession } from '@claude-sessions/core/server'
 import * as os from 'node:os'
 
@@ -16,7 +16,7 @@ export const POST: RequestHandler = async ({ request }) => {
     // Get project path for cwd
     const folderPath = await folderNameToPath(projectName)
     const homeDir = os.homedir()
-    const cwd = folderPath.startsWith('~') ? folderPath.replace('~', homeDir) : folderPath
+    const cwd = expandHomePath(folderPath, homeDir)
 
     const result = resumeSession({
       sessionId,

@@ -212,19 +212,21 @@ export class SessionTreeProvider
         homeDir: USER_HOME,
       })
 
-      return sorted.map(
-        (p) =>
-          new SessionTreeItem(
-            maskHomePath(session.folderNameToPath(p.name), USER_HOME), // Show ~/... for current user only
-            // Expand current project by default
-            p.name === currentProjectName
-              ? vscode.TreeItemCollapsibleState.Expanded
-              : vscode.TreeItemCollapsibleState.Collapsed,
-            'project',
-            p.name,
-            '',
-            p.sessionCount
-          )
+      return Promise.all(
+        sorted.map(
+          async (p) =>
+            new SessionTreeItem(
+              maskHomePath(await session.folderNameToPath(p.name), USER_HOME), // Show ~/... for current user only
+              // Expand current project by default
+              p.name === currentProjectName
+                ? vscode.TreeItemCollapsibleState.Expanded
+                : vscode.TreeItemCollapsibleState.Collapsed,
+              'project',
+              p.name,
+              '',
+              p.sessionCount
+            )
+        )
       )
     }
 

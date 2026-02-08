@@ -170,13 +170,14 @@ describe('toRelativePath', () => {
   })
 
   it('handles Windows paths', () => {
-    // Windows paths return backslash after ~
-    expect(toRelativePath('C:\\Users\\david\\projects', 'C:\\Users\\david')).toBe('~\\projects')
+    // Windows paths return forward slash after ~ for consistency with .claude.json
+    expect(toRelativePath('C:\\Users\\david\\projects', 'C:\\Users\\david')).toBe('~/projects')
   })
 
   it('does not convert other Windows user paths', () => {
+    // Returns forward slash normalized path
     expect(toRelativePath('C:\\Users\\other\\projects', 'C:\\Users\\david')).toBe(
-      'C:\\Users\\other\\projects'
+      'C:/Users/other/projects'
     )
   })
 })

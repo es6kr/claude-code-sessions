@@ -52,6 +52,7 @@ export {
   folderNameToPath,
   getRealPathFromSession,
   findProjectByWorkspacePath,
+  expandHomePath,
 } from './paths.js'
 
 // Project utilities

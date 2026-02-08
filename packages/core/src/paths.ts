@@ -128,12 +128,12 @@ export const toRelativePath = (absolutePath: string, homeDir: string): string =>
     : normalizedPath.startsWith(normalizedHome + '/')
 
   if (startsWithHome) {
-    // Use OS-native separator in return value
-    const sep = isWin ? '\\' : '/'
+    // Always use forward slash for consistency with .claude.json
     const relativePart = absolutePath.slice(homeDir.length)
-    return '~' + relativePart.replace(/[\\/]/g, sep)
+    return '~' + relativePart.replace(/\\/g, '/')
   }
-  return absolutePath
+  // Always normalize to forward slash
+  return absolutePath.replace(/\\/g, '/')
 }
 
 // ============================================
@@ -247,8 +247,6 @@ export const getRealPathFromSession = (
       logger.warn(
         `getRealPathFromSession: ${folderName} -> no match, cwds found: ${cwdList.join(', ')}`
       )
-    } else {
-      logger.warn(`getRealPathFromSession: ${folderName} -> no valid cwd in any session`)
     }
     return null
   } catch {

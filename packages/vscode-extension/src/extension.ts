@@ -249,11 +249,9 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (item.type !== 'project') return
 
-        const folderPath = session.folderNameToPath(item.projectName)
+        const folderPath = await session.folderNameToPath(item.projectName)
         const homeDir = process.env.HOME || process.env.USERPROFILE || ''
-        const absolutePath = folderPath.startsWith('~')
-          ? folderPath.replace('~', homeDir)
-          : folderPath
+        const absolutePath = session.expandHomePath(folderPath, homeDir)
 
         await openOrRevealFolder(absolutePath)
       }
@@ -296,18 +294,18 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         // Show quick pick to select target project
-        const selected = await vscode.window.showQuickPick(
-          otherProjects.map((p) => ({
-            label: session.folderNameToPath(p.name),
+        const quickPickItems = await Promise.all(
+          otherProjects.map(async (p) => ({
+            label: await session.folderNameToPath(p.name),
             description: `${p.sessionCount} sessions`,
             projectName: p.name,
-          })),
-          {
-            placeHolder: 'Select target project',
-            title:
-              sessions.length > 1 ? `Move ${sessions.length} Sessions to...` : 'Move Session to...',
-          }
+          }))
         )
+        const selected = await vscode.window.showQuickPick(quickPickItems, {
+          placeHolder: 'Select target project',
+          title:
+            sessions.length > 1 ? `Move ${sessions.length} Sessions to...` : 'Move Session to...',
+        })
 
         if (!selected) return
 
@@ -467,9 +465,9 @@ export function activate(context: vscode.ExtensionContext) {
         if (!choice) return
 
         // Get project path for cwd
-        const folderPath = session.folderNameToPath(item.projectName)
+        const folderPath = await session.folderNameToPath(item.projectName)
         const homeDir = process.env.HOME || process.env.USERPROFILE || ''
-        const cwd = folderPath.startsWith('~') ? folderPath.replace('~', homeDir) : folderPath
+        const cwd = session.expandHomePath(folderPath, homeDir)
 
         if (choice.mode === 'internal') {
           // Create terminal with proper name and cwd
