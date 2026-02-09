@@ -47,7 +47,6 @@ export {
   getSessionsDir,
   getTodosDir,
   folderNameToDisplayPath,
-  displayPathToFolderName,
   pathToFolderName,
   folderNameToPath,
   getRealPathFromSession,

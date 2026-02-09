@@ -59,12 +59,6 @@ const WINDOWS_PATTERNS = {
 
 type WindowsPathResult = { isWindows: true; drive: string; rest: string } | { isWindows: false }
 
-/** Parse Windows absolute path, extracting drive letter and rest */
-const parseWindowsAbsPath = (p: string): WindowsPathResult => {
-  const match = p.match(WINDOWS_PATTERNS.absolutePath)
-  return match ? { isWindows: true, drive: match[1], rest: p.slice(3) } : { isWindows: false }
-}
-
 /** Parse Windows folder name format, extracting drive letter and rest */
 const parseWindowsFolderName = (name: string): WindowsPathResult => {
   const match = name.match(WINDOWS_PATTERNS.folderName)
@@ -73,10 +67,6 @@ const parseWindowsFolderName = (name: string): WindowsPathResult => {
 
 /** Check if path looks like Windows format */
 const isWindowsPath = (p: string): boolean => WINDOWS_PATTERNS.absolutePath.test(p)
-
-/** Convert separators to folder name format (no dot handling) */
-const separatorsToFolderName = (str: string): string =>
-  str.replace(/[/\\]\./g, '--').replace(/[/\\]/g, '-')
 
 // ============================================
 // Pure Functions (No I/O)
@@ -154,20 +144,6 @@ export const folderNameToDisplayPath = (folderName: string): string => {
 
   // Unix path
   return folderName.replace(/^-/, '/').replace(/--/g, '/.').replace(/-/g, '/')
-}
-
-/**
- * Convert display path to folder name (reverse of folderNameToDisplayPath)
- * @deprecated Use pathToFolderName for absolute paths. This function exists
- * for roundtrip testing and does not handle non-ASCII or normalize drive case.
- */
-export const displayPathToFolderName = (displayPath: string): string => {
-  const parsed = parseWindowsAbsPath(displayPath)
-  if (parsed.isWindows) {
-    return parsed.drive + '--' + separatorsToFolderName(parsed.rest)
-  }
-
-  return displayPath.replace(/^\//g, '-').replace(/\/\./g, '--').replace(/\//g, '-')
 }
 
 /**

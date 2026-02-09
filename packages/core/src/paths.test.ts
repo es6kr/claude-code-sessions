@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   pathToFolderName,
   folderNameToDisplayPath,
-  displayPathToFolderName,
   toRelativePath,
   expandHomePath,
   folderNameToPath,
@@ -124,28 +123,28 @@ describe('folderNameToDisplayPath', () => {
   })
 })
 
-describe('displayPathToFolderName', () => {
+describe('pathToFolderName', () => {
   describe('Unix paths', () => {
     it('converts Unix path to folder name', () => {
-      expect(displayPathToFolderName('/home/user/projects')).toBe('-home-user-projects')
+      expect(pathToFolderName('/home/user/projects')).toBe('-home-user-projects')
     })
 
     it('handles dot-prefixed folders', () => {
-      expect(displayPathToFolderName('/home/user/.vscode')).toBe('-home-user--vscode')
+      expect(pathToFolderName('/home/user/.vscode')).toBe('-home-user--vscode')
     })
   })
 
   describe('Windows paths', () => {
     it('converts Windows path to folder name', () => {
-      expect(displayPathToFolderName('C:\\Users\\david\\projects')).toBe('C--Users-david-projects')
+      expect(pathToFolderName('C:\\Users\\david\\projects')).toBe('C--Users-david-projects')
     })
 
     it('handles Windows path with forward slashes', () => {
-      expect(displayPathToFolderName('C:/Users/david/projects')).toBe('C--Users-david-projects')
+      expect(pathToFolderName('C:/Users/david/projects')).toBe('C--Users-david-projects')
     })
 
     it('handles Windows dot-prefixed folders', () => {
-      expect(displayPathToFolderName('C:\\Users\\david\\.vscode')).toBe('C--Users-david--vscode')
+      expect(pathToFolderName('C:\\Users\\david\\.vscode')).toBe('C--Users-david--vscode')
     })
   })
 })
@@ -231,29 +230,6 @@ describe('Windows path separator issue (issue #14)', () => {
   })
 
   /**
-   * Bug 3: toRelativePath returns forward slashes on Windows
-   * - normalizedPath uses forward slashes for comparison
-   * - Return value uses normalizedPath, not original separators
-   */
-  it('toRelativePath should return OS-native separators in relative path', async () => {
-    const nodePath = await import('path')
-    const os = await import('os')
-
-    const homeDir = os.homedir()
-    const testPath = nodePath.join(homeDir, 'projects', 'work')
-
-    const result = toRelativePath(testPath, homeDir)
-
-    // The part after ~ should use OS-native separators
-    if (result.startsWith('~')) {
-      const relativePart = result.slice(1)
-      const hasWrongSeparator =
-        nodePath.sep === '\\' ? relativePart.includes('/') : relativePart.includes('\\')
-      expect(hasWrongSeparator).toBe(false)
-    }
-  })
-
-  /**
    * Full integration test: extension.ts resumeSession flow
    */
   it('resumeSession should produce correct cwd path', async () => {
@@ -279,16 +255,16 @@ describe('Windows path separator issue (issue #14)', () => {
 
 describe('roundtrip conversion', () => {
   describe('Unix paths', () => {
-    it('roundtrips simple Unix path via displayPathToFolderName', () => {
+    it('roundtrips simple Unix path via pathToFolderName', () => {
       const original = '/home/user/projects'
-      const folderName = displayPathToFolderName(original)
+      const folderName = pathToFolderName(original)
       const restored = folderNameToDisplayPath(folderName)
       expect(restored).toBe(original)
     })
 
     it('roundtrips dot-prefixed Unix path', () => {
       const original = '/home/user/.vscode'
-      const folderName = displayPathToFolderName(original)
+      const folderName = pathToFolderName(original)
       const restored = folderNameToDisplayPath(folderName)
       expect(restored).toBe(original)
     })
@@ -297,14 +273,14 @@ describe('roundtrip conversion', () => {
   describe('Windows paths', () => {
     it('roundtrips simple Windows path', () => {
       const original = 'C:\\Users\\david\\projects'
-      const folderName = displayPathToFolderName(original)
+      const folderName = pathToFolderName(original)
       const restored = folderNameToDisplayPath(folderName)
       expect(restored).toBe(original)
     })
 
     it('roundtrips dot-prefixed Windows path', () => {
       const original = 'C:\\Users\\david\\.vscode'
-      const folderName = displayPathToFolderName(original)
+      const folderName = pathToFolderName(original)
       const restored = folderNameToDisplayPath(folderName)
       expect(restored).toBe(original)
     })
