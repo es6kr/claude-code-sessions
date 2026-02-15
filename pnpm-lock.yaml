@@ -54,8 +54,8 @@ importers:
   packages/core:
     dependencies:
       effect:
-        specifier: ^3.19.16
-        version: 3.19.16
+        specifier: ^3.19.17
+        version: 3.19.17
     devDependencies:
       '@types/node':
         specifier: ^25.0.9
@@ -79,8 +79,8 @@ importers:
         specifier: ^1.26.0
         version: 1.26.0(zod@4.3.6)
       effect:
-        specifier: ^3.19.16
-        version: 3.19.16
+        specifier: ^3.19.17
+        version: 3.19.17
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -107,8 +107,8 @@ importers:
         specifier: workspace:^
         version: link:../core
       effect:
-        specifier: ^3.19.16
-        version: 3.19.16
+        specifier: ^3.19.17
+        version: 3.19.17
     devDependencies:
       '@types/glob':
         specifier: ^9.0.0
@@ -150,11 +150,11 @@ importers:
         specifier: ^1.7.5
         version: 1.7.5
       effect:
-        specifier: ^3.19.16
-        version: 3.19.16
+        specifier: ^3.19.17
+        version: 3.19.17
       marked:
-        specifier: ^17.0.1
-        version: 17.0.1
+        specifier: ^17.0.2
+        version: 17.0.2
     devDependencies:
       '@chromatic-com/storybook':
         specifier: ^5.0.0
@@ -1965,8 +1965,8 @@ packages:
   ee-first@1.1.1:
     resolution: {integrity: sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow==}
 
-  effect@3.19.16:
-    resolution: {integrity: sha512-7+XC3vGrbAhCHd8LTFHvnZjRpZKZ8YHRZqJTkpNoxcJ2mCyNs2SwI+6VkV/ij8Y3YW7wfBN4EbU06/F5+m/wkQ==}
+  effect@3.19.17:
+    resolution: {integrity: sha512-MChgn9z0y3KJ2DJ+VsZt1bdVDJ0bDIZt9zm4s3iPpRLzgcEGDOIP8pwADjAWifaP0S672nlRE5rZPBbyDcjn1g==}
 
   emoji-regex@10.6.0:
     resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
@@ -2813,8 +2813,8 @@ packages:
     resolution: {integrity: sha512-a54IwgWPaeBCAAsv13YgmALOF1elABB08FxO9i+r4VFk5Vl4pKokRPeX8u5TCgSsPi6ec1otfLjdOpVcgbpshg==}
     hasBin: true
 
-  marked@17.0.1:
-    resolution: {integrity: sha512-boeBdiS0ghpWcSwoNm/jJBwdpFaMnZWRzjA6SkUMYb40SVaN1x7mmfGKp0jvexGcx+7y2La5zRZsYFZI6Qpypg==}
+  marked@17.0.2:
+    resolution: {integrity: sha512-s5HZGFQea7Huv5zZcAGhJLT3qLpAfnY7v7GWkICUr0+Wd5TFEtdlRR2XUL5Gg+RH7u2Df595ifrxR03mBaw7gA==}
     engines: {node: '>= 20'}
     hasBin: true
 
@@ -5820,7 +5820,7 @@ snapshots:
 
   ee-first@1.1.1: {}
 
-  effect@3.19.16:
+  effect@3.19.17:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 3.23.2
@@ -6709,7 +6709,7 @@ snapshots:
       punycode.js: 2.3.1
       uc.micro: 2.1.0
 
-  marked@17.0.1: {}
+  marked@17.0.2: {}
 
   math-intrinsics@1.1.0: {}
 
