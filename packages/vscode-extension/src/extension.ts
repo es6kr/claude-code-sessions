@@ -23,6 +23,7 @@ function getConfig() {
     autoStartServer: config.get<boolean>('autoStartServer', true),
     openInEditor: config.get<boolean>('openInEditor', true),
     useBetaVersion: config.get<boolean>('useBetaVersion', false),
+    defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
   }
 }
 
@@ -443,33 +444,41 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (item.type !== 'session') return
 
-        const choice = await vscode.window.showQuickPick(
-          [
-            {
-              label: '$(terminal) Internal Terminal',
-              description: 'Open in VSCode integrated terminal',
-              mode: 'internal' as const,
-            },
-            {
-              label: '$(link-external) External Terminal',
-              description: 'Open in system default terminal',
-              mode: 'external' as const,
-            },
-          ],
-          {
-            placeHolder: 'Where to open Claude session?',
-            title: 'Resume Session',
-          }
-        )
+        const { defaultTerminalMode } = getConfig()
 
-        if (!choice) return
+        let mode: 'internal' | 'external'
+        if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
+          mode = defaultTerminalMode
+        } else {
+          const choice = await vscode.window.showQuickPick(
+            [
+              {
+                label: '$(terminal) Internal Terminal',
+                description: 'Open in VSCode integrated terminal',
+                mode: 'internal' as const,
+              },
+              {
+                label: '$(link-external) External Terminal',
+                description: 'Open in system default terminal',
+                mode: 'external' as const,
+              },
+            ],
+            {
+              placeHolder: 'Where to open Claude session?',
+              title: 'Resume Session',
+            }
+          )
+
+          if (!choice) return
+          mode = choice.mode
+        }
 
         // Get project path for cwd
         const folderPath = await session.folderNameToPath(item.projectName)
         const homeDir = process.env.HOME || process.env.USERPROFILE || ''
         const cwd = session.expandHomePath(folderPath, homeDir)
 
-        if (choice.mode === 'internal') {
+        if (mode === 'internal') {
           // Create terminal with proper name and cwd
           const terminal = vscode.window.createTerminal({
             name: `Claude: ${item.label}`,
