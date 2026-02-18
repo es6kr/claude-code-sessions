@@ -24,6 +24,7 @@ function getConfig() {
     openInEditor: config.get<boolean>('openInEditor', true),
     useBetaVersion: config.get<boolean>('useBetaVersion', false),
     defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
+    cliFlags: config.get<string>('cliFlags', ''),
   }
 }
 
@@ -477,6 +478,7 @@ export function activate(context: vscode.ExtensionContext) {
         const folderPath = await session.folderNameToPath(item.projectName)
         const homeDir = process.env.HOME || process.env.USERPROFILE || ''
         const cwd = session.expandHomePath(folderPath, homeDir)
+        const { cliFlags } = getConfig()
 
         if (mode === 'internal') {
           // Create terminal with proper name and cwd
@@ -485,12 +487,15 @@ export function activate(context: vscode.ExtensionContext) {
             cwd,
           })
           terminal.show()
-          terminal.sendText(`claude --resume ${item.sessionId}`)
+          const cmd = `claude --resume ${item.sessionId}${cliFlags ? ` ${cliFlags}` : ''}`
+          terminal.sendText(cmd)
         } else {
           // External: spawn detached process
+          const extraArgs = cliFlags ? cliFlags.split(/\s+/).filter(Boolean) : []
           const result = resumeSession({
             sessionId: item.sessionId,
             cwd,
+            args: extraArgs,
           })
 
           if (result.success) {

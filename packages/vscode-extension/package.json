@@ -228,6 +228,11 @@
           ],
           "default": "ask",
           "description": "Default terminal mode when resuming sessions: 'ask' shows a picker, 'internal' uses the integrated terminal, 'external' uses the system terminal"
+        },
+        "claudeSessions.cliFlags": {
+          "type": "string",
+          "default": "",
+          "description": "Additional CLI flags appended to the claude command when resuming sessions (e.g., '--dangerously-skip-permissions')"
         }
       }
     }
