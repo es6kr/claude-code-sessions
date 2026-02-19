@@ -48,6 +48,9 @@ export class SessionTreeProvider
   readonly dropMimeTypes = [MIME_TYPE]
   readonly dragMimeTypes = ['text/uri-list', MIME_TYPE]
 
+  // Parent tracking for tree search (Ctrl+F) support
+  private parentMap = new Map<string, SessionTreeItem>()
+
   // Sort options (persisted in memory, reset on restart)
   private sortOptions: SessionSortOptions = { field: 'summary', order: 'desc' }
 
@@ -61,11 +64,17 @@ export class SessionTreeProvider
   }
 
   refresh(): void {
+    this.parentMap.clear()
     this._onDidChangeTreeData.fire()
   }
 
   getTreeItem(element: SessionTreeItem): vscode.TreeItem {
     return element
+  }
+
+  getParent(element: SessionTreeItem): SessionTreeItem | undefined {
+    if (!element.id) return undefined
+    return this.parentMap.get(element.id)
   }
 
   public async handleDrag(
@@ -189,6 +198,13 @@ export class SessionTreeProvider
     return session.findProjectByWorkspacePath(fsPath, projectNames)
   }
 
+  private trackChildren(parent: SessionTreeItem, children: SessionTreeItem[]): SessionTreeItem[] {
+    for (const child of children) {
+      if (child.id) this.parentMap.set(child.id, parent)
+    }
+    return children
+  }
+
   async getChildren(element?: SessionTreeItem): Promise<SessionTreeItem[]> {
     if (!element) {
       // Root level - show projects
@@ -242,31 +258,34 @@ export class SessionTreeProvider
       const currentProjectName = this.findCurrentProject(projectNames)
       const isCurrentProject = element.projectName === currentProjectName
 
-      return projectData.sessions.map((s, index) => {
-        // Calculate if session has sub-items (summaries, agents, todos)
-        const hasSubItems = sessionHasSubItems(s)
+      return this.trackChildren(
+        element,
+        projectData.sessions.map((s, index) => {
+          // Calculate if session has sub-items (summaries, agents, todos)
+          const hasSubItems = sessionHasSubItems(s)
 
-        // Auto-expand first session in current project
-        const shouldExpand = isCurrentProject && index === 0 && hasSubItems
+          // Auto-expand first session in current project
+          const shouldExpand = isCurrentProject && index === 0 && hasSubItems
 
-        return new SessionTreeItem(
-          session.getDisplayTitle(s.customTitle, s.currentSummary, s.title),
-          hasSubItems
-            ? shouldExpand
-              ? vscode.TreeItemCollapsibleState.Expanded
-              : vscode.TreeItemCollapsibleState.Collapsed
-            : vscode.TreeItemCollapsibleState.None,
-          'session',
-          element.projectName,
-          s.id,
-          s.messageCount,
-          s.sortTimestamp,
-          undefined, // todo
-          undefined, // agentId
-          undefined, // itemIndex
-          getSessionTooltip(s) // tooltip
-        )
-      })
+          return new SessionTreeItem(
+            session.getDisplayTitle(s.customTitle, s.currentSummary, s.title),
+            hasSubItems
+              ? shouldExpand
+                ? vscode.TreeItemCollapsibleState.Expanded
+                : vscode.TreeItemCollapsibleState.Collapsed
+              : vscode.TreeItemCollapsibleState.None,
+            'session',
+            element.projectName,
+            s.id,
+            s.messageCount,
+            s.sortTimestamp,
+            undefined, // todo
+            undefined, // agentId
+            undefined, // itemIndex
+            getSessionTooltip(s) // tooltip
+          )
+        })
+      )
     }
 
     if (element.type === 'session') {
@@ -320,7 +339,7 @@ export class SessionTreeProvider
         )
       }
 
-      return items
+      return this.trackChildren(element, items)
     }
 
     if (element.type === 'summaries-group') {
@@ -329,23 +348,26 @@ export class SessionTreeProvider
         session.loadSessionTreeData(element.projectName, element.sessionId)
       )
 
-      return sessionData.summaries.map((summary, idx) => {
-        // Truncate summary text for display
-        const displayText =
-          summary.summary.length > 60 ? summary.summary.slice(0, 57) + '...' : summary.summary
-        return new SessionTreeItem(
-          displayText,
-          vscode.TreeItemCollapsibleState.None,
-          'summary',
-          element.projectName,
-          element.sessionId,
-          idx === 0 ? undefined : idx, // Show index for older summaries
-          summary.timestamp,
-          undefined, // todo
-          undefined, // agentId
-          idx // itemIndex for unique ID
-        )
-      })
+      return this.trackChildren(
+        element,
+        sessionData.summaries.map((summary, idx) => {
+          // Truncate summary text for display
+          const displayText =
+            summary.summary.length > 60 ? summary.summary.slice(0, 57) + '...' : summary.summary
+          return new SessionTreeItem(
+            displayText,
+            vscode.TreeItemCollapsibleState.None,
+            'summary',
+            element.projectName,
+            element.sessionId,
+            idx === 0 ? undefined : idx, // Show index for older summaries
+            summary.timestamp,
+            undefined, // todo
+            undefined, // agentId
+            idx // itemIndex for unique ID
+          )
+        })
+      )
     }
 
     if (element.type === 'todos-group') {
@@ -395,7 +417,7 @@ export class SessionTreeProvider
         }
       }
 
-      return items
+      return this.trackChildren(element, items)
     }
 
     if (element.type === 'agents-group') {
@@ -404,20 +426,23 @@ export class SessionTreeProvider
         session.loadSessionTreeData(element.projectName, element.sessionId)
       )
 
-      return sessionData.agents.map(
-        (agent, idx) =>
-          new SessionTreeItem(
-            agent.name ?? agent.id.slice(0, 8),
-            vscode.TreeItemCollapsibleState.None,
-            'agent',
-            element.projectName,
-            element.sessionId,
-            agent.messageCount,
-            undefined,
-            undefined,
-            agent.id,
-            idx // itemIndex for unique ID
-          )
+      return this.trackChildren(
+        element,
+        sessionData.agents.map(
+          (agent, idx) =>
+            new SessionTreeItem(
+              agent.name ?? agent.id.slice(0, 8),
+              vscode.TreeItemCollapsibleState.None,
+              'agent',
+              element.projectName,
+              element.sessionId,
+              agent.messageCount,
+              undefined,
+              undefined,
+              agent.id,
+              idx // itemIndex for unique ID
+            )
+        )
       )
     }
 
