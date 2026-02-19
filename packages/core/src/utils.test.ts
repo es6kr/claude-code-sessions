@@ -276,18 +276,20 @@ describe('parseJsonlLines', () => {
     expect(result[1]).toEqual({ type: 'assistant', uuid: '2' })
   })
 
-  it('should throw error with file path and line number on parse failure', () => {
+  it('should skip malformed lines and return valid ones', () => {
     const lines = ['{"valid":"json"}', 'invalid json here', '{"also":"valid"}']
 
-    expect(() => parseJsonlLines(lines, '/path/to/session.jsonl')).toThrow(
-      'Failed to parse line 2 in /path/to/session.jsonl:'
-    )
+    const result = parseJsonlLines(lines, '/path/to/session.jsonl')
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({ valid: 'json' })
+    expect(result[1]).toEqual({ also: 'valid' })
   })
 
-  it('should include original error message in thrown error', () => {
+  it('should return empty array when all lines are malformed', () => {
     const lines = ['not valid json']
 
-    expect(() => parseJsonlLines(lines, '/test.jsonl')).toThrow('Unexpected token')
+    const result = parseJsonlLines(lines, '/test.jsonl')
+    expect(result).toEqual([])
   })
 
   it('should handle empty lines array', () => {
@@ -337,13 +339,13 @@ describe('readJsonlFile', () => {
     expect(result).toHaveLength(3)
   })
 
-  it('should throw with file path on parse error', async () => {
+  it('should skip malformed lines in file', async () => {
     const fileContent = '{"valid":true}\ninvalid line\n'
     mockedFs.readFile.mockResolvedValue(fileContent)
 
-    await expect(Effect.runPromise(readJsonlFile('/broken/file.jsonl'))).rejects.toThrow(
-      'Failed to parse line 2 in /broken/file.jsonl:'
-    )
+    const result = await Effect.runPromise(readJsonlFile('/broken/file.jsonl'))
+    expect(result).toHaveLength(1)
+    expect(result[0]).toEqual({ valid: true })
   })
 
   it('should handle file read errors', async () => {

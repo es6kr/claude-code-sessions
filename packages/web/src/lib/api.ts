@@ -12,7 +12,9 @@ import type {
 // Re-export core types
 export type { Project, SessionMeta, SummaryInfo, TodoItem, SessionTodos, AgentInfo }
 
-const BASE_URL = '/api'
+import { base } from '$app/paths'
+
+const BASE_URL = `${base}/api`
 
 // Content item with recursive content support
 export interface ContentItem {

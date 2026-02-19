@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 import { SessionTreeProvider, type SessionTreeItem } from './treeProvider'
+import { SearchViewProvider } from './searchView'
 import * as session from '@claude-sessions/core'
 import { resumeSession } from '@claude-sessions/core/server'
 import { Effect } from 'effect'
@@ -23,6 +24,9 @@ function getConfig() {
     autoStartServer: config.get<boolean>('autoStartServer', true),
     openInEditor: config.get<boolean>('openInEditor', true),
     useBetaVersion: config.get<boolean>('useBetaVersion', false),
+    defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
+    cliFlags: config.get<string>('cliFlags', ''),
+    webServerPath: config.get<string>('webServerPath', ''),
   }
 }
 
@@ -49,14 +53,25 @@ async function ensureWebServer(): Promise<number> {
     webServerProcess = null
   }
 
-  const { useBetaVersion } = getConfig()
-  const packageSpec = useBetaVersion ? '@claude-sessions/web@beta' : '@claude-sessions/web'
+  const { useBetaVersion, webServerPath } = getConfig()
+
+  let spawnCmd: string
+  let spawnArgs: string[]
+
+  if (webServerPath) {
+    spawnCmd = 'node'
+    spawnArgs = [webServerPath, '--port', String(port)]
+  } else {
+    const packageSpec = useBetaVersion ? '@claude-sessions/web@beta' : '@claude-sessions/web'
+    spawnCmd = 'npx'
+    spawnArgs = ['-y', packageSpec, '--port', String(port)]
+  }
 
   outputChannel.appendLine('=== Starting Web Server ===')
-  outputChannel.appendLine(`Command: npx ${packageSpec} --port ${port}`)
+  outputChannel.appendLine(`Command: ${spawnCmd} ${spawnArgs.join(' ')}`)
 
   return new Promise((resolve, reject) => {
-    const child = spawn('npx', ['-y', packageSpec, '--port', String(port)], {
+    const child = spawn(spawnCmd, spawnArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
     })
@@ -157,6 +172,14 @@ async function openOrRevealFolder(absolutePath: string) {
 
 export function activate(context: vscode.ExtensionContext) {
   const treeProvider = new SessionTreeProvider()
+
+  // Register filter webview (above tree view)
+  const searchProvider = new SearchViewProvider(context.extensionUri, (text) => {
+    treeProvider.setFilterText(text)
+  })
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider('claudeSessionsFilter', searchProvider)
+  )
 
   // Register tree view with drag and drop support
   const treeView = vscode.window.createTreeView('claudeSessions', {

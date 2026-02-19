@@ -38,6 +38,12 @@
     "views": {
       "claude-sessions": [
         {
+          "type": "webview",
+          "id": "claudeSessionsFilter",
+          "name": "Filter",
+          "visibility": "visible"
+        },
+        {
           "id": "claudeSessions",
           "name": "Sessions",
           "icon": "resources/activity-bar.svg",
@@ -218,6 +224,26 @@
           "type": "boolean",
           "default": false,
           "description": "Use beta version of @claude-sessions/web package instead of latest"
+        },
+        "claudeSessions.defaultTerminalMode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "internal",
+            "external"
+          ],
+          "default": "ask",
+          "description": "Default terminal mode when resuming sessions: 'ask' shows a picker, 'internal' uses the integrated terminal, 'external' uses the system terminal"
+        },
+        "claudeSessions.cliFlags": {
+          "type": "string",
+          "default": "",
+          "description": "Additional CLI flags appended to the claude command when resuming sessions (e.g., '--dangerously-skip-permissions')"
+        },
+        "claudeSessions.webServerPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a local @claude-sessions/web CLI script (e.g., '/path/to/packages/web/dist/cli.js'). When set, uses this instead of npx."
         }
       }
     }
@@ -247,8 +273,5 @@
     "mocha": "^11.7.5",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"
-  },
-  "extensionDependencies": [
-    "Anthropic.claude-code"
-  ]
+  }
 }

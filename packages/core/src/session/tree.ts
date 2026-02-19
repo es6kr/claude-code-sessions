@@ -4,7 +4,7 @@
 import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { getSessionsDir } from '../paths.js'
+import { getSessionsDir, folderNameToPath } from '../paths.js'
 import {
   extractTextContent,
   extractTitle,
@@ -15,7 +15,6 @@ import {
 } from '../utils.js'
 import { findLinkedAgents } from '../agents.js'
 import { findLinkedTodos } from '../todos.js'
-import { listProjects } from './projects.js'
 import { loadTreeCache, writeTreeCache, validateCache, type TreeCache } from './cache.js'
 import { createLogger } from '../logger.js'
 import type {
@@ -462,13 +461,22 @@ const updateSessionSummaries = (
 // Load all sessions tree data for a project (with caching)
 export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSortOptions) =>
   Effect.gen(function* () {
-    const project = (yield* listProjects).find((p) => p.name === projectName)
-    if (!project) {
-      return null
-    }
+    const projectPath = path.join(getSessionsDir(), projectName)
+
+    // Check project exists (fast: single stat instead of listing ALL projects)
+    const exists = yield* Effect.tryPromise(() =>
+      fs
+        .access(projectPath)
+        .then(() => true)
+        .catch(() => false)
+    )
+    if (!exists) return null
+
+    // Resolve display name for this single project (avoids processing all projects)
+    const displayName = yield* Effect.tryPromise(() => folderNameToPath(projectName))
+    const project = { name: projectName, displayName, path: projectPath }
 
     const sort = sortOptions ?? DEFAULT_SORT
-    const projectPath = path.join(getSessionsDir(), projectName)
     const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
     const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
     const sessionFileIds = sessionFiles.map((f) => f.replace('.jsonl', ''))

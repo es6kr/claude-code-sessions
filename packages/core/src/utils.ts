@@ -245,23 +245,23 @@ export const tryParseJsonLine = <T = Record<string, unknown>>(
 }
 
 /**
- * Parse JSONL lines with detailed error messages including file path and line number
- * @throws Error with "Failed to parse line X in /path/to/file: original error"
+ * Parse JSONL lines, skipping malformed lines with a warning
+ * Session files can have truncated/corrupt lines in practice
  */
 export const parseJsonlLines = <T = Record<string, unknown>>(
   lines: string[],
   filePath: string
 ): T[] => {
-  return lines.map((line, idx) => {
+  const results: T[] = []
+  for (let idx = 0; idx < lines.length; idx++) {
     try {
-      return JSON.parse(line) as T
+      results.push(JSON.parse(lines[idx]) as T)
     } catch (e) {
       const err = e as Error
-      throw new Error(`Failed to parse line ${idx + 1} in ${filePath}: ${err.message}`, {
-        cause: err,
-      })
+      console.warn(`Skipping malformed line ${idx + 1} in ${filePath}: ${err.message}`)
     }
-  })
+  }
+  return results
 }
 
 /**
