@@ -23,6 +23,8 @@ export {
   // Tree data
   loadSessionTreeData,
   loadProjectTreeData,
+  // Cache
+  getCachePath,
   // Analysis
   analyzeSession,
   compressSession,
