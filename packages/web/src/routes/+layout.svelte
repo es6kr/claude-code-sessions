@@ -116,9 +116,11 @@
   )
   let effectiveDeleteCount = $derived(skipWithTodos ? totalEmpty - totalWithTodos : totalEmpty)
 
-  onMount(async () => {
-    const cleanupTheme = initTheme()
+  onMount(() => {
+    return initTheme()
+  })
 
+  onMount(async () => {
     try {
       const res = await api.getVersion()
       version = res.version
@@ -130,8 +132,6 @@
     } catch {
       version = 'unknown'
     }
-
-    return cleanupTheme
   })
 
   const handleShutdown = () => {
