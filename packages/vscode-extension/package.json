@@ -38,12 +38,6 @@
     "views": {
       "claude-sessions": [
         {
-          "type": "webview",
-          "id": "claudeSessionsFilter",
-          "name": "Filter",
-          "visibility": "visible"
-        },
-        {
           "id": "claudeSessions",
           "name": "Sessions",
           "icon": "resources/activity-bar.svg",
@@ -106,34 +100,54 @@
         "command": "claudeSessions.sortBy",
         "title": "Sort Sessions",
         "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "claudeSessions.filterSessions",
+        "title": "Filter Sessions",
+        "icon": "$(search)"
+      },
+      {
+        "command": "claudeSessions.clearFilter",
+        "title": "Clear Filter",
+        "icon": "$(close)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "claudeSessions.sortBy",
+          "command": "claudeSessions.clearFilter",
+          "when": "view == claudeSessions && claudeSessions.filterActive",
+          "group": "navigation@0"
+        },
+        {
+          "command": "claudeSessions.filterSessions",
           "when": "view == claudeSessions",
           "group": "navigation@1"
         },
         {
-          "command": "claudeSessions.cleanup",
+          "command": "claudeSessions.sortBy",
           "when": "view == claudeSessions",
           "group": "navigation@2"
         },
         {
-          "command": "claudeSessions.openWebUI",
+          "command": "claudeSessions.cleanup",
           "when": "view == claudeSessions",
           "group": "navigation@3"
         },
         {
-          "command": "claudeSessions.refresh",
+          "command": "claudeSessions.openWebUI",
           "when": "view == claudeSessions",
           "group": "navigation@4"
         },
         {
-          "command": "workbench.action.restartExtensionHost",
+          "command": "claudeSessions.refresh",
           "when": "view == claudeSessions",
           "group": "navigation@5"
+        },
+        {
+          "command": "workbench.action.restartExtensionHost",
+          "when": "view == claudeSessions",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [

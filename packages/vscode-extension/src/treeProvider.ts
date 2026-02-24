@@ -70,6 +70,10 @@ export class SessionTreeProvider
     this.refresh()
   }
 
+  getFilterText(): string {
+    return this.filterText
+  }
+
   setFilterText(text: string): void {
     this.filterText = text.trim().toLowerCase()
     this._onDidChangeTreeData.fire()

@@ -1,6 +1,5 @@
 import * as vscode from 'vscode'
 import { SessionTreeProvider, type SessionTreeItem } from './treeProvider'
-import { SearchViewProvider } from './searchView'
 import * as session from '@claude-sessions/core'
 import { resumeSession } from '@claude-sessions/core/server'
 import { Effect } from 'effect'
@@ -172,14 +171,6 @@ async function openOrRevealFolder(absolutePath: string) {
 
 export function activate(context: vscode.ExtensionContext) {
   const treeProvider = new SessionTreeProvider()
-
-  // Register filter webview (above tree view)
-  const searchProvider = new SearchViewProvider(context.extensionUri, (text) => {
-    treeProvider.setFilterText(text)
-  })
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider('claudeSessionsFilter', searchProvider)
-  )
 
   // Register tree view with drag and drop support
   const treeView = vscode.window.createTreeView('claudeSessions', {
@@ -374,6 +365,30 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
     ),
+
+    vscode.commands.registerCommand('claudeSessions.filterSessions', async () => {
+      const value = await vscode.window.showInputBox({
+        prompt: 'Filter sessions by title, summary, or content',
+        value: treeProvider.getFilterText(),
+        placeHolder: 'Type to filter sessions...',
+      })
+
+      if (value !== undefined) {
+        treeProvider.setFilterText(value)
+        treeView.message = value.trim() ? `Filter: "${value.trim()}"` : undefined
+        vscode.commands.executeCommand(
+          'setContext',
+          'claudeSessions.filterActive',
+          value.trim().length > 0
+        )
+      }
+    }),
+
+    vscode.commands.registerCommand('claudeSessions.clearFilter', () => {
+      treeProvider.setFilterText('')
+      treeView.message = undefined
+      vscode.commands.executeCommand('setContext', 'claudeSessions.filterActive', false)
+    }),
 
     vscode.commands.registerCommand('claudeSessions.sortBy', async () => {
       const sortOptions: Array<{
