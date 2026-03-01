@@ -249,7 +249,7 @@
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
-    "effect": "^3.19.16"
+    "effect": "^3.19.19"
   },
   "devDependencies": {
     "@types/glob": "^9.0.0",
