@@ -2,7 +2,7 @@
   "name": "claude-sessions",
   "displayName": "Claude Code Sessions",
   "description": "Manage Claude Code sessions from VS Code sidebar",
-  "version": "0.4.6-beta.0",
+  "version": "0.4.6-beta.1",
   "publisher": "es6kr",
   "license": "MIT",
   "repository": {
@@ -218,6 +218,21 @@
           "type": "boolean",
           "default": false,
           "description": "Use beta version of @claude-sessions/web package instead of latest"
+        },
+        "claudeSessions.cliFlags": {
+          "type": "string",
+          "default": "",
+          "description": "Additional CLI flags appended to the claude command when resuming sessions (e.g., '--dangerously-skip-permissions')"
+        },
+        "claudeSessions.defaultTerminalMode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "external",
+            "internal"
+          ],
+          "default": "ask",
+          "description": "Default terminal mode when resuming sessions: 'ask' shows a picker, 'internal' uses the integrated terminal, 'external' uses the system terminal"
         }
       }
     }
