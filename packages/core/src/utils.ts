@@ -258,7 +258,7 @@ export const parseJsonlLines = <T = Record<string, unknown>>(
     } catch (e) {
       const err = e as Error
       throw new Error(`Failed to parse line ${idx + 1} in ${filePath}: ${err.message}`, {
-        cause: err,
+        cause: e,
       })
     }
   })
