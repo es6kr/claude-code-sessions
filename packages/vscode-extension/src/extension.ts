@@ -19,12 +19,12 @@ session.setLogger({
 function getConfig() {
   const config = vscode.workspace.getConfiguration('claudeSessions')
   return {
-    port: config.get<number>('port', 5174),
     autoStartServer: config.get<boolean>('autoStartServer', true),
-    openInEditor: config.get<boolean>('openInEditor', true),
-    useBetaVersion: config.get<boolean>('useBetaVersion', false),
-    defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
     cliFlags: config.get<string>('cliFlags', ''),
+    defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
+    openInEditor: config.get<boolean>('openInEditor', true),
+    port: config.get<number>('port', 5174),
+    useBetaVersion: config.get<boolean>('useBetaVersion', false),
   }
 }
 
@@ -445,7 +445,7 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (item.type !== 'session') return
 
-        const { defaultTerminalMode } = getConfig()
+        const { cliFlags, defaultTerminalMode } = getConfig()
 
         let mode: 'internal' | 'external'
         if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
@@ -478,7 +478,6 @@ export function activate(context: vscode.ExtensionContext) {
         const folderPath = await session.folderNameToPath(item.projectName)
         const homeDir = process.env.HOME || process.env.USERPROFILE || ''
         const cwd = session.expandHomePath(folderPath, homeDir)
-        const { cliFlags } = getConfig()
 
         if (mode === 'internal') {
           // Create terminal with proper name and cwd
