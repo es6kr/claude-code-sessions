@@ -200,7 +200,7 @@ describe('Windows path separator issue (issue #14)', () => {
     const testPath = displayHome + nodePath.sep + 'projects' + nodePath.sep + 'work'
 
     const result = toRelativePath(testPath, homeDir)
-    expect(result).toBe('~' + nodePath.sep + 'projects' + nodePath.sep + 'work')
+    expect(result).toBe('~/projects/work')
   })
 
   /**
