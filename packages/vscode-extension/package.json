@@ -2,7 +2,7 @@
   "name": "claude-sessions",
   "displayName": "Claude Code Sessions",
   "description": "Manage Claude Code sessions from VS Code sidebar",
-  "version": "0.4.5",
+  "version": "0.4.6-beta.1",
   "publisher": "es6kr",
   "license": "MIT",
   "repository": {
@@ -218,6 +218,21 @@
           "type": "boolean",
           "default": false,
           "description": "Use beta version of @claude-sessions/web package instead of latest"
+        },
+        "claudeSessions.cliFlags": {
+          "type": "string",
+          "default": "",
+          "description": "Additional CLI flags appended to the claude command when resuming sessions (e.g., '--dangerously-skip-permissions')"
+        },
+        "claudeSessions.defaultTerminalMode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "external",
+            "internal"
+          ],
+          "default": "ask",
+          "description": "Default terminal mode when resuming sessions: 'ask' shows a picker, 'internal' uses the integrated terminal, 'external' uses the system terminal"
         }
       }
     }
@@ -234,16 +249,16 @@
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
-    "effect": "^3.19.16"
+    "effect": "^3.19.19"
   },
   "devDependencies": {
     "@types/glob": "^9.0.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.0.9",
+    "@types/node": "^25.3.3",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.0.0",
-    "glob": "^13.0.0",
+    "glob": "^13.0.6",
     "mocha": "^11.7.5",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"

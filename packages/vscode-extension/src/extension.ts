@@ -19,9 +19,11 @@ session.setLogger({
 function getConfig() {
   const config = vscode.workspace.getConfiguration('claudeSessions')
   return {
-    port: config.get<number>('port', 5174),
     autoStartServer: config.get<boolean>('autoStartServer', true),
+    cliFlags: config.get<string>('cliFlags', ''),
+    defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
     openInEditor: config.get<boolean>('openInEditor', true),
+    port: config.get<number>('port', 5174),
     useBetaVersion: config.get<boolean>('useBetaVersion', false),
   }
 }
@@ -177,14 +179,13 @@ export function activate(context: vscode.ExtensionContext) {
         try {
           const port = await ensureWebServer()
           const { openInEditor } = getConfig()
-          const url = `http://localhost:${port}/session/${encodeURIComponent(item.projectName)}/${encodeURIComponent(item.sessionId)}`
+          const localUrl = `http://localhost:${port}/session/${encodeURIComponent(item.projectName)}/${encodeURIComponent(item.sessionId)}`
+          const externalUri = await vscode.env.asExternalUri(vscode.Uri.parse(localUrl))
 
           if (openInEditor) {
-            // Open in VS Code Simple Browser (expects string URL)
-            await vscode.commands.executeCommand('simpleBrowser.show', url)
+            await vscode.commands.executeCommand('simpleBrowser.show', externalUri.toString())
           } else {
-            // Open in external browser
-            await vscode.env.openExternal(vscode.Uri.parse(url))
+            await vscode.env.openExternal(externalUri)
           }
         } catch (e) {
           vscode.window.showErrorMessage(`Failed to open session: ${e}`)
@@ -238,7 +239,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('claudeSessions.openWebUI', async () => {
       try {
         const port = await ensureWebServer()
-        vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${port}`))
+        const externalUri = await vscode.env.asExternalUri(
+          vscode.Uri.parse(`http://localhost:${port}`)
+        )
+        vscode.env.openExternal(externalUri)
       } catch (e) {
         vscode.window.showErrorMessage(`Failed to open Web UI: ${e}`)
       }
@@ -443,45 +447,56 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (item.type !== 'session') return
 
-        const choice = await vscode.window.showQuickPick(
-          [
-            {
-              label: '$(terminal) Internal Terminal',
-              description: 'Open in VSCode integrated terminal',
-              mode: 'internal' as const,
-            },
-            {
-              label: '$(link-external) External Terminal',
-              description: 'Open in system default terminal',
-              mode: 'external' as const,
-            },
-          ],
-          {
-            placeHolder: 'Where to open Claude session?',
-            title: 'Resume Session',
-          }
-        )
+        const { cliFlags, defaultTerminalMode } = getConfig()
 
-        if (!choice) return
+        let mode: 'internal' | 'external'
+        if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
+          mode = defaultTerminalMode
+        } else {
+          const choice = await vscode.window.showQuickPick(
+            [
+              {
+                label: '$(terminal) Internal Terminal',
+                description: 'Open in VSCode integrated terminal',
+                mode: 'internal' as const,
+              },
+              {
+                label: '$(link-external) External Terminal',
+                description: 'Open in system default terminal',
+                mode: 'external' as const,
+              },
+            ],
+            {
+              placeHolder: 'Where to open Claude session?',
+              title: 'Resume Session',
+            }
+          )
+
+          if (!choice) return
+          mode = choice.mode
+        }
 
         // Get project path for cwd
         const folderPath = await session.folderNameToPath(item.projectName)
         const homeDir = process.env.HOME || process.env.USERPROFILE || ''
         const cwd = session.expandHomePath(folderPath, homeDir)
 
-        if (choice.mode === 'internal') {
+        if (mode === 'internal') {
           // Create terminal with proper name and cwd
           const terminal = vscode.window.createTerminal({
             name: `Claude: ${item.label}`,
             cwd,
           })
           terminal.show()
-          terminal.sendText(`claude --resume ${item.sessionId}`)
+          const cmd = `claude --resume ${item.sessionId}${cliFlags ? ` ${cliFlags}` : ''}`
+          terminal.sendText(cmd)
         } else {
           // External: spawn detached process
+          const extraArgs = cliFlags ? cliFlags.split(/\s+/).filter(Boolean) : []
           const result = resumeSession({
             sessionId: item.sessionId,
             cwd,
+            args: extraArgs,
           })
 
           if (result.success) {
