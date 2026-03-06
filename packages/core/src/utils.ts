@@ -238,7 +238,7 @@ export const tryParseJsonLine = <T = Record<string, unknown>>(
     return JSON.parse(line) as T
   } catch {
     if (filePath) {
-      console.warn(`Skipping invalid JSON at line ${lineNumber} in ${filePath}`)
+      logger.warn(`Skipping invalid JSON at line ${lineNumber} in ${filePath}`)
     }
     return null
   }
@@ -258,7 +258,7 @@ export const parseJsonlLines = <T = Record<string, unknown>>(
       results.push(JSON.parse(lines[idx]) as T)
     } catch (e) {
       const err = e as Error
-      console.warn(`Skipping malformed line ${idx + 1} in ${filePath}: ${err.message}`)
+      logger.warn(`Skipping malformed line ${idx + 1} in ${filePath}: ${err.message}`)
     }
   }
   return results

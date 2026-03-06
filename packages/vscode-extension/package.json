@@ -268,9 +268,7 @@
     "dev": "tsup --watch",
     "package": "vsce package --no-dependencies",
     "lint": "eslint src",
-    "pretest": "node -e \"const p=require('./package.json'); delete p.extensionDependencies; require('fs').writeFileSync('./package.json', JSON.stringify(p,null,2)+'\\n')\"",
-    "test": "tsc -p tsconfig.test.json && node ./out/test/runTest.js",
-    "posttest": "node -e \"const p=require('./package.json'); p.extensionDependencies=['Anthropic.claude-code']; require('fs').writeFileSync('./package.json', JSON.stringify(p,null,2)+'\\n')\""
+    "test": "tsc -p tsconfig.test.json && node ./out/test/runTest.js"
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",

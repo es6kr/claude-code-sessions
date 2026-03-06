@@ -48,8 +48,6 @@ export class SessionTreeProvider
   readonly dropMimeTypes = [MIME_TYPE]
   readonly dragMimeTypes = ['text/uri-list', MIME_TYPE]
 
-  // Cached project state to avoid redundant listProjects calls
-  private cachedProjectNames: string[] = []
   private currentProjectName: string | null = null
 
   // In-memory project data cache (survives filter changes, cleared on explicit refresh)
@@ -80,7 +78,6 @@ export class SessionTreeProvider
   }
 
   refresh(): void {
-    this.cachedProjectNames = []
     this.currentProjectName = null
     this.projectDataCache.clear()
     this._onDidChangeTreeData.fire()
@@ -251,8 +248,6 @@ export class SessionTreeProvider
       const projectNames = projects.map((p) => p.name)
       const currentProjectName = this.findCurrentProject(projectNames)
 
-      // Cache for use by project-level getChildren (avoids redundant listProjects)
-      this.cachedProjectNames = projectNames
       this.currentProjectName = currentProjectName
 
       // Sort: 1) current project, 2) current user's home subpaths, 3) others
