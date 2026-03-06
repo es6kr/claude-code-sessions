@@ -368,7 +368,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('claudeSessions.filterSessions', async () => {
       const value = await vscode.window.showInputBox({
-        prompt: 'Filter sessions by title, summary, or content',
+        prompt: 'Filter sessions by title or summary',
         value: treeProvider.getFilterText(),
         placeHolder: 'Type to filter sessions...',
       })
@@ -481,40 +481,52 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (item.type !== 'session') return
 
-        const choice = await vscode.window.showQuickPick(
-          [
-            {
-              label: '$(terminal) Internal Terminal',
-              description: 'Open in VSCode integrated terminal',
-              mode: 'internal' as const,
-            },
-            {
-              label: '$(link-external) External Terminal',
-              description: 'Open in system default terminal',
-              mode: 'external' as const,
-            },
-          ],
-          {
-            placeHolder: 'Where to open Claude session?',
-            title: 'Resume Session',
-          }
-        )
+        const { defaultTerminalMode, cliFlags } = getConfig()
+        const cliCommand = cliFlags
+          ? `claude --resume ${item.sessionId} ${cliFlags}`
+          : `claude --resume ${item.sessionId}`
 
-        if (!choice) return
-
-        // Get project path for cwd
+        // Get project path for cwd (needed for all modes)
         const folderPath = await session.folderNameToPath(item.projectName)
         const homeDir = process.env.HOME || process.env.USERPROFILE || ''
         const cwd = session.expandHomePath(folderPath, homeDir)
 
-        if (choice.mode === 'internal') {
+        // Determine terminal mode: skip picker if pre-configured
+        let mode: 'internal' | 'external'
+        if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
+          mode = defaultTerminalMode
+        } else {
+          const choice = await vscode.window.showQuickPick(
+            [
+              {
+                label: '$(terminal) Internal Terminal',
+                description: 'Open in VSCode integrated terminal',
+                mode: 'internal' as const,
+              },
+              {
+                label: '$(link-external) External Terminal',
+                description: 'Open in system default terminal',
+                mode: 'external' as const,
+              },
+            ],
+            {
+              placeHolder: 'Where to open Claude session?',
+              title: 'Resume Session',
+            }
+          )
+
+          if (!choice) return
+          mode = choice.mode
+        }
+
+        if (mode === 'internal') {
           // Create terminal with proper name and cwd
           const terminal = vscode.window.createTerminal({
             name: `Claude: ${item.label}`,
             cwd,
           })
           terminal.show()
-          terminal.sendText(`claude --resume ${item.sessionId}`)
+          terminal.sendText(cliCommand)
         } else {
           // External: spawn detached process
           const result = resumeSession({

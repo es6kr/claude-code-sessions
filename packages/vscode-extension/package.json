@@ -143,11 +143,6 @@
           "command": "claudeSessions.refresh",
           "when": "view == claudeSessions",
           "group": "navigation@5"
-        },
-        {
-          "command": "workbench.action.restartExtensionHost",
-          "when": "view == claudeSessions",
-          "group": "navigation@6"
         }
       ],
       "view/item/context": [

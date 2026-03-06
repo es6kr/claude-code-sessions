@@ -587,7 +587,9 @@ const loadProjectTreeDataFull = (
 
     // Write cache in background (don't block return)
     const cacheData = buildTreeCache(globalUuidMap, allSummaries, sessions, fileMtimes)
-    void writeTreeCache(projectName, cacheData)
+    writeTreeCache(projectName, cacheData).catch((err) => {
+      log.debug(`cache write failed for ${projectName}: ${err}`)
+    })
 
     return buildProjectTreeResult(project, sessions, sort)
   })
@@ -648,7 +650,9 @@ const loadProjectTreeDataIncremental = (
 
     // Write updated cache
     const cacheData = buildTreeCache(globalUuidMap, allSummaries, allSessions, fileMtimes)
-    void writeTreeCache(projectName, cacheData)
+    writeTreeCache(projectName, cacheData).catch((err) => {
+      log.debug(`cache write failed for ${projectName}: ${err}`)
+    })
 
     return buildProjectTreeResult(project, allSessions, sort)
   })

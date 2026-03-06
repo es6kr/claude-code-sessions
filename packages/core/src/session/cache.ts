@@ -118,6 +118,7 @@ export const validateCache = (
     } else {
       const cachedMtime = cache.sessions[id].fileMtime
       const currentMtime = currentMtimes.get(id) ?? 0
+      // 1ms tolerance: filesystem mtimes have varying precision across platforms
       if (Math.abs(cachedMtime - currentMtime) < 1) {
         unchangedSessionIds.push(id)
       } else {
