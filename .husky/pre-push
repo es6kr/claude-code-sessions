@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Install dependencies
+pnpm install --frozen-lockfile
+
 # Get the current branch
 current_branch=$(git rev-parse --abbrev-ref HEAD)
 
