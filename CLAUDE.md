@@ -17,14 +17,15 @@ This is an **English-only open source project**:
 
 ## Development Workflow
 
-### Git Push Policy
+### Permanent Records & Public Actions Policy
 
-**IMPORTANT**: When fixing mistakes or making corrections during a session, ALWAYS use `AskUserQuestion` before `git push`. Never push without explicit user confirmation when:
+**CRITICAL**: GitHub comments, PR/Issue modifications, and Git pushes leave permanent traces that cannot be fully erased (e.g., "comment deleted" logs).
+ALWAYS use `notify_user` (or `AskUserQuestion`) to get explicit confirmation BEFORE:
 
-- Amending commits
-- Force pushing
-- Fixing previous errors
-- Re-doing work after mistakes
+- **GitHub API Actions**: Posting or editing comments, labels, milestones, or issue states.
+- **Git Push**: Amending commits, force pushing, or pushing corrections for previous mistakes.
+- **VSIX/NPM Publishing**: Any action that results in a new public artifact version.
+- **Workflow Changes**: Modifying CI/CD pipelines or branch protection rules.
 
 ### Version Management
 

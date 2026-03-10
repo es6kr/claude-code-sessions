@@ -5,6 +5,13 @@ current_branch=$(git rev-parse --abbrev-ref HEAD)
 
 # Read stdin to check what's being pushed (branch or tag)
 while read local_ref local_sha remote_ref remote_sha; do
+  # Skip tag deletion (e.g. git push origin :refs/tags/v1.0.0)
+  zero="0000000000000000000000000000000000000000"
+  if [ "$local_sha" = "$zero" ] && echo "$remote_ref" | grep -q "^refs/tags/"; then
+    echo "🗑️  Tag deletion: $remote_ref — skipping tests."
+    continue
+  fi
+
   # Check if pushing a tag
   if echo "$remote_ref" | grep -q "^refs/tags/"; then
     tag_name=$(echo "$remote_ref" | sed 's|refs/tags/||')
