@@ -304,6 +304,23 @@ describe('parseJsonlLines', () => {
     expect(result[0].type).toBe('user')
     expect(result[0].uuid).toBe('1')
   })
+
+  it('should throw on malformed lines when strict: true', () => {
+    const lines = ['{"valid":"json"}', 'invalid json', '{"also":"valid"}']
+
+    expect(() => parseJsonlLines(lines, '/test.jsonl', { strict: true })).toThrow(
+      'Failed to parse line 2 in /test.jsonl'
+    )
+  })
+
+  it('should skip malformed lines when strict: false (default)', () => {
+    const lines = ['{"valid":"json"}', 'invalid json', '{"also":"valid"}']
+
+    const result = parseJsonlLines(lines, '/test.jsonl')
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({ valid: 'json' })
+    expect(result[1]).toEqual({ also: 'valid' })
+  })
 })
 
 describe('readJsonlFile', () => {

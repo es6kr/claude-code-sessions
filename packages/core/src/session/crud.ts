@@ -29,7 +29,7 @@ import type {
 export const updateSessionSummary = (projectName: string, sessionId: string, newSummary: string) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath)
+    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath, { strict: true })
 
     // Find existing summary message
     const summaryIdx = messages.findIndex((m) => m.type === 'summary')
@@ -150,7 +150,7 @@ export const deleteMessage = (
 ) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath)
+    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath, { strict: true })
 
     // Use the pure function for chain repair
     const result = deleteMessageWithChainRepair(messages, messageUuid, targetType)
@@ -174,7 +174,7 @@ export const restoreMessage = (
 ) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath)
+    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath, { strict: true })
 
     const msgUuid = message.uuid ?? message.messageId
     if (!msgUuid) {
@@ -366,7 +366,7 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
     const filePath = path.join(projectPath, `${sessionId}.jsonl`)
 
     // Parse all messages preserving their full structure
-    const allMessages = yield* readJsonlFile<Message>(filePath)
+    const allMessages = yield* readJsonlFile<Message>(filePath, { strict: true })
 
     // Find the split point
     const splitIndex = allMessages.findIndex((m) => m.uuid === splitAtMessageUuid)
@@ -477,7 +477,7 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
 export const repairChain = (projectName: string, sessionId: string) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const messages = yield* readJsonlFile<Message>(filePath)
+    const messages = yield* readJsonlFile<Message>(filePath, { strict: true })
 
     // Validate before repair
     const beforeResult = validateChain(messages)
