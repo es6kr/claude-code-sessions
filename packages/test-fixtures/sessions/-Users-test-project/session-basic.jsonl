@@ -1,0 +1,4 @@
+{"type":"user","uuid":"basic-msg-1","timestamp":"2025-12-20T01:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Create a simple utility function"}]}}
+{"type":"assistant","uuid":"basic-msg-2","parentUuid":"basic-msg-1","timestamp":"2025-12-20T01:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Sure, here is a utility function."}]}}
+{"type":"user","uuid":"basic-msg-3","parentUuid":"basic-msg-2","timestamp":"2025-12-20T01:01:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Add error handling"}]}}
+{"type":"assistant","uuid":"basic-msg-4","parentUuid":"basic-msg-3","timestamp":"2025-12-20T01:01:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Done. I added try-catch blocks."}]}}

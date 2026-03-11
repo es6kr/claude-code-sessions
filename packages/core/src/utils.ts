@@ -245,12 +245,13 @@ export const tryParseJsonLine = <T = Record<string, unknown>>(
 }
 
 /**
- * Parse JSONL lines, skipping malformed lines with a warning
- * Session files can have truncated/corrupt lines in practice
+ * Parse JSONL lines with optional strict mode
+ * @param strict - When true, throws on malformed lines. When false (default), skips with a warning.
  */
 export const parseJsonlLines = <T = Record<string, unknown>>(
   lines: string[],
-  filePath: string
+  filePath: string,
+  { strict = false }: { strict?: boolean } = {}
 ): T[] => {
   const results: T[] = []
   for (let idx = 0; idx < lines.length; idx++) {
@@ -258,6 +259,11 @@ export const parseJsonlLines = <T = Record<string, unknown>>(
       results.push(JSON.parse(lines[idx]) as T)
     } catch (e) {
       const err = e as Error
+      if (strict) {
+        throw new Error(`Failed to parse line ${idx + 1} in ${filePath}: ${err.message}`, {
+          cause: e,
+        })
+      }
       logger.warn(`Skipping malformed line ${idx + 1} in ${filePath}: ${err.message}`)
     }
   }
@@ -268,11 +274,14 @@ export const parseJsonlLines = <T = Record<string, unknown>>(
  * Read and parse JSONL file (Effect wrapper)
  * Combines file reading and JSONL parsing with proper error messages
  */
-export const readJsonlFile = <T = Record<string, unknown>>(filePath: string) =>
+export const readJsonlFile = <T = Record<string, unknown>>(
+  filePath: string,
+  options?: { strict?: boolean }
+) =>
   Effect.gen(function* () {
     const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
     const lines = content.trim().split('\n').filter(Boolean)
-    return parseJsonlLines<T>(lines, filePath)
+    return parseJsonlLines<T>(lines, filePath, options)
   })
 
 // ============================================================================

@@ -1,0 +1,4 @@
+{"type":"user","uuid":"tools-msg-1","timestamp":"2025-12-23T04:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Read the config file"}]}}
+{"type":"assistant","uuid":"tools-msg-2","parentUuid":"tools-msg-1","timestamp":"2025-12-23T04:00:10.000Z","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01test","name":"Read","input":{"file_path":"/project/config.json"}}]}}
+{"type":"user","uuid":"tools-msg-3","parentUuid":"tools-msg-2","timestamp":"2025-12-23T04:00:11.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01test","content":"{\"port\": 3000}"}]},"toolUseResult":"tool_result"}
+{"type":"assistant","uuid":"tools-msg-4","parentUuid":"tools-msg-3","timestamp":"2025-12-23T04:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"The config file shows port 3000."}]}}

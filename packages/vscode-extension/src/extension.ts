@@ -19,12 +19,12 @@ session.setLogger({
 function getConfig() {
   const config = vscode.workspace.getConfiguration('claudeSessions')
   return {
-    port: config.get<number>('port', 5174),
     autoStartServer: config.get<boolean>('autoStartServer', true),
-    openInEditor: config.get<boolean>('openInEditor', true),
-    useBetaVersion: config.get<boolean>('useBetaVersion', false),
-    defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
     cliFlags: config.get<string>('cliFlags', ''),
+    defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
+    openInEditor: config.get<boolean>('openInEditor', true),
+    port: config.get<number>('port', 5174),
+    useBetaVersion: config.get<boolean>('useBetaVersion', false),
     webServerPath: config.get<string>('webServerPath', ''),
   }
 }
@@ -191,14 +191,13 @@ export function activate(context: vscode.ExtensionContext) {
         try {
           const port = await ensureWebServer()
           const { openInEditor } = getConfig()
-          const url = `http://localhost:${port}/session/${encodeURIComponent(item.projectName)}/${encodeURIComponent(item.sessionId)}`
+          const localUrl = `http://localhost:${port}/session/${encodeURIComponent(item.projectName)}/${encodeURIComponent(item.sessionId)}`
+          const externalUri = await vscode.env.asExternalUri(vscode.Uri.parse(localUrl))
 
           if (openInEditor) {
-            // Open in VS Code Simple Browser (expects string URL)
-            await vscode.commands.executeCommand('simpleBrowser.show', url)
+            await vscode.commands.executeCommand('simpleBrowser.show', externalUri.toString())
           } else {
-            // Open in external browser
-            await vscode.env.openExternal(vscode.Uri.parse(url))
+            await vscode.env.openExternal(externalUri)
           }
         } catch (e) {
           vscode.window.showErrorMessage(`Failed to open session: ${e}`)
@@ -252,7 +251,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('claudeSessions.openWebUI', async () => {
       try {
         const port = await ensureWebServer()
-        vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${port}`))
+        const externalUri = await vscode.env.asExternalUri(
+          vscode.Uri.parse(`http://localhost:${port}`)
+        )
+        vscode.env.openExternal(externalUri)
       } catch (e) {
         vscode.window.showErrorMessage(`Failed to open Web UI: ${e}`)
       }
@@ -529,9 +531,11 @@ export function activate(context: vscode.ExtensionContext) {
           terminal.sendText(cliCommand)
         } else {
           // External: spawn detached process
+          const extraArgs = cliFlags ? cliFlags.split(/\s+/).filter(Boolean) : []
           const result = resumeSession({
             sessionId: item.sessionId,
             cwd,
+            args: extraArgs,
           })
 
           if (result.success) {

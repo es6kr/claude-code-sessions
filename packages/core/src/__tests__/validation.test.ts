@@ -445,6 +445,23 @@ describe('validateProgressMessages', () => {
     expect(result.errors).toHaveLength(0)
   })
 
+  it('should detect saved_hook_context as error', () => {
+    const messages = [
+      { type: 'user', uuid: 'u1', parentUuid: null },
+      { type: 'saved_hook_context', uuid: 's1', parentUuid: 'u1' },
+    ]
+
+    const result = validateProgressMessages(messages)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toMatchObject({
+      type: 'unwanted_progress',
+      line: 2,
+      messageType: 'saved_hook_context',
+    })
+  })
+
   it('should only count Stop among multiple progress messages', () => {
     const messages = [
       { type: 'user', uuid: 'u1', parentUuid: null },

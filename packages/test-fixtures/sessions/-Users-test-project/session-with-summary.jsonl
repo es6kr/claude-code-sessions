@@ -1,0 +1,5 @@
+{"type":"summary","summary":"Refactored authentication module with JWT support","leafUuid":"summary-msg-1","timestamp":"2025-12-21T02:00:00.000Z"}
+{"type":"user","uuid":"summary-msg-1","timestamp":"2025-12-21T02:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Refactor the auth module"}]}}
+{"type":"assistant","uuid":"summary-msg-2","parentUuid":"summary-msg-1","timestamp":"2025-12-21T02:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"I will refactor the authentication module to use JWT."}]}}
+{"type":"user","uuid":"summary-msg-3","parentUuid":"summary-msg-2","timestamp":"2025-12-21T02:01:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Also add refresh token support"}]}}
+{"type":"assistant","uuid":"summary-msg-4","parentUuid":"summary-msg-3","timestamp":"2025-12-21T02:01:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Added refresh token rotation logic."}]}}
