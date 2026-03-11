@@ -271,7 +271,7 @@ export class SessionTreeProvider
               'project',
               p.name,
               '',
-              matches.length // show match count
+              data.sessionCount // show total count, filtered children convey match info
             )
           )
         }

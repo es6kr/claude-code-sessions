@@ -10,6 +10,7 @@
 .svelte-kit/
 *.log
 *.vsix
+/Makefile
 build/
 dist/
 node_modules/
@@ -17,6 +18,7 @@ packages/web/e2e/local/
 packages/web/e2e/screenshots/
 packages/web/playwright-report/
 packages/web/test-results/
+PROMPT.md
 
 # Storybook
 *storybook.log

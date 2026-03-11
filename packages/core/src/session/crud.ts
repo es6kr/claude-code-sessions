@@ -271,7 +271,7 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
       return { success: false, error: 'Empty session' } satisfies RenameSessionResult
     }
 
-    const messages = parseJsonlLines<Record<string, unknown>>(lines, filePath)
+    const messages = parseJsonlLines<Record<string, unknown>>(lines, filePath, { strict: true })
 
     // Remove existing custom-title (may be at wrong position) and append to end
     const customTitleIdx = messages.findIndex((m) => m.type === 'custom-title')
@@ -442,7 +442,9 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
 
       if (agentLines.length === 0) continue
 
-      const agentMessages = parseJsonlLines<Record<string, unknown>>(agentLines, agentPath)
+      const agentMessages = parseJsonlLines<Record<string, unknown>>(agentLines, agentPath, {
+        strict: true,
+      })
       const firstAgentMsg = agentMessages[0] as { sessionId?: string }
 
       // If this agent belongs to the original session, check if it should be moved
