@@ -31,13 +31,20 @@ while read local_ref local_sha remote_ref remote_sha; do
       exit $?
     fi
   fi
-done
 
-# Branch push
-if [ "$current_branch" = "main" ]; then
-  echo "🔍 Main branch: running full CI with act..."
-  pnpm test:act
-else
-  echo "🧪 Branch $current_branch: running typecheck and tests..."
-  pnpm typecheck && pnpm test
-fi
+  # Branch push — check remote ref, not local branch
+  remote_branch=$(echo "$remote_ref" | sed 's|refs/heads/||')
+  if [ "$remote_branch" = "main" ]; then
+    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+      echo "🔍 Pushing to main: running full CI with act..."
+      pnpm test:act
+    else
+      echo "⚠️  Docker not available, falling back to typecheck and tests..."
+      pnpm typecheck && pnpm test
+    fi
+  else
+    echo "🧪 Pushing to $remote_branch: running typecheck and tests..."
+    pnpm typecheck && pnpm test
+  fi
+  exit $?
+done
