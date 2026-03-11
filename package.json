@@ -22,6 +22,7 @@
     "test": "pnpm -r --workspace-concurrency=1 test",
     "test:act": "act push --job test -P ubuntu-latest=-self-hosted",
     "test:core": "pnpm --filter @claude-sessions/core test",
+    "test:e2e": "pnpm --filter @claude-sessions/web exec playwright test",
     "test:mcp": "pnpm --filter claude-sessions-mcp test",
     "test:web": "pnpm --filter @claude-sessions/web test",
     "typecheck": "pnpm -r typecheck",

@@ -1,0 +1,3 @@
+{"type":"summary","summary":"Cross-session summary referencing basic session","leafUuid":"basic-msg-1"}
+{"type":"user","uuid":"cross-msg-1","timestamp":"2025-12-24T05:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Continue from previous session"}]}}
+{"type":"assistant","uuid":"cross-msg-2","parentUuid":"cross-msg-1","timestamp":"2025-12-24T05:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Continuing where we left off."}]}}
