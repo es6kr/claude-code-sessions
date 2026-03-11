@@ -32,7 +32,7 @@ describe('loadProjectTreeData - cross-session leafUuid lookup', () => {
 
   afterEach(async () => {
     // Cleanup temp directory
-    await fs.rm(tempDir, { recursive: true, force: true })
+    await fs.rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
     vi.clearAllMocks()
   })
 
@@ -312,7 +312,7 @@ describe('loadSessionTreeData - single session (no global map)', () => {
   })
 
   afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true })
+    await fs.rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
     vi.clearAllMocks()
   })
 
