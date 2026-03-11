@@ -31,6 +31,19 @@ describe('extractTitle', () => {
     expect(extractTitle('')).toBe('Untitled')
   })
 
+  it('should not parse command tags from embedded JSON after first paragraph', () => {
+    const message = {
+      role: 'user' as const,
+      content: [
+        {
+          type: 'text' as const,
+          text: 'Fix display title parsing\n\n{"message":{"content":"<command-name>/session</command-name>\\n<command-args>repair</command-args>"}}',
+        },
+      ],
+    }
+    expect(extractTitle(message)).toBe('Fix display title parsing')
+  })
+
   it('should strip IDE tags when stripIdeTags option is true', () => {
     const message = {
       role: 'user' as const,
@@ -228,6 +241,18 @@ describe('getDisplayTitle', () => {
     expect(getDisplayTitle('', 'Summary', 'Title')).toBe('Summary')
     expect(getDisplayTitle('', '', 'Title')).toBe('Title')
     expect(getDisplayTitle('', '', '')).toBe('Untitled')
+  })
+
+  it('should not parse command tags from embedded JSON in title', () => {
+    const title =
+      'Fix display title parsing\n\n{"message":{"content":"<command-name>/session</command-name>\\n<command-args>repair</command-args>"}}'
+    expect(getDisplayTitle(undefined, undefined, title)).toBe('Fix display title parsing')
+  })
+
+  it('should parse command from first paragraph of title', () => {
+    const title =
+      '<command-message>session</command-message>\n<command-name>/session</command-name>\n<command-args>  repair --dry-run</command-args>'
+    expect(getDisplayTitle(undefined, undefined, title)).toBe('/session repair --dry-run')
   })
 })
 

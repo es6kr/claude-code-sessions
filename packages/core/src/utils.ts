@@ -84,19 +84,18 @@ export const extractTitle = (input: MessagePayload | string | undefined): string
 
   if (!text) return 'Untitled'
 
-  // Check for slash command format (e.g., <command-name>/session</command-name>)
-  const { name, args } = parseCommandMessage(text)
-  if (name) return args ? `${name} ${args}` : name
-
-  let cleaned = text.trim()
-  if (!cleaned) return 'Untitled'
-
-  // Use only content before \n\n or \n as title
-  if (cleaned.includes('\n\n')) {
-    cleaned = cleaned.split('\n\n')[0]
+  // Extract first paragraph before parsing commands
+  // This prevents embedded JSON/code from being parsed as commands
+  let firstParagraph = text.trim()
+  if (firstParagraph.includes('\n\n')) {
+    firstParagraph = firstParagraph.split('\n\n')[0]
   }
 
-  return cleaned || 'Untitled'
+  // Check for slash command format only in first paragraph
+  const { name, args } = parseCommandMessage(firstParagraph)
+  if (name) return args ? `${name} ${args}` : name
+
+  return firstParagraph || 'Untitled'
 }
 
 // Check if message contains "Invalid API key"
@@ -150,12 +149,14 @@ export const getDisplayTitle = (
       : currentSummary
   }
   if (title && title !== 'Untitled') {
-    // Check if title contains command-name tag (slash command)
-    if (title.includes('<command-name>')) {
-      const { name, args } = parseCommandMessage(title)
+    // Extract first paragraph to avoid parsing embedded JSON/code
+    const firstParagraph = title.includes('\n\n') ? title.split('\n\n')[0] : title
+    // Check if first paragraph contains command-name tag (slash command)
+    if (firstParagraph.includes('<command-name>')) {
+      const { name, args } = parseCommandMessage(firstParagraph)
       if (name) return args ? `${name} ${args}` : name
     }
-    return title
+    return firstParagraph
   }
   return fallback
 }
