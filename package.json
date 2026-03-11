@@ -61,6 +61,11 @@
       "editorconfig-checker"
     ]
   },
+  "pnpm": {
+    "overrides": {
+      "@typescript-eslint/utils": "^8.56.0"
+    }
+  },
   "prettier": {
     "printWidth": 100,
     "semi": false,
