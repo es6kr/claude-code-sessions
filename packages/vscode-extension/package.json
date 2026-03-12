@@ -110,6 +110,11 @@
         "command": "claudeSessions.clearFilter",
         "title": "Clear Filter",
         "icon": "$(close)"
+      },
+      {
+        "command": "claudeSessions.restartWebServer",
+        "title": "Restart Web Server",
+        "category": "Claude Sessions"
       }
     ],
     "menus": {
@@ -229,10 +234,26 @@
           "default": [],
           "description": "Patterns to exclude from project list (e.g., 'es6.kr' to hide personal projects)"
         },
+        "claudeSessions.packageTag": {
+          "type": "string",
+          "enum": [
+            "",
+            "latest",
+            "beta"
+          ],
+          "default": "",
+          "enumDescriptions": [
+            "No tag — uses npx default resolution (may use cached version)",
+            "Always fetch the latest published version",
+            "Use the beta channel"
+          ],
+          "description": "npm dist-tag for @claude-sessions/web package. Empty string uses npx default behavior."
+        },
         "claudeSessions.useBetaVersion": {
           "type": "boolean",
           "default": false,
-          "description": "Use beta version of @claude-sessions/web package instead of latest"
+          "description": "Use beta version of @claude-sessions/web package instead of latest",
+          "deprecationMessage": "Use 'claudeSessions.packageTag' instead. Set it to 'beta' for the same behavior."
         },
         "claudeSessions.cliFlags": {
           "type": "string",
