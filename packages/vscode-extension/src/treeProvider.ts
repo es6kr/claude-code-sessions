@@ -51,6 +51,7 @@ export class SessionTreeProvider
   private currentProjectName: string | null = null
 
   // In-memory project data cache (survives filter changes, cleared on explicit refresh)
+  private inFlightRequests = new Map<string, Promise<session.ProjectTreeData | null>>()
   private projectDataCache = new Map<string, session.ProjectTreeData>()
 
   // Filter text for session search
@@ -79,6 +80,7 @@ export class SessionTreeProvider
 
   refresh(): void {
     this.currentProjectName = null
+    this.inFlightRequests.clear()
     this.projectDataCache.clear()
     this._onDidChangeTreeData.fire()
   }
@@ -212,9 +214,19 @@ export class SessionTreeProvider
     const cached = this.projectDataCache.get(projectName)
     if (cached) return cached
 
-    const data = await Effect.runPromise(session.loadProjectTreeData(projectName, this.sortOptions))
-    if (data) this.projectDataCache.set(projectName, data)
-    return data
+    const inFlight = this.inFlightRequests.get(projectName)
+    if (inFlight) return inFlight
+
+    const promise = Effect.runPromise(session.loadProjectTreeData(projectName, this.sortOptions))
+      .then((data) => {
+        if (data) this.projectDataCache.set(projectName, data)
+        return data
+      })
+      .finally(() => {
+        this.inFlightRequests.delete(projectName)
+      })
+    this.inFlightRequests.set(projectName, promise)
+    return promise
   }
 
   private filterSessions(sessions: session.SessionTreeData[]): session.SessionTreeData[] {
