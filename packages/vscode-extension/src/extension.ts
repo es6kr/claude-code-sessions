@@ -37,7 +37,17 @@ function killWebServer(): Promise<void> {
       return
     }
     const proc = webServerProcess
+    // Escalate to SIGKILL if process doesn't exit within 3s
     const timeout = setTimeout(() => {
+      try {
+        if (proc.pid && process.platform !== 'win32') {
+          process.kill(-proc.pid, 'SIGKILL')
+        } else {
+          proc.kill('SIGKILL')
+        }
+      } catch {
+        // Process already terminated
+      }
       webServerProcess = null
       resolve()
     }, 3000)
@@ -611,6 +621,12 @@ export function activate(context: vscode.ExtensionContext) {
         e.affectsConfiguration('claudeSessions.packageTag') ||
         e.affectsConfiguration('claudeSessions.useBetaVersion')
       ) {
+        if (!webServerProcess) {
+          outputChannel.appendLine(
+            'Package tag setting changed; no managed web server is running, skipping restart'
+          )
+          return
+        }
         outputChannel.appendLine('Package tag setting changed, restarting web server...')
         await killWebServer()
         try {
