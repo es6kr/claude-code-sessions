@@ -23,36 +23,88 @@ function getConfig() {
     cliFlags: config.get<string>('cliFlags', ''),
     defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
     openInEditor: config.get<boolean>('openInEditor', true),
+    packageTag: config.get<string>('packageTag', ''),
     port: config.get<number>('port', 5174),
     useBetaVersion: config.get<boolean>('useBetaVersion', false),
     webServerPath: config.get<string>('webServerPath', ''),
   }
 }
 
-async function ensureWebServer(): Promise<number> {
+function killWebServer(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!webServerProcess) {
+      resolve()
+      return
+    }
+    const proc = webServerProcess
+    // Escalate to SIGKILL if process doesn't exit within 3s
+    const timeout = setTimeout(() => {
+      try {
+        if (proc.pid && process.platform !== 'win32') {
+          process.kill(-proc.pid, 'SIGKILL')
+        } else {
+          proc.kill('SIGKILL')
+        }
+      } catch {
+        // Process already terminated
+      }
+      webServerProcess = null
+      resolve()
+    }, 3000)
+    proc.once('exit', () => {
+      clearTimeout(timeout)
+      webServerProcess = null
+      resolve()
+    })
+    // shell: true + detached: true spawns a new process group.
+    // Use negative PID to kill the entire group (shell + npx + node).
+    // On Windows, detached creates a new console so proc.kill() suffices.
+    if (proc.pid && process.platform !== 'win32') {
+      try {
+        process.kill(-proc.pid, 'SIGTERM')
+      } catch {
+        try {
+          proc.kill()
+        } catch {
+          // Process already terminated
+        }
+      }
+    } else {
+      try {
+        proc.kill()
+      } catch {
+        // Process already terminated
+      }
+    }
+  })
+}
+
+async function ensureWebServer({
+  forceRestart = false,
+  skipAutoStartCheck = false,
+} = {}): Promise<number> {
   const { port, autoStartServer } = getConfig()
 
-  // Check if server is running
-  try {
-    const response = await fetch(`http://localhost:${port}/api/version`)
-    if (response.ok) return port
-  } catch {
-    // Server not running
+  // Check if server is running (skip when force-restarting with new config)
+  if (!forceRestart) {
+    try {
+      const response = await fetch(`http://localhost:${port}/api/version`)
+      if (response.ok) return port
+    } catch {
+      // Server not running
+    }
   }
 
-  if (!autoStartServer) {
+  if (!autoStartServer && !skipAutoStartCheck) {
     throw new Error(
       `Web server not running on port ${port}. Start it manually or enable autoStartServer.`
     )
   }
 
   // Start the server
-  if (webServerProcess) {
-    webServerProcess.kill()
-    webServerProcess = null
-  }
+  await killWebServer()
 
-  const { useBetaVersion, webServerPath } = getConfig()
+  const { packageTag, useBetaVersion, webServerPath } = getConfig()
 
   let spawnCmd: string
   let spawnArgs: string[]
@@ -61,7 +113,9 @@ async function ensureWebServer(): Promise<number> {
     spawnCmd = 'node'
     spawnArgs = [webServerPath, '--port', String(port)]
   } else {
-    const packageSpec = useBetaVersion ? '@claude-sessions/web@beta' : '@claude-sessions/web'
+    // Resolve effective tag: packageTag takes precedence, useBetaVersion as fallback
+    const tag = packageTag || (useBetaVersion ? 'beta' : '')
+    const packageSpec = tag ? `@claude-sessions/web@${tag}` : '@claude-sessions/web'
     spawnCmd = 'npx'
     spawnArgs = ['-y', packageSpec, '--port', String(port)]
   }
@@ -73,6 +127,7 @@ async function ensureWebServer(): Promise<number> {
     const child = spawn(spawnCmd, spawnArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
+      detached: process.platform !== 'win32',
     })
 
     webServerProcess = child
@@ -549,13 +604,51 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
+    vscode.commands.registerCommand('claudeSessions.restartWebServer', async () => {
+      await killWebServer()
+      try {
+        await ensureWebServer({ forceRestart: true, skipAutoStartCheck: true })
+        vscode.window.showInformationMessage('Web server restarted successfully')
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Failed to restart web server: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+    }),
+
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (
+        e.affectsConfiguration('claudeSessions.packageTag') ||
+        e.affectsConfiguration('claudeSessions.useBetaVersion')
+      ) {
+        if (!webServerProcess) {
+          outputChannel.appendLine(
+            'Package tag setting changed; no managed web server is running, skipping restart'
+          )
+          return
+        }
+        outputChannel.appendLine('Package tag setting changed, restarting web server...')
+        await killWebServer()
+        try {
+          await ensureWebServer({ forceRestart: true })
+          outputChannel.appendLine('Web server restarted with new configuration')
+        } catch (err) {
+          outputChannel.appendLine(
+            `Failed to restart web server: ${
+              err instanceof Error ? (err.stack ?? err.message) : String(err)
+            }`
+          )
+          vscode.window.showErrorMessage(
+            `Failed to restart web server: ${err instanceof Error ? err.message : String(err)}`
+          )
+        }
+      }
+    }),
+
     treeView
   )
 }
 
-export function deactivate() {
-  if (webServerProcess) {
-    webServerProcess.kill()
-    webServerProcess = null
-  }
+export async function deactivate() {
+  await killWebServer()
 }
