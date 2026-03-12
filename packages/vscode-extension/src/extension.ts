@@ -41,7 +41,7 @@ function killWebServer(): Promise<void> {
       webServerProcess = null
       resolve()
     }, 3000)
-    proc.on('exit', () => {
+    proc.once('exit', () => {
       clearTimeout(timeout)
       webServerProcess = null
       resolve()
@@ -53,15 +53,26 @@ function killWebServer(): Promise<void> {
       try {
         process.kill(-proc.pid, 'SIGTERM')
       } catch {
-        proc.kill()
+        try {
+          proc.kill()
+        } catch {
+          // Process already terminated
+        }
       }
     } else {
-      proc.kill()
+      try {
+        proc.kill()
+      } catch {
+        // Process already terminated
+      }
     }
   })
 }
 
-async function ensureWebServer({ forceRestart = false } = {}): Promise<number> {
+async function ensureWebServer({
+  forceRestart = false,
+  skipAutoStartCheck = false,
+} = {}): Promise<number> {
   const { port, autoStartServer } = getConfig()
 
   // Check if server is running (skip when force-restarting with new config)
@@ -74,7 +85,7 @@ async function ensureWebServer({ forceRestart = false } = {}): Promise<number> {
     }
   }
 
-  if (!autoStartServer) {
+  if (!autoStartServer && !skipAutoStartCheck) {
     throw new Error(
       `Web server not running on port ${port}. Start it manually or enable autoStartServer.`
     )
@@ -586,7 +597,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('claudeSessions.restartWebServer', async () => {
       await killWebServer()
       try {
-        await ensureWebServer({ forceRestart: true })
+        await ensureWebServer({ forceRestart: true, skipAutoStartCheck: true })
         vscode.window.showInformationMessage('Web server restarted successfully')
       } catch (err) {
         vscode.window.showErrorMessage(
