@@ -120,6 +120,7 @@ export {
   searchSessions,
   loadSessionTreeData,
   loadProjectTreeData,
+  getCachePath,
   updateSessionSummary,
   repairChain,
 } from './session.js'

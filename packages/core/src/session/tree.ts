@@ -4,7 +4,7 @@
 import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { getSessionsDir } from '../paths.js'
+import { getSessionsDir, folderNameToPath } from '../paths.js'
 import {
   extractTextContent,
   extractTitle,
@@ -15,7 +15,8 @@ import {
 } from '../utils.js'
 import { findLinkedAgents } from '../agents.js'
 import { findLinkedTodos } from '../todos.js'
-import { listProjects } from './projects.js'
+import { loadTreeCache, writeTreeCache, validateCache, type TreeCache } from './cache.js'
+import { createLogger } from '../logger.js'
 import type {
   Message,
   SessionTreeData,
@@ -25,6 +26,8 @@ import type {
   ProjectTreeData,
   JsonlRecord,
 } from '../types.js'
+
+const log = createLogger('tree')
 
 /**
  * Sort sessions based on sort options
@@ -268,48 +271,26 @@ export const loadSessionTreeData = (projectName: string, sessionId: string) =>
 /** Default sort: by oldest summary timestamp (matches official extension) */
 const DEFAULT_SORT: SessionSortOptions = { field: 'summary', order: 'desc' }
 
-// Load all sessions tree data for a project
-export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSortOptions) =>
+// ============================================================================
+// Phase 1 helpers (UUID map + summaries)
+// ============================================================================
+
+interface Phase1Result {
+  globalUuidMap: Map<string, { sessionId: string; timestamp?: string }>
+  allSummaries: Array<{
+    summary: string
+    leafUuid?: string
+    timestamp?: string
+    sourceFile: string
+  }>
+}
+
+/** Build global UUID map and collect all summaries from all JSONL files in a project */
+const buildPhase1 = (projectPath: string, allJsonlFiles: string[]) =>
   Effect.gen(function* () {
-    const project = (yield* listProjects).find((p) => p.name === projectName)
-    if (!project) {
-      return null
-    }
-
-    const sort = sortOptions ?? DEFAULT_SORT
-    const projectPath = path.join(getSessionsDir(), projectName)
-    const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
-    const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
-
-    // Collect file modification times
-    const fileMtimes = new Map<string, number>()
-    yield* Effect.all(
-      sessionFiles.map((file) =>
-        Effect.gen(function* () {
-          const filePath = path.join(projectPath, file)
-          try {
-            const stat = yield* Effect.tryPromise(() => fs.stat(filePath))
-            fileMtimes.set(file.replace('.jsonl', ''), stat.mtimeMs)
-          } catch {
-            // Ignore stat errors
-          }
-        })
-      ),
-      { concurrency: 20 }
-    )
-
-    // Phase 1: Build global uuid map + collect all summaries from ALL sessions
-    // This is needed because leafUuid can reference messages in other sessions
     const globalUuidMap = new Map<string, { sessionId: string; timestamp?: string }>()
-    const allSummaries: Array<{
-      summary: string
-      leafUuid?: string
-      timestamp?: string
-      sourceFile: string
-    }> = []
+    const allSummaries: Phase1Result['allSummaries'] = []
 
-    // Read all .jsonl files (sessions + agents) to build uuid map and collect summaries
-    const allJsonlFiles = files.filter((f) => f.endsWith('.jsonl'))
     yield* Effect.all(
       allJsonlFiles.map((file) =>
         Effect.gen(function* () {
@@ -354,29 +335,247 @@ export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSo
       { concurrency: 20 }
     )
 
-    // Phase 1.5: Build summariesByTargetSession map
-    // Each summary's leafUuid points to a message in some session - that's the TARGET session
-    const summariesByTargetSession = new Map<string, SummaryInfo[]>()
-    for (const summaryData of allSummaries) {
-      if (summaryData.leafUuid) {
-        const targetInfo = globalUuidMap.get(summaryData.leafUuid)
-        if (targetInfo) {
-          const targetSessionId = targetInfo.sessionId
-          if (!summariesByTargetSession.has(targetSessionId)) {
-            summariesByTargetSession.set(targetSessionId, [])
-          }
-          summariesByTargetSession.get(targetSessionId)!.push({
-            summary: summaryData.summary,
-            leafUuid: summaryData.leafUuid,
-            // Use summary's own timestamp for sorting, not the target message's timestamp
-            timestamp: summaryData.timestamp ?? targetInfo.timestamp,
-            sourceFile: summaryData.sourceFile,
-          })
+    return { globalUuidMap, allSummaries } satisfies Phase1Result
+  })
+
+/** Build summariesByTargetSession map from Phase 1 output */
+const buildSummariesByTargetSession = (
+  globalUuidMap: Map<string, { sessionId: string; timestamp?: string }>,
+  allSummaries: Phase1Result['allSummaries']
+): Map<string, SummaryInfo[]> => {
+  const summariesByTargetSession = new Map<string, SummaryInfo[]>()
+  for (const summaryData of allSummaries) {
+    if (summaryData.leafUuid) {
+      const targetInfo = globalUuidMap.get(summaryData.leafUuid)
+      if (targetInfo) {
+        const targetSessionId = targetInfo.sessionId
+        if (!summariesByTargetSession.has(targetSessionId)) {
+          summariesByTargetSession.set(targetSessionId, [])
         }
+        summariesByTargetSession.get(targetSessionId)!.push({
+          summary: summaryData.summary,
+          leafUuid: summaryData.leafUuid,
+          timestamp: summaryData.timestamp ?? targetInfo.timestamp,
+          sourceFile: summaryData.sourceFile,
+        })
       }
     }
+  }
+  return summariesByTargetSession
+}
 
-    // Phase 2: Load session tree data with summaries targeting each session
+/** Sort summaries consistently (oldest first by timestamp, then sourceFile desc) */
+const sortSummaries = (summaries: SummaryInfo[]): SummaryInfo[] => {
+  return [...summaries].sort((a, b) => {
+    const timestampCmp = (a.timestamp ?? '').localeCompare(b.timestamp ?? '')
+    if (timestampCmp !== 0) return timestampCmp
+    return (b.sourceFile ?? '').localeCompare(a.sourceFile ?? '')
+  })
+}
+
+/** Apply sort, filter error sessions, and wrap as ProjectTreeData */
+const buildProjectTreeResult = (
+  project: { name: string; displayName: string; path: string },
+  sessions: SessionTreeData[],
+  sort: SessionSortOptions
+): ProjectTreeData => {
+  const sortedSessions = sortSessions(sessions, sort)
+
+  const filteredSessions = sortedSessions.filter((s) => {
+    if (isErrorSessionTitle(s.title)) return false
+    if (isErrorSessionTitle(s.customTitle)) return false
+    if (isErrorSessionTitle(s.currentSummary)) return false
+    return true
+  })
+
+  return {
+    name: project.name,
+    displayName: project.displayName,
+    path: project.path,
+    sessionCount: filteredSessions.length,
+    sessions: filteredSessions,
+  }
+}
+
+// ============================================================================
+// Cache helpers
+// ============================================================================
+
+/** Serialize Phase 1 + Phase 2 results into a TreeCache */
+const buildTreeCache = (
+  globalUuidMap: Map<string, { sessionId: string; timestamp?: string }>,
+  allSummaries: Phase1Result['allSummaries'],
+  sessions: SessionTreeData[],
+  fileMtimes: Map<string, number>
+): TreeCache => {
+  const uuidMapRecord: Record<string, { sessionId: string; timestamp?: string }> = {}
+  for (const [key, val] of globalUuidMap) {
+    uuidMapRecord[key] = val
+  }
+
+  const sessionsRecord: Record<string, { fileMtime: number; data: SessionTreeData }> = {}
+  for (const s of sessions) {
+    sessionsRecord[s.id] = {
+      fileMtime: fileMtimes.get(s.id) ?? 0,
+      data: s,
+    }
+  }
+
+  return {
+    version: 1,
+    globalUuidMap: uuidMapRecord,
+    allSummaries,
+    sessions: sessionsRecord,
+  }
+}
+
+/** Update an unchanged session's summaries from new Phase 1 data */
+const updateSessionSummaries = (
+  cached: SessionTreeData,
+  summariesByTargetSession: Map<string, SummaryInfo[]>
+): SessionTreeData => {
+  const newSummaries = sortSummaries(summariesByTargetSession.get(cached.id) ?? [])
+
+  // Check if summaries actually changed
+  const oldJson = JSON.stringify(cached.summaries)
+  const newJson = JSON.stringify(newSummaries)
+  if (oldJson === newJson) return cached
+
+  const newSortTimestamp = getSessionSortTimestamp({
+    summaries: newSummaries,
+    createdAt: cached.createdAt,
+  })
+
+  return {
+    ...cached,
+    summaries: newSummaries,
+    currentSummary: newSummaries[0]?.summary,
+    sortTimestamp: newSortTimestamp,
+  }
+}
+
+// ============================================================================
+// Main entry point
+// ============================================================================
+
+// Load all sessions tree data for a project (with caching)
+export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSortOptions) =>
+  Effect.gen(function* () {
+    const projectPath = path.join(getSessionsDir(), projectName)
+
+    // Check project exists (fast: single stat instead of listing ALL projects)
+    const exists = yield* Effect.tryPromise(() =>
+      fs
+        .access(projectPath)
+        .then(() => true)
+        .catch(() => false)
+    )
+    if (!exists) return null
+
+    // Resolve display name for this single project (avoids processing all projects)
+    const displayName = yield* Effect.tryPromise(() => folderNameToPath(projectName))
+    const project = { name: projectName, displayName, path: projectPath }
+
+    const sort = sortOptions ?? DEFAULT_SORT
+    const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+    const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+    const sessionFileIds = sessionFiles.map((f) => f.replace('.jsonl', ''))
+
+    // Step 1: Collect file modification times (cheap ~50ms for 57 files)
+    const fileMtimes = new Map<string, number>()
+    yield* Effect.all(
+      sessionFiles.map((file) =>
+        Effect.gen(function* () {
+          const filePath = path.join(projectPath, file)
+          try {
+            const stat = yield* Effect.tryPromise(() => fs.stat(filePath))
+            fileMtimes.set(file.replace('.jsonl', ''), stat.mtimeMs)
+          } catch {
+            // Ignore stat errors
+          }
+        })
+      ),
+      { concurrency: 20 }
+    )
+
+    // Step 2: Try cache
+    const cache = yield* Effect.tryPromise(() => loadTreeCache(projectName))
+
+    if (cache) {
+      const validation = validateCache(cache, sessionFileIds, fileMtimes)
+
+      if (validation.isFullHit) {
+        // Fast path: all files unchanged, return cached data directly
+        log.debug(`cache hit for ${projectName} (${sessionFileIds.length} sessions)`)
+        const sessions = sessionFileIds
+          .map((id) => cache.sessions[id]?.data)
+          .filter((s): s is SessionTreeData => s != null)
+        return buildProjectTreeResult(project, sessions, sort)
+      }
+
+      const changedCount =
+        validation.changedSessionIds.length +
+        validation.newSessionIds.length +
+        validation.deletedSessionIds.length
+      log.debug(
+        `cache partial miss for ${projectName}: ` +
+          `${validation.changedSessionIds.length} changed, ` +
+          `${validation.newSessionIds.length} new, ` +
+          `${validation.deletedSessionIds.length} deleted, ` +
+          `${validation.unchangedSessionIds.length} unchanged`
+      )
+
+      // Incremental path: rebuild Phase 1, then selectively reload Phase 2
+      if (changedCount <= sessionFileIds.length / 2) {
+        const result = yield* loadProjectTreeDataIncremental(
+          projectName,
+          projectPath,
+          files,
+          sessionFiles,
+          fileMtimes,
+          cache,
+          validation,
+          project,
+          sort
+        )
+        return result
+      }
+      // If more than half changed, just do a full load (faster than incremental)
+    }
+
+    // Full load (no cache or too many changes)
+    log.debug(`full load for ${projectName} (${sessionFileIds.length} sessions)`)
+    return yield* loadProjectTreeDataFull(
+      projectName,
+      projectPath,
+      files,
+      sessionFiles,
+      fileMtimes,
+      project,
+      sort
+    )
+  })
+
+/** Full load: Phase 1 + Phase 2 on all files, then write cache */
+const loadProjectTreeDataFull = (
+  projectName: string,
+  projectPath: string,
+  files: string[],
+  sessionFiles: string[],
+  fileMtimes: Map<string, number>,
+  project: { name: string; displayName: string; path: string },
+  sort: SessionSortOptions
+) =>
+  Effect.gen(function* () {
+    const allJsonlFiles = files.filter((f) => f.endsWith('.jsonl'))
+
+    // Phase 1: Build global UUID map + collect all summaries
+    const { globalUuidMap, allSummaries } = yield* buildPhase1(projectPath, allJsonlFiles)
+
+    // Phase 1.5: Build summariesByTargetSession
+    const summariesByTargetSession = buildSummariesByTargetSession(globalUuidMap, allSummaries)
+
+    // Phase 2: Load all session tree data
     const sessions = yield* Effect.all(
       sessionFiles.map((file) => {
         const sessionId = file.replace('.jsonl', '')
@@ -386,23 +585,74 @@ export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSo
       { concurrency: 10 }
     )
 
-    // Sort sessions based on sortOptions
-    const sortedSessions = sortSessions(sessions, sort)
-
-    // Filter out error sessions (API errors, authentication errors, etc.)
-    const filteredSessions = sortedSessions.filter((s) => {
-      // Check all possible title/summary fields for error patterns
-      if (isErrorSessionTitle(s.title)) return false
-      if (isErrorSessionTitle(s.customTitle)) return false
-      if (isErrorSessionTitle(s.currentSummary)) return false
-      return true
+    // Write cache in background (don't block return)
+    const cacheData = buildTreeCache(globalUuidMap, allSummaries, sessions, fileMtimes)
+    writeTreeCache(projectName, cacheData).catch((err) => {
+      log.debug(`cache write failed for ${projectName}: ${err}`)
     })
 
-    return {
-      name: project.name,
-      displayName: project.displayName,
-      path: project.path,
-      sessionCount: filteredSessions.length,
-      sessions: filteredSessions,
-    } as ProjectTreeData
+    return buildProjectTreeResult(project, sessions, sort)
+  })
+
+/** Incremental load: Phase 1 on all files, Phase 2 only for changed sessions */
+const loadProjectTreeDataIncremental = (
+  projectName: string,
+  projectPath: string,
+  files: string[],
+  sessionFiles: string[],
+  fileMtimes: Map<string, number>,
+  cache: TreeCache,
+  validation: ReturnType<typeof validateCache>,
+  project: { name: string; displayName: string; path: string },
+  sort: SessionSortOptions
+) =>
+  Effect.gen(function* () {
+    const allJsonlFiles = files.filter((f) => f.endsWith('.jsonl'))
+
+    // Phase 1: Rebuild UUID map + summaries fully (fast: ~2-3s, just parsing)
+    const { globalUuidMap, allSummaries } = yield* buildPhase1(projectPath, allJsonlFiles)
+    const summariesByTargetSession = buildSummariesByTargetSession(globalUuidMap, allSummaries)
+
+    // Phase 2: Only load changed + new sessions
+    const sessionsToLoad = [...validation.changedSessionIds, ...validation.newSessionIds]
+    const loadedSessions = yield* Effect.all(
+      sessionsToLoad.map((sessionId) => {
+        const mtime = fileMtimes.get(sessionId)
+        return loadSessionTreeDataInternal(projectName, sessionId, summariesByTargetSession, mtime)
+      }),
+      { concurrency: 10 }
+    )
+
+    // Build loaded map for quick lookup
+    const loadedMap = new Map<string, SessionTreeData>()
+    for (const s of loadedSessions) {
+      loadedMap.set(s.id, s)
+    }
+
+    // Merge: use loaded for changed/new, update summaries for unchanged, skip deleted
+    const allSessions: SessionTreeData[] = []
+    for (const file of sessionFiles) {
+      const sessionId = file.replace('.jsonl', '')
+      const loaded = loadedMap.get(sessionId)
+      if (loaded) {
+        allSessions.push(loaded)
+      } else if (cache.sessions[sessionId]) {
+        // Unchanged session: update summaries from new Phase 1 data
+        const updated = updateSessionSummaries(
+          cache.sessions[sessionId].data,
+          summariesByTargetSession
+        )
+        // Update fileMtime from current stat
+        allSessions.push({ ...updated, fileMtime: fileMtimes.get(sessionId) })
+      }
+      // deleted sessions are not in sessionFiles, so they're naturally excluded
+    }
+
+    // Write updated cache
+    const cacheData = buildTreeCache(globalUuidMap, allSummaries, allSessions, fileMtimes)
+    writeTreeCache(projectName, cacheData).catch((err) => {
+      log.debug(`cache write failed for ${projectName}: ${err}`)
+    })
+
+    return buildProjectTreeResult(project, allSessions, sort)
   })

@@ -84,19 +84,18 @@ export const extractTitle = (input: MessagePayload | string | undefined): string
 
   if (!text) return 'Untitled'
 
-  // Check for slash command format (e.g., <command-name>/session</command-name>)
-  const { name, args } = parseCommandMessage(text)
-  if (name) return args ? `${name} ${args}` : name
-
-  let cleaned = text.trim()
-  if (!cleaned) return 'Untitled'
-
-  // Use only content before \n\n or \n as title
-  if (cleaned.includes('\n\n')) {
-    cleaned = cleaned.split('\n\n')[0]
+  // Extract first paragraph before parsing commands
+  // This prevents embedded JSON/code from being parsed as commands
+  let firstParagraph = text.trim()
+  if (firstParagraph.includes('\n\n')) {
+    firstParagraph = firstParagraph.split('\n\n')[0]
   }
 
-  return cleaned || 'Untitled'
+  // Check for slash command format only in first paragraph
+  const { name, args } = parseCommandMessage(firstParagraph)
+  if (name) return args ? `${name} ${args}` : name
+
+  return firstParagraph || 'Untitled'
 }
 
 // Check if message contains "Invalid API key"
@@ -150,12 +149,14 @@ export const getDisplayTitle = (
       : currentSummary
   }
   if (title && title !== 'Untitled') {
-    // Check if title contains command-name tag (slash command)
-    if (title.includes('<command-name>')) {
-      const { name, args } = parseCommandMessage(title)
+    // Extract first paragraph to avoid parsing embedded JSON/code
+    const firstParagraph = title.includes('\n\n') ? title.split('\n\n')[0] : title
+    // Check if first paragraph contains command-name tag (slash command)
+    if (firstParagraph.includes('<command-name>')) {
+      const { name, args } = parseCommandMessage(firstParagraph)
       if (name) return args ? `${name} ${args}` : name
     }
-    return title
+    return firstParagraph
   }
   return fallback
 }
@@ -238,41 +239,50 @@ export const tryParseJsonLine = <T = Record<string, unknown>>(
     return JSON.parse(line) as T
   } catch {
     if (filePath) {
-      console.warn(`Skipping invalid JSON at line ${lineNumber} in ${filePath}`)
+      logger.warn(`Skipping invalid JSON at line ${lineNumber} in ${filePath}`)
     }
     return null
   }
 }
 
 /**
- * Parse JSONL lines with detailed error messages including file path and line number
- * @throws Error with "Failed to parse line X in /path/to/file: original error"
+ * Parse JSONL lines with optional strict mode
+ * @param strict - When true, throws on malformed lines. When false (default), skips with a warning.
  */
 export const parseJsonlLines = <T = Record<string, unknown>>(
   lines: string[],
-  filePath: string
+  filePath: string,
+  { strict = false }: { strict?: boolean } = {}
 ): T[] => {
-  return lines.map((line, idx) => {
+  const results: T[] = []
+  for (let idx = 0; idx < lines.length; idx++) {
     try {
-      return JSON.parse(line) as T
+      results.push(JSON.parse(lines[idx]) as T)
     } catch (e) {
       const err = e as Error
-      throw new Error(`Failed to parse line ${idx + 1} in ${filePath}: ${err.message}`, {
-        cause: e,
-      })
+      if (strict) {
+        throw new Error(`Failed to parse line ${idx + 1} in ${filePath}: ${err.message}`, {
+          cause: e,
+        })
+      }
+      logger.warn(`Skipping malformed line ${idx + 1} in ${filePath}: ${err.message}`)
     }
-  })
+  }
+  return results
 }
 
 /**
  * Read and parse JSONL file (Effect wrapper)
  * Combines file reading and JSONL parsing with proper error messages
  */
-export const readJsonlFile = <T = Record<string, unknown>>(filePath: string) =>
+export const readJsonlFile = <T = Record<string, unknown>>(
+  filePath: string,
+  options?: { strict?: boolean }
+) =>
   Effect.gen(function* () {
     const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
     const lines = content.trim().split('\n').filter(Boolean)
-    return parseJsonlLines<T>(lines, filePath)
+    return parseJsonlLines<T>(lines, filePath, options)
   })
 
 // ============================================================================

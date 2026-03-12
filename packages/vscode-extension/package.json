@@ -100,32 +100,47 @@
         "command": "claudeSessions.sortBy",
         "title": "Sort Sessions",
         "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "claudeSessions.filterSessions",
+        "title": "Filter Sessions",
+        "icon": "$(search)"
+      },
+      {
+        "command": "claudeSessions.clearFilter",
+        "title": "Clear Filter",
+        "icon": "$(close)"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "claudeSessions.sortBy",
+          "command": "claudeSessions.clearFilter",
+          "when": "view == claudeSessions && claudeSessions.filterActive",
+          "group": "navigation@0"
+        },
+        {
+          "command": "claudeSessions.filterSessions",
           "when": "view == claudeSessions",
           "group": "navigation@1"
         },
         {
-          "command": "claudeSessions.cleanup",
+          "command": "claudeSessions.sortBy",
           "when": "view == claudeSessions",
           "group": "navigation@2"
         },
         {
-          "command": "claudeSessions.openWebUI",
+          "command": "claudeSessions.cleanup",
           "when": "view == claudeSessions",
           "group": "navigation@3"
         },
         {
-          "command": "claudeSessions.refresh",
+          "command": "claudeSessions.openWebUI",
           "when": "view == claudeSessions",
           "group": "navigation@4"
         },
         {
-          "command": "workbench.action.restartExtensionHost",
+          "command": "claudeSessions.refresh",
           "when": "view == claudeSessions",
           "group": "navigation@5"
         }
@@ -233,6 +248,11 @@
           ],
           "default": "ask",
           "description": "Default terminal mode when resuming sessions: 'ask' shows a picker, 'internal' uses the integrated terminal, 'external' uses the system terminal"
+        },
+        "claudeSessions.webServerPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a local @claude-sessions/web CLI script (e.g., '/path/to/packages/web/dist/cli.js'). When set, uses this instead of npx."
         }
       }
     }
@@ -243,9 +263,7 @@
     "dev": "tsup --watch",
     "package": "vsce package --no-dependencies",
     "lint": "eslint src",
-    "pretest": "node -e \"const p=require('./package.json'); delete p.extensionDependencies; require('fs').writeFileSync('./package.json', JSON.stringify(p,null,2)+'\\n')\"",
-    "test": "tsc -p tsconfig.test.json && node ./out/test/runTest.js",
-    "posttest": "node -e \"const p=require('./package.json'); p.extensionDependencies=['Anthropic.claude-code']; require('fs').writeFileSync('./package.json', JSON.stringify(p,null,2)+'\\n')\""
+    "test": "tsc -p tsconfig.test.json && node ./out/test/runTest.js"
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
@@ -262,8 +280,5 @@
     "mocha": "^11.7.5",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"
-  },
-  "extensionDependencies": [
-    "Anthropic.claude-code"
-  ]
+  }
 }

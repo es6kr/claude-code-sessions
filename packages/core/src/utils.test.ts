@@ -31,6 +31,19 @@ describe('extractTitle', () => {
     expect(extractTitle('')).toBe('Untitled')
   })
 
+  it('should not parse command tags from embedded JSON after first paragraph', () => {
+    const message = {
+      role: 'user' as const,
+      content: [
+        {
+          type: 'text' as const,
+          text: 'Fix display title parsing\n\n{"message":{"content":"<command-name>/session</command-name>\\n<command-args>repair</command-args>"}}',
+        },
+      ],
+    }
+    expect(extractTitle(message)).toBe('Fix display title parsing')
+  })
+
   it('should strip IDE tags when stripIdeTags option is true', () => {
     const message = {
       role: 'user' as const,
@@ -229,6 +242,18 @@ describe('getDisplayTitle', () => {
     expect(getDisplayTitle('', '', 'Title')).toBe('Title')
     expect(getDisplayTitle('', '', '')).toBe('Untitled')
   })
+
+  it('should not parse command tags from embedded JSON in title', () => {
+    const title =
+      'Fix display title parsing\n\n{"message":{"content":"<command-name>/session</command-name>\\n<command-args>repair</command-args>"}}'
+    expect(getDisplayTitle(undefined, undefined, title)).toBe('Fix display title parsing')
+  })
+
+  it('should parse command from first paragraph of title', () => {
+    const title =
+      '<command-message>session</command-message>\n<command-name>/session</command-name>\n<command-args>  repair --dry-run</command-args>'
+    expect(getDisplayTitle(undefined, undefined, title)).toBe('/session repair --dry-run')
+  })
 })
 
 describe('maskHomePath', () => {
@@ -276,18 +301,20 @@ describe('parseJsonlLines', () => {
     expect(result[1]).toEqual({ type: 'assistant', uuid: '2' })
   })
 
-  it('should throw error with file path and line number on parse failure', () => {
+  it('should skip malformed lines and return valid ones', () => {
     const lines = ['{"valid":"json"}', 'invalid json here', '{"also":"valid"}']
 
-    expect(() => parseJsonlLines(lines, '/path/to/session.jsonl')).toThrow(
-      'Failed to parse line 2 in /path/to/session.jsonl:'
-    )
+    const result = parseJsonlLines(lines, '/path/to/session.jsonl')
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({ valid: 'json' })
+    expect(result[1]).toEqual({ also: 'valid' })
   })
 
-  it('should include original error message in thrown error', () => {
+  it('should return empty array when all lines are malformed', () => {
     const lines = ['not valid json']
 
-    expect(() => parseJsonlLines(lines, '/test.jsonl')).toThrow('Unexpected token')
+    const result = parseJsonlLines(lines, '/test.jsonl')
+    expect(result).toEqual([])
   })
 
   it('should handle empty lines array', () => {
@@ -301,6 +328,23 @@ describe('parseJsonlLines', () => {
 
     expect(result[0].type).toBe('user')
     expect(result[0].uuid).toBe('1')
+  })
+
+  it('should throw on malformed lines when strict: true', () => {
+    const lines = ['{"valid":"json"}', 'invalid json', '{"also":"valid"}']
+
+    expect(() => parseJsonlLines(lines, '/test.jsonl', { strict: true })).toThrow(
+      'Failed to parse line 2 in /test.jsonl'
+    )
+  })
+
+  it('should skip malformed lines when strict: false (default)', () => {
+    const lines = ['{"valid":"json"}', 'invalid json', '{"also":"valid"}']
+
+    const result = parseJsonlLines(lines, '/test.jsonl')
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({ valid: 'json' })
+    expect(result[1]).toEqual({ also: 'valid' })
   })
 })
 
@@ -337,13 +381,13 @@ describe('readJsonlFile', () => {
     expect(result).toHaveLength(3)
   })
 
-  it('should throw with file path on parse error', async () => {
+  it('should skip malformed lines in file', async () => {
     const fileContent = '{"valid":true}\ninvalid line\n'
     mockedFs.readFile.mockResolvedValue(fileContent)
 
-    await expect(Effect.runPromise(readJsonlFile('/broken/file.jsonl'))).rejects.toThrow(
-      'Failed to parse line 2 in /broken/file.jsonl:'
-    )
+    const result = await Effect.runPromise(readJsonlFile('/broken/file.jsonl'))
+    expect(result).toHaveLength(1)
+    expect(result[0]).toEqual({ valid: true })
   })
 
   it('should handle file read errors', async () => {

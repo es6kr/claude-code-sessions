@@ -25,6 +25,7 @@ function getConfig() {
     openInEditor: config.get<boolean>('openInEditor', true),
     port: config.get<number>('port', 5174),
     useBetaVersion: config.get<boolean>('useBetaVersion', false),
+    webServerPath: config.get<string>('webServerPath', ''),
   }
 }
 
@@ -51,14 +52,25 @@ async function ensureWebServer(): Promise<number> {
     webServerProcess = null
   }
 
-  const { useBetaVersion } = getConfig()
-  const packageSpec = useBetaVersion ? '@claude-sessions/web@beta' : '@claude-sessions/web'
+  const { useBetaVersion, webServerPath } = getConfig()
+
+  let spawnCmd: string
+  let spawnArgs: string[]
+
+  if (webServerPath) {
+    spawnCmd = 'node'
+    spawnArgs = [webServerPath, '--port', String(port)]
+  } else {
+    const packageSpec = useBetaVersion ? '@claude-sessions/web@beta' : '@claude-sessions/web'
+    spawnCmd = 'npx'
+    spawnArgs = ['-y', packageSpec, '--port', String(port)]
+  }
 
   outputChannel.appendLine('=== Starting Web Server ===')
-  outputChannel.appendLine(`Command: npx ${packageSpec} --port ${port}`)
+  outputChannel.appendLine(`Command: ${spawnCmd} ${spawnArgs.join(' ')}`)
 
   return new Promise((resolve, reject) => {
-    const child = spawn('npx', ['-y', packageSpec, '--port', String(port)], {
+    const child = spawn(spawnCmd, spawnArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
     })
@@ -356,6 +368,30 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
+    vscode.commands.registerCommand('claudeSessions.filterSessions', async () => {
+      const value = await vscode.window.showInputBox({
+        prompt: 'Filter sessions by title or summary',
+        value: treeProvider.getFilterText(),
+        placeHolder: 'Type to filter sessions...',
+      })
+
+      if (value !== undefined) {
+        treeProvider.setFilterText(value)
+        treeView.message = value.trim() ? `Filter: "${value.trim()}"` : undefined
+        vscode.commands.executeCommand(
+          'setContext',
+          'claudeSessions.filterActive',
+          value.trim().length > 0
+        )
+      }
+    }),
+
+    vscode.commands.registerCommand('claudeSessions.clearFilter', () => {
+      treeProvider.setFilterText('')
+      treeView.message = undefined
+      vscode.commands.executeCommand('setContext', 'claudeSessions.filterActive', false)
+    }),
+
     vscode.commands.registerCommand('claudeSessions.sortBy', async () => {
       const sortOptions: Array<{
         label: string
@@ -447,8 +483,17 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (item.type !== 'session') return
 
-        const { cliFlags, defaultTerminalMode } = getConfig()
+        const { defaultTerminalMode, cliFlags } = getConfig()
+        const cliCommand = cliFlags
+          ? `claude --resume ${item.sessionId} ${cliFlags}`
+          : `claude --resume ${item.sessionId}`
 
+        // Get project path for cwd (needed for all modes)
+        const folderPath = await session.folderNameToPath(item.projectName)
+        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
+        const cwd = session.expandHomePath(folderPath, homeDir)
+
+        // Determine terminal mode: skip picker if pre-configured
         let mode: 'internal' | 'external'
         if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
           mode = defaultTerminalMode
@@ -476,11 +521,6 @@ export function activate(context: vscode.ExtensionContext) {
           mode = choice.mode
         }
 
-        // Get project path for cwd
-        const folderPath = await session.folderNameToPath(item.projectName)
-        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
-        const cwd = session.expandHomePath(folderPath, homeDir)
-
         if (mode === 'internal') {
           // Create terminal with proper name and cwd
           const terminal = vscode.window.createTerminal({
@@ -488,8 +528,7 @@ export function activate(context: vscode.ExtensionContext) {
             cwd,
           })
           terminal.show()
-          const cmd = `claude --resume ${item.sessionId}${cliFlags ? ` ${cliFlags}` : ''}`
-          terminal.sendText(cmd)
+          terminal.sendText(cliCommand)
         } else {
           // External: spawn detached process
           const extraArgs = cliFlags ? cliFlags.split(/\s+/).filter(Boolean) : []

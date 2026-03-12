@@ -22,6 +22,9 @@ export {
 // Tree data operations
 export { loadSessionTreeData, loadProjectTreeData } from './tree.js'
 
+// Cache utilities
+export { getCachePath } from './cache.js'
+
 // Analysis and compression
 export {
   analyzeSession,
