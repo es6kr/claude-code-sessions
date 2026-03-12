@@ -30,7 +30,7 @@
       "activitybar": [
         {
           "id": "claude-sessions",
-          "title": "Claude Code Sessions",
+          "title": "Claude Sessions",
           "icon": "resources/activity-bar.svg"
         }
       ]
@@ -39,9 +39,8 @@
       "claude-sessions": [
         {
           "id": "claudeSessions",
-          "name": "Sessions",
+          "name": "Claude Sessions",
           "icon": "resources/activity-bar.svg",
-          "contextualTitle": "Claude Code Sessions",
           "canSelectMany": true
         }
       ]
@@ -148,6 +147,11 @@
           "command": "claudeSessions.refresh",
           "when": "view == claudeSessions",
           "group": "navigation@5"
+        },
+        {
+          "command": "workbench.action.restartExtensionHost",
+          "when": "view == claudeSessions",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [
