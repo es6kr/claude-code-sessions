@@ -37,15 +37,19 @@ function killWebServer(): Promise<void> {
       return
     }
     const proc = webServerProcess
-    webServerProcess = null
-    const timeout = setTimeout(() => resolve(), 3000)
+    const timeout = setTimeout(() => {
+      webServerProcess = null
+      resolve()
+    }, 3000)
     proc.on('exit', () => {
       clearTimeout(timeout)
+      webServerProcess = null
       resolve()
     })
-    // shell: true spawns shell -> npx -> node.
-    // proc.kill() only kills the shell; use process group kill to free the port.
-    if (proc.pid) {
+    // shell: true + detached: true spawns a new process group.
+    // Use negative PID to kill the entire group (shell + npx + node).
+    // On Windows, detached creates a new console so proc.kill() suffices.
+    if (proc.pid && process.platform !== 'win32') {
       try {
         process.kill(-proc.pid, 'SIGTERM')
       } catch {
@@ -57,15 +61,17 @@ function killWebServer(): Promise<void> {
   })
 }
 
-async function ensureWebServer(): Promise<number> {
+async function ensureWebServer({ forceRestart = false } = {}): Promise<number> {
   const { port, autoStartServer } = getConfig()
 
-  // Check if server is running
-  try {
-    const response = await fetch(`http://localhost:${port}/api/version`)
-    if (response.ok) return port
-  } catch {
-    // Server not running
+  // Check if server is running (skip when force-restarting with new config)
+  if (!forceRestart) {
+    try {
+      const response = await fetch(`http://localhost:${port}/api/version`)
+      if (response.ok) return port
+    } catch {
+      // Server not running
+    }
   }
 
   if (!autoStartServer) {
@@ -100,6 +106,7 @@ async function ensureWebServer(): Promise<number> {
     const child = spawn(spawnCmd, spawnArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
+      detached: process.platform !== 'win32',
     })
 
     webServerProcess = child
@@ -579,7 +586,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('claudeSessions.restartWebServer', async () => {
       await killWebServer()
       try {
-        await ensureWebServer()
+        await ensureWebServer({ forceRestart: true })
         vscode.window.showInformationMessage('Web server restarted successfully')
       } catch (err) {
         vscode.window.showErrorMessage(
@@ -596,10 +603,14 @@ export function activate(context: vscode.ExtensionContext) {
         outputChannel.appendLine('Package tag setting changed, restarting web server...')
         await killWebServer()
         try {
-          await ensureWebServer()
+          await ensureWebServer({ forceRestart: true })
           outputChannel.appendLine('Web server restarted with new configuration')
         } catch (err) {
-          outputChannel.appendLine(`Failed to restart web server: ${err}`)
+          outputChannel.appendLine(
+            `Failed to restart web server: ${
+              err instanceof Error ? (err.stack ?? err.message) : String(err)
+            }`
+          )
           vscode.window.showErrorMessage(
             `Failed to restart web server: ${err instanceof Error ? err.message : String(err)}`
           )
@@ -611,6 +622,6 @@ export function activate(context: vscode.ExtensionContext) {
   )
 }
 
-export function deactivate() {
-  killWebServer()
+export async function deactivate() {
+  await killWebServer()
 }
