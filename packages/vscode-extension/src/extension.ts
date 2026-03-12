@@ -23,10 +23,38 @@ function getConfig() {
     cliFlags: config.get<string>('cliFlags', ''),
     defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
     openInEditor: config.get<boolean>('openInEditor', true),
+    packageTag: config.get<string>('packageTag', ''),
     port: config.get<number>('port', 5174),
     useBetaVersion: config.get<boolean>('useBetaVersion', false),
     webServerPath: config.get<string>('webServerPath', ''),
   }
+}
+
+function killWebServer(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!webServerProcess) {
+      resolve()
+      return
+    }
+    const proc = webServerProcess
+    webServerProcess = null
+    const timeout = setTimeout(() => resolve(), 3000)
+    proc.on('exit', () => {
+      clearTimeout(timeout)
+      resolve()
+    })
+    // shell: true spawns shell -> npx -> node.
+    // proc.kill() only kills the shell; use process group kill to free the port.
+    if (proc.pid) {
+      try {
+        process.kill(-proc.pid, 'SIGTERM')
+      } catch {
+        proc.kill()
+      }
+    } else {
+      proc.kill()
+    }
+  })
 }
 
 async function ensureWebServer(): Promise<number> {
@@ -47,12 +75,9 @@ async function ensureWebServer(): Promise<number> {
   }
 
   // Start the server
-  if (webServerProcess) {
-    webServerProcess.kill()
-    webServerProcess = null
-  }
+  await killWebServer()
 
-  const { useBetaVersion, webServerPath } = getConfig()
+  const { packageTag, useBetaVersion, webServerPath } = getConfig()
 
   let spawnCmd: string
   let spawnArgs: string[]
@@ -61,7 +86,9 @@ async function ensureWebServer(): Promise<number> {
     spawnCmd = 'node'
     spawnArgs = [webServerPath, '--port', String(port)]
   } else {
-    const packageSpec = useBetaVersion ? '@claude-sessions/web@beta' : '@claude-sessions/web'
+    // Resolve effective tag: packageTag takes precedence, useBetaVersion as fallback
+    const tag = packageTag || (useBetaVersion ? 'beta' : '')
+    const packageSpec = tag ? `@claude-sessions/web@${tag}` : '@claude-sessions/web'
     spawnCmd = 'npx'
     spawnArgs = ['-y', packageSpec, '--port', String(port)]
   }
@@ -549,13 +576,41 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
+    vscode.commands.registerCommand('claudeSessions.restartWebServer', async () => {
+      await killWebServer()
+      try {
+        await ensureWebServer()
+        vscode.window.showInformationMessage('Web server restarted successfully')
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Failed to restart web server: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+    }),
+
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (
+        e.affectsConfiguration('claudeSessions.packageTag') ||
+        e.affectsConfiguration('claudeSessions.useBetaVersion')
+      ) {
+        outputChannel.appendLine('Package tag setting changed, restarting web server...')
+        await killWebServer()
+        try {
+          await ensureWebServer()
+          outputChannel.appendLine('Web server restarted with new configuration')
+        } catch (err) {
+          outputChannel.appendLine(`Failed to restart web server: ${err}`)
+          vscode.window.showErrorMessage(
+            `Failed to restart web server: ${err instanceof Error ? err.message : String(err)}`
+          )
+        }
+      }
+    }),
+
     treeView
   )
 }
 
 export function deactivate() {
-  if (webServerProcess) {
-    webServerProcess.kill()
-    webServerProcess = null
-  }
+  killWebServer()
 }
