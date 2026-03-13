@@ -268,16 +268,15 @@ export class SessionTreeProvider
         homeDir: USER_HOME,
       })
 
-      // When filter is active, load all projects and only show those with matches
+      // When filter is active, load all projects concurrently and only show those with matches
       if (this.filterText) {
-        const results: SessionTreeItem[] = []
-        for (const p of sorted) {
-          const data = await this.getProjectData(p.name)
-          if (!data) continue
-          const matches = this.filterSessions(data.sessions)
-          if (matches.length === 0) continue
-          results.push(
-            new SessionTreeItem(
+        const projectResults = await Promise.all(
+          sorted.map(async (p) => {
+            const data = await this.getProjectData(p.name)
+            if (!data) return null
+            const matches = this.filterSessions(data.sessions)
+            if (matches.length === 0) return null
+            return new SessionTreeItem(
               maskHomePath(p.displayName, USER_HOME),
               vscode.TreeItemCollapsibleState.Expanded, // auto-expand filtered projects
               'project',
@@ -285,9 +284,9 @@ export class SessionTreeProvider
               '',
               data.sessionCount // show total count, filtered children convey match info
             )
-          )
-        }
-        return results
+          })
+        )
+        return projectResults.filter((item): item is SessionTreeItem => item !== null)
       }
 
       return sorted.map(
