@@ -300,6 +300,153 @@ describe('loadProjectTreeData - cross-session leafUuid lookup', () => {
   })
 })
 
+describe('loadProjectTreeData - cache behavior', () => {
+  let tempDir: string
+  let projectDir: string
+  const projectName = '-Users-test-cache-project'
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-cache-test-'))
+    projectDir = path.join(tempDir, projectName)
+    await fs.mkdir(projectDir, { recursive: true })
+    vi.mocked(getSessionsDir).mockReturnValue(tempDir)
+  })
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    vi.clearAllMocks()
+  })
+
+  const writeSession = async (id: string, messages: object[]) => {
+    await fs.writeFile(
+      path.join(projectDir, `${id}.jsonl`),
+      messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    )
+  }
+
+  const cacheExists = async () => {
+    try {
+      await fs.access(path.join(projectDir, '.tree-cache.json'))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const readCacheFile = async () => {
+    const raw = await fs.readFile(path.join(projectDir, '.tree-cache.json'), 'utf-8')
+    return JSON.parse(raw)
+  }
+
+  it('should write cache file after first load', async () => {
+    await writeSession('session-a', [
+      {
+        type: 'user',
+        uuid: 'msg-1',
+        timestamp: '2025-01-01T00:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+      },
+    ])
+
+    expect(await cacheExists()).toBe(false)
+
+    await Effect.runPromise(loadProjectTreeData(projectName))
+
+    // Cache write is async (fire-and-forget), wait briefly
+    await new Promise((r) => setTimeout(r, 100))
+
+    expect(await cacheExists()).toBe(true)
+    const cache = await readCacheFile()
+    expect(cache.version).toBe(1)
+    expect(cache.sessions['session-a']).toBeDefined()
+  })
+
+  it('should return cached data on second call with unchanged files', async () => {
+    await writeSession('session-b', [
+      {
+        type: 'user',
+        uuid: 'msg-2',
+        timestamp: '2025-01-02T00:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Cached test' }] },
+      },
+    ])
+
+    // First call: full load + cache write
+    const result1 = await Effect.runPromise(loadProjectTreeData(projectName))
+    await new Promise((r) => setTimeout(r, 100))
+
+    // Second call: should use cache (no file changes)
+    const result2 = await Effect.runPromise(loadProjectTreeData(projectName))
+
+    expect(result1!.sessions).toHaveLength(1)
+    expect(result2!.sessions).toHaveLength(1)
+    expect(result2!.sessions[0].title).toBe(result1!.sessions[0].title)
+  })
+
+  it('should incrementally rebuild when a subset of sessions change', async () => {
+    // Create 3 sessions
+    for (const id of ['s1', 's2', 's3']) {
+      await writeSession(id, [
+        {
+          type: 'user',
+          uuid: `${id}-msg`,
+          timestamp: '2025-01-01T00:00:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: `Session ${id}` }] },
+        },
+      ])
+    }
+
+    // First call: full load
+    await Effect.runPromise(loadProjectTreeData(projectName))
+    await new Promise((r) => setTimeout(r, 100))
+
+    // Modify only s1 (touch to update mtime)
+    await writeSession('s1', [
+      {
+        type: 'user',
+        uuid: 's1-msg',
+        timestamp: '2025-01-01T00:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Session s1 updated' }] },
+      },
+    ])
+
+    // Second call: should take incremental path (1 changed < 3/2)
+    const result = await Effect.runPromise(loadProjectTreeData(projectName))
+
+    expect(result!.sessions).toHaveLength(3)
+    const s1 = result!.sessions.find((s) => s.id === 's1')
+    expect(s1!.title).toBe('Session s1 updated')
+  })
+
+  it('should handle new session added after cache was written', async () => {
+    await writeSession('existing', [
+      {
+        type: 'user',
+        uuid: 'e-msg',
+        timestamp: '2025-01-01T00:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Existing session' }] },
+      },
+    ])
+
+    await Effect.runPromise(loadProjectTreeData(projectName))
+    await new Promise((r) => setTimeout(r, 100))
+
+    // Add new session
+    await writeSession('brand-new', [
+      {
+        type: 'user',
+        uuid: 'n-msg',
+        timestamp: '2025-01-02T00:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'New session' }] },
+      },
+    ])
+
+    const result = await Effect.runPromise(loadProjectTreeData(projectName))
+    expect(result!.sessions).toHaveLength(2)
+    expect(result!.sessions.find((s) => s.id === 'brand-new')).toBeDefined()
+  })
+})
+
 describe('loadSessionTreeData - single session (no global map)', () => {
   let tempDir: string
   let projectDir: string
