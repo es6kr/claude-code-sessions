@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
@@ -178,6 +179,47 @@
     )
   }
 
+  const handleRenameSession = () => {
+    if (!session) return
+
+    showInput(
+      'Rename Session',
+      'Session title:',
+      customTitle ?? session.title,
+      async (newTitle) => {
+        closeInput()
+        const trimmed = newTitle.trim()
+        if (!trimmed) return
+
+        try {
+          await api.renameSession(session!.projectName, session!.id, trimmed)
+          customTitle = trimmed
+        } catch (e) {
+          error = String(e)
+        }
+      }
+    )
+  }
+
+  const handleDeleteSession = () => {
+    if (!session) return
+
+    showConfirm(
+      'Delete Session',
+      `Delete this session?\n\n"${customTitle ?? session.title}"\n\nThis action cannot be undone.`,
+      async () => {
+        closeConfirm()
+        try {
+          await api.deleteSession(session!.projectName, session!.id)
+          goto(backUrl)
+        } catch (e) {
+          error = String(e)
+        }
+      },
+      'danger'
+    )
+  }
+
   onMount(loadSession)
 </script>
 
@@ -212,6 +254,8 @@
       }}
       onEditTitle={handleEditTitle}
       onSplitSession={handleSplitSession}
+      onRenameSession={handleRenameSession}
+      onDeleteSession={handleDeleteSession}
       enableScroll={true}
       fullWidth={true}
     />
