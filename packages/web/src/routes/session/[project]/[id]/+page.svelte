@@ -166,6 +166,19 @@
             // Keep messages from split point onwards (original session keeps newer messages)
             messages = messages.slice(msgIndex)
             toast = `Session split! Old messages moved to new session: ${result.newSessionId.slice(0, 8)}...`
+
+            // Refresh session metadata so title/summary reflects the new first message
+            try {
+              const sessions = await api.listSessions(session!.projectName)
+              const updatedSession = sessions.find((s) => s.id === session!.id)
+              if (updatedSession) session = updatedSession
+
+              const sessionData = await api.getSessionTreeData(session!.projectName, session!.id)
+              currentSummary = sessionData.currentSummary
+              customTitle = sessionData.customTitle
+            } catch {
+              // Non-critical: metadata refresh failure does not block the split result
+            }
           } else {
             error = result.error ?? 'Failed to split session'
           }
