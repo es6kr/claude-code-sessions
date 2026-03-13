@@ -20,6 +20,12 @@ packages/web/playwright-report/
 packages/web/test-results/
 PROMPT.md
 
+# Ralph
+.ralph/
+.ralphrc
+@AGENT.md
+@fix_plan.md
+
 # Storybook
 *storybook.log
 storybook-static
