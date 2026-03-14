@@ -268,24 +268,30 @@ export class SessionTreeProvider
         homeDir: USER_HOME,
       })
 
-      // When filter is active, load all projects concurrently and only show those with matches
+      // When filter is active, load projects with bounded concurrency and only show those with matches
       if (this.filterText) {
-        const projectResults = await Promise.all(
-          sorted.map(async (p) => {
-            const data = await this.getProjectData(p.name)
-            if (!data) return null
-            const matches = this.filterSessions(data.sessions)
-            if (matches.length === 0) return null
-            return new SessionTreeItem(
-              maskHomePath(p.displayName, USER_HOME),
-              vscode.TreeItemCollapsibleState.Expanded, // auto-expand filtered projects
-              'project',
-              p.name,
-              '',
-              data.sessionCount // show total count, filtered children convey match info
-            )
-          })
-        )
+        const CONCURRENCY = 5
+        const projectResults: (SessionTreeItem | null)[] = []
+        for (let i = 0; i < sorted.length; i += CONCURRENCY) {
+          const batch = sorted.slice(i, i + CONCURRENCY)
+          const batchResults = await Promise.all(
+            batch.map(async (p) => {
+              const data = await this.getProjectData(p.name)
+              if (!data) return null
+              const matches = this.filterSessions(data.sessions)
+              if (matches.length === 0) return null
+              return new SessionTreeItem(
+                maskHomePath(p.displayName, USER_HOME),
+                vscode.TreeItemCollapsibleState.Expanded, // auto-expand filtered projects
+                'project',
+                p.name,
+                '',
+                data.sessionCount // show total count, filtered children convey match info
+              )
+            })
+          )
+          projectResults.push(...batchResults)
+        }
         return projectResults.filter((item): item is SessionTreeItem => item !== null)
       }
 
