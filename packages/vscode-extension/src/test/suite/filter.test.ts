@@ -1,21 +1,31 @@
 import * as vscode from 'vscode'
 import * as assert from 'assert'
 
+/**
+ * Ensure extension is loaded and activated.
+ * Calls this.skip() if extension is not found (visible in Mocha output).
+ */
+async function ensureExtensionActive(ctx: Mocha.Context): Promise<vscode.Extension<unknown>> {
+  ctx.timeout(30000)
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+
+  const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+  if (!extension) {
+    ctx.skip()
+    // unreachable after skip, but satisfies TS return type
+    throw new Error('Extension not found')
+  }
+
+  if (!extension.isActive) {
+    await extension.activate()
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+  return extension
+}
+
 suite('Filter Test Suite', () => {
   test('Filter commands are registered', async function () {
-    this.timeout(30000)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
-    if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
-    }
-
-    if (!extension.isActive) {
-      await extension.activate()
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await ensureExtensionActive(this)
 
     const commands = await vscode.commands.getCommands(true)
 
@@ -32,45 +42,16 @@ suite('Filter Test Suite', () => {
     console.log('All filter commands are registered')
   })
 
-  test('Clear filter resets context key', async function () {
-    this.timeout(30000)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+  test('clearFilter command executes without error', async function () {
+    await ensureExtensionActive(this)
 
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
-    if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
-    }
-
-    if (!extension.isActive) {
-      await extension.activate()
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    // Execute clearFilter — should not throw
+    // Execute clearFilter — test passes if no error is thrown
     await vscode.commands.executeCommand('claudeSessions.clearFilter')
     console.log('clearFilter command executed without error')
-
-    // After clearing, the filterActive context should be false
-    // We cannot directly read context keys, but verifying no error is thrown
-    // confirms the command handler is wired up correctly
-    assert.ok(true, 'clearFilter executed without error')
   })
 
-  test('Tree view is created with correct ID', async function () {
-    this.timeout(30000)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
-    if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
-    }
-
-    if (!extension.isActive) {
-      await extension.activate()
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+  test('View container and view contributions are defined', async function () {
+    const extension = await ensureExtensionActive(this)
 
     // Open the Claude Sessions sidebar
     try {
@@ -81,7 +62,7 @@ suite('Filter Test Suite', () => {
     }
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
-    // Verify the view container contribution exists
+    // Verify the view container contribution exists in package.json
     const pkg = extension.packageJSON
     const viewContainers = pkg?.contributes?.viewsContainers?.activitybar ?? []
     const claudeContainer = viewContainers.find((c: { id: string }) => c.id === 'claude-sessions')
@@ -91,23 +72,11 @@ suite('Filter Test Suite', () => {
     const claudeView = views.find((v: { id: string }) => v.id === 'claudeSessions')
     assert.ok(claudeView, 'claudeSessions view should exist in the container')
 
-    console.log('Tree view structure verified')
+    console.log('View contributions verified')
   })
 
   test('Keyboard shortcut for filter is registered', async function () {
-    this.timeout(30000)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
-    if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
-    }
-
-    if (!extension.isActive) {
-      await extension.activate()
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const extension = await ensureExtensionActive(this)
 
     // Verify the keybinding is defined in package.json
     const pkg = extension.packageJSON
@@ -126,7 +95,5 @@ suite('Filter Test Suite', () => {
     } else {
       console.log('No filter keybinding defined (PR #37 may not be merged yet)')
     }
-
-    assert.ok(true, 'Keybinding check completed')
   })
 })

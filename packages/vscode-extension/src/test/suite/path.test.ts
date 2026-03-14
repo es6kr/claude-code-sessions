@@ -8,21 +8,30 @@ async function importCore() {
   return await import('@claude-sessions/core')
 }
 
+/**
+ * Ensure extension is loaded and activated.
+ * Calls this.skip() if extension is not found (visible in Mocha output).
+ */
+async function ensureExtensionActive(ctx: Mocha.Context): Promise<vscode.Extension<unknown>> {
+  ctx.timeout(30000)
+  await new Promise((resolve) => setTimeout(resolve, 2000))
+
+  const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+  if (!extension) {
+    ctx.skip()
+    throw new Error('Extension not found')
+  }
+
+  if (!extension.isActive) {
+    await extension.activate()
+  }
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+  return extension
+}
+
 suite('Path Handling Test Suite', () => {
   test('openProjectFolder command is registered', async function () {
-    this.timeout(30000)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
-    if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
-    }
-
-    if (!extension.isActive) {
-      await extension.activate()
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await ensureExtensionActive(this)
 
     const commands = await vscode.commands.getCommands(true)
 
@@ -50,7 +59,7 @@ suite('Path Handling Test Suite', () => {
     const projects = await Effect.runPromise(session.listProjects)
 
     if (projects.length === 0) {
-      console.log('No projects found, skipping path validation')
+      this.skip()
       return
     }
 
@@ -125,12 +134,22 @@ suite('Path Handling Test Suite', () => {
     // Should be an absolute path
     assert.ok(path.isAbsolute(sessionsDir), `Sessions dir should be absolute: "${sessionsDir}"`)
 
-    // Should contain 'claude' in the path (platform-agnostic check)
-    const lowerPath = sessionsDir.toLowerCase()
-    assert.ok(
-      lowerPath.includes('claude'),
-      `Sessions dir should reference claude: "${sessionsDir}"`
-    )
+    // Validate path based on whether CLAUDE_SESSIONS_DIR is set
+    const envOverride = process.env.CLAUDE_SESSIONS_DIR
+    if (envOverride) {
+      assert.strictEqual(
+        sessionsDir,
+        envOverride,
+        `Sessions dir should match CLAUDE_SESSIONS_DIR env: "${sessionsDir}"`
+      )
+    } else {
+      // Default path should end with .claude/projects
+      const normalized = sessionsDir.replace(/\\/g, '/')
+      assert.ok(
+        normalized.endsWith('.claude/projects'),
+        `Default sessions dir should end with .claude/projects: "${sessionsDir}"`
+      )
+    }
 
     // Should not have mixed separators on Windows
     if (process.platform === 'win32') {
