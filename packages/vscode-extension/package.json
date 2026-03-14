@@ -116,6 +116,14 @@
         "category": "Claude Sessions"
       }
     ],
+    "keybindings": [
+      {
+        "command": "claudeSessions.filterSessions",
+        "key": "ctrl+f",
+        "mac": "cmd+f",
+        "when": "focusedView == claudeSessions"
+      }
+    ],
     "menus": {
       "view/title": [
         {
