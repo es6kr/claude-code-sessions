@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { validateCache, type TreeCache } from '../session/cache.js'
+import type { SessionTreeData } from '../types.js'
 
 describe('validateCache', () => {
   const makeCache = (sessions: Record<string, number>): TreeCache => ({
@@ -9,7 +10,7 @@ describe('validateCache', () => {
     sessions: Object.fromEntries(
       Object.entries(sessions).map(([id, mtime]) => [
         id,
-        { fileMtime: mtime, data: { id } as unknown as import('../types.js').SessionTreeData },
+        { fileMtime: mtime, data: { id } as unknown as SessionTreeData },
       ])
     ),
   })
