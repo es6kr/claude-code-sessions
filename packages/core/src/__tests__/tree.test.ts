@@ -13,7 +13,7 @@ vi.mock('../paths.js', async () => {
   }
 })
 
-import { loadProjectTreeData, loadSessionTreeData } from '../session.js'
+import { getCachePath, loadProjectTreeData, loadSessionTreeData } from '../session.js'
 import { getSessionsDir } from '../paths.js'
 
 describe('loadProjectTreeData - cross-session leafUuid lookup', () => {
@@ -324,9 +324,11 @@ describe('loadProjectTreeData - cache behavior', () => {
     )
   }
 
+  const cachePath = () => getCachePath(projectName)
+
   const cacheExists = async () => {
     try {
-      await fs.access(path.join(projectDir, '.tree-cache.json'))
+      await fs.access(cachePath())
       return true
     } catch {
       return false
@@ -334,8 +336,18 @@ describe('loadProjectTreeData - cache behavior', () => {
   }
 
   const readCacheFile = async () => {
-    const raw = await fs.readFile(path.join(projectDir, '.tree-cache.json'), 'utf-8')
+    const raw = await fs.readFile(cachePath(), 'utf-8')
     return JSON.parse(raw)
+  }
+
+  /** Poll until cache file appears (max 2s) */
+  const waitForCache = async (timeoutMs = 2000) => {
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      if (await cacheExists()) return
+      await new Promise((r) => setTimeout(r, 20))
+    }
+    throw new Error(`Cache file did not appear within ${timeoutMs}ms`)
   }
 
   it('should write cache file after first load', async () => {
@@ -352,8 +364,8 @@ describe('loadProjectTreeData - cache behavior', () => {
 
     await Effect.runPromise(loadProjectTreeData(projectName))
 
-    // Cache write is async (fire-and-forget), wait briefly
-    await new Promise((r) => setTimeout(r, 100))
+    // Cache write is async (fire-and-forget), poll until file appears
+    await waitForCache()
 
     expect(await cacheExists()).toBe(true)
     const cache = await readCacheFile()
@@ -373,10 +385,17 @@ describe('loadProjectTreeData - cache behavior', () => {
 
     // First call: full load + cache write
     const result1 = await Effect.runPromise(loadProjectTreeData(projectName))
-    await new Promise((r) => setTimeout(r, 100))
+    await waitForCache()
+
+    // Record cache file mtime before second call
+    const cacheMtimeBefore = (await fs.stat(cachePath())).mtimeMs
 
     // Second call: should use cache (no file changes)
     const result2 = await Effect.runPromise(loadProjectTreeData(projectName))
+
+    // Prove cache hit: cache file was NOT rewritten (mtime unchanged)
+    const cacheMtimeAfter = (await fs.stat(cachePath())).mtimeMs
+    expect(cacheMtimeAfter).toBe(cacheMtimeBefore)
 
     expect(result1!.sessions).toHaveLength(1)
     expect(result2!.sessions).toHaveLength(1)
@@ -398,7 +417,10 @@ describe('loadProjectTreeData - cache behavior', () => {
 
     // First call: full load
     await Effect.runPromise(loadProjectTreeData(projectName))
-    await new Promise((r) => setTimeout(r, 100))
+    await waitForCache()
+
+    const cacheBeforeUpdate = await readCacheFile()
+    const s2MtimeBefore = cacheBeforeUpdate.sessions['s2']?.mtimeMs
 
     // Modify only s1 (touch to update mtime)
     await writeSession('s1', [
@@ -412,6 +434,11 @@ describe('loadProjectTreeData - cache behavior', () => {
 
     // Second call: should take incremental path (1 changed < 3/2)
     const result = await Effect.runPromise(loadProjectTreeData(projectName))
+    await waitForCache()
+
+    // Verify incremental: unchanged session s2 keeps same mtime in cache
+    const cacheAfterUpdate = await readCacheFile()
+    expect(cacheAfterUpdate.sessions['s2']?.mtimeMs).toBe(s2MtimeBefore)
 
     expect(result!.sessions).toHaveLength(3)
     const s1 = result!.sessions.find((s) => s.id === 's1')
@@ -429,7 +456,7 @@ describe('loadProjectTreeData - cache behavior', () => {
     ])
 
     await Effect.runPromise(loadProjectTreeData(projectName))
-    await new Promise((r) => setTimeout(r, 100))
+    await waitForCache()
 
     // Add new session
     await writeSession('brand-new', [
