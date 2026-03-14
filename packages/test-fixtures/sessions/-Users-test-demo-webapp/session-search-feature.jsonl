@@ -1,0 +1,3 @@
+{"type":"custom-title","customTitle":"Implement full-text search with Elasticsearch"}
+{"type":"user","uuid":"search-1","cwd":"/Users/test/demo-webapp","timestamp":"2025-12-21T08:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Add search functionality using Elasticsearch"}]}}
+{"type":"assistant","uuid":"search-2","parentUuid":"search-1","cwd":"/Users/test/demo-webapp","timestamp":"2025-12-21T08:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Implemented full-text search index with Elasticsearch client integration and auto-complete suggestions."}]}}

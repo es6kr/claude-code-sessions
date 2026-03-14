@@ -390,7 +390,10 @@
 
           if (result.success && result.newSessionId) {
             // Refresh full session data for current project
-            const sessionDataList = await api.expandProject(currentProjectName)
+            const sessionDataList = await api.expandProject(currentProjectName, {
+              field: sortField,
+              order: sortOrder,
+            })
 
             // Rebuild session metadata and data maps
             const sessions: SessionMeta[] = []
@@ -412,6 +415,13 @@
             projectSessions = new Map(projectSessions)
             projectSessionData.set(currentProjectName, dataMap)
             projectSessionData = new Map(projectSessionData)
+
+            // Update project session count (split adds one new session)
+            const project = projects.find((p) => p.name === currentProjectName)
+            if (project) {
+              project.sessionCount = sessions.length
+              projects = [...projects]
+            }
 
             // Update current session view (show kept messages - FROM split point, newer messages)
             messages = messages.slice(msgIndex)

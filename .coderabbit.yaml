@@ -1,5 +1,8 @@
 early_access: false
 enable_free_tier: true
+knowledge_base:
+  # Disable learnings storage from code reviews
+  opt_out: true
 reviews:
   disable_cache: true
   review_status: false

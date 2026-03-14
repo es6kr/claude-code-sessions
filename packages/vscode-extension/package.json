@@ -30,7 +30,7 @@
       "activitybar": [
         {
           "id": "claude-sessions",
-          "title": "Claude Code Sessions",
+          "title": "Claude Sessions",
           "icon": "resources/activity-bar.svg"
         }
       ]
@@ -39,9 +39,8 @@
       "claude-sessions": [
         {
           "id": "claudeSessions",
-          "name": "Sessions",
+          "name": "Claude Sessions",
           "icon": "resources/activity-bar.svg",
-          "contextualTitle": "Claude Code Sessions",
           "canSelectMany": true
         }
       ]
@@ -117,6 +116,14 @@
         "category": "Claude Sessions"
       }
     ],
+    "keybindings": [
+      {
+        "command": "claudeSessions.filterSessions",
+        "key": "ctrl+f",
+        "mac": "cmd+f",
+        "when": "focusedView == claudeSessions"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -148,6 +155,11 @@
           "command": "claudeSessions.refresh",
           "when": "view == claudeSessions",
           "group": "navigation@5"
+        },
+        {
+          "command": "workbench.action.restartExtensionHost",
+          "when": "view == claudeSessions",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [

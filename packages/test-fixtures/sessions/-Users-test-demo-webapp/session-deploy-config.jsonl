@@ -1,0 +1,2 @@
+{"type":"user","uuid":"deploy-1","cwd":"/Users/test/demo-webapp","timestamp":"2025-12-22T11:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Set up Docker deployment configuration"}]}}
+{"type":"assistant","uuid":"deploy-2","parentUuid":"deploy-1","cwd":"/Users/test/demo-webapp","timestamp":"2025-12-22T11:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Created Dockerfile and docker-compose.yml for production deployment with multi-stage build."}]}}

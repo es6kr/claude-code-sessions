@@ -8,6 +8,7 @@
 .playwright-mcp/
 .serena/
 .svelte-kit/
+.tree-cache.json
 *.log
 *.vsix
 /Makefile
@@ -19,6 +20,12 @@ packages/web/e2e/screenshots/
 packages/web/playwright-report/
 packages/web/test-results/
 PROMPT.md
+
+# Ralph
+.ralph/
+.ralphrc
+@AGENT.md
+@fix_plan.md
 
 # Storybook
 *storybook.log

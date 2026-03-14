@@ -20,11 +20,35 @@ Open http://localhost:5173 in your browser.
 
 ## Features
 
-- **Project Browser**: View all Claude Code projects with session counts
-- **Session Management**: Rename, delete, and split sessions
-- **Message Viewer**: Browse messages with syntax highlighting
-- **Cleanup**: Remove empty sessions and invalid API key messages
-- **File Tracking**: View files changed during a session
+### Project Listing
+
+Browse Claude Code project folders with expandable tree view, sorted by summary time or name.
+
+![Project Listing](../../docs/feature-project-listing.png)
+
+### Session Management
+
+List, rename, delete, and split sessions. Hover to see session details with tooltip.
+
+![Session Management](../../docs/feature-session-management.png)
+
+### Message Viewer
+
+View messages with tab interface. Inspect user/assistant turns, tool calls, and thinking blocks.
+
+![Message Viewer](../../docs/feature-message-viewer.png)
+
+### Search
+
+Search sessions by title across all projects.
+
+![Search](../../docs/feature-search.png)
+
+### Cleanup
+
+Remove empty sessions, orphan agents, and orphan todos with preview before execution.
+
+![Cleanup](../../docs/feature-cleanup.png)
 
 ## API Endpoints
 

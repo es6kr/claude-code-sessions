@@ -76,23 +76,45 @@ pnpm build:mcp     # mcp only
 pnpm build:web     # web only
 ```
 
-## Screenshot
+## Features
 
-### Web UI
+### Project Listing
 
-![Web UI Screenshot](docs/screenshot-mainpage.png)
+Browse Claude Code project folders with expandable tree view, sorted by summary time or name.
+
+![Project Listing](docs/feature-project-listing.png)
+
+### Session Management
+
+List, rename, delete, and split sessions. Hover to see session details with tooltip.
+
+![Session Management](docs/feature-session-management.png)
+
+### Message Viewer
+
+View messages with tab interface. Inspect user/assistant turns, tool calls, and thinking blocks.
+
+![Message Viewer](docs/feature-message-viewer.png)
+
+### Search
+
+Search sessions by title across all projects.
+
+![Search](docs/feature-search.png)
+
+### Cleanup
+
+Remove empty sessions, orphan agents, and orphan todos with preview before execution.
+
+![Cleanup](docs/feature-cleanup.png)
 
 ### VSCode Extension
 
-![VSCode Extension Screenshot](docs/screenshot-vscode.png)
+![VSCode Extension](docs/screenshot-vscode.png)
 
-## Features
+### Web UI
 
-- **Project listing**: Browse Claude Code project folders
-- **Session management**: List, rename, delete sessions
-- **Message management**: View and delete messages within sessions
-- **Cleanup**: Remove empty sessions and invalid API key messages
-- **Web UI**: SvelteKit-based web interface
+![Web UI](docs/screenshot-mainpage.png)
 
 ## MCP Tools
 

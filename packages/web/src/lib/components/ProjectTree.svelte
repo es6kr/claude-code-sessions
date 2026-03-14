@@ -256,7 +256,7 @@
             {#if loadingProject === project.name}
               <li class="py-2 px-8 text-gh-text-secondary text-sm">Loading...</li>
             {:else}
-              {#each projectSessions.get(project.name) ?? [] as session}
+              {#each projectSessions.get(project.name) ?? [] as session (session.id)}
                 {@const isSelected = selectedSession?.id === session.id}
                 {@const isDragging = draggedSession?.id === session.id}
                 {@const sessionInfo = getSessionInfo(session)}
