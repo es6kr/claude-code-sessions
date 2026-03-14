@@ -361,6 +361,7 @@
             class="p-1.5 rounded text-gh-text-secondary hover:text-gh-fg hover:bg-gh-border text-sm transition-colors"
             onclick={onRenameSession}
             title="Rename session"
+            aria-label="Rename session"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -377,6 +378,7 @@
             class="p-1.5 rounded text-gh-text-secondary hover:text-gh-red hover:bg-gh-red/10 text-sm transition-colors"
             onclick={onDeleteSession}
             title="Delete session"
+            aria-label="Delete session"
           >
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path

@@ -185,7 +185,7 @@
     showInput(
       'Rename Session',
       'Session title:',
-      customTitle ?? session.title,
+      customTitle ?? currentSummary ?? session.title,
       async (newTitle) => {
         closeInput()
         const trimmed = newTitle.trim()
@@ -194,6 +194,9 @@
         try {
           await api.renameSession(session!.projectName, session!.id, trimmed)
           customTitle = trimmed
+          // Also refresh currentSummary to stay in sync
+          const sessionData = await api.getSessionTreeData(session!.projectName, session!.id)
+          currentSummary = sessionData.currentSummary
         } catch (e) {
           error = String(e)
         }
