@@ -6,6 +6,12 @@ Manage Claude Code sessions directly from VS Code sidebar.
 
 ![VSCode Extension](https://raw.githubusercontent.com/es6kr/claude-code-sessions/main/docs/screenshot-vscode.png)
 
+### Message Viewer
+
+View messages with tab interface. Inspect user/assistant turns, tool calls, and thinking blocks.
+
+![Message Viewer](https://raw.githubusercontent.com/es6kr/claude-code-sessions/main/docs/feature-message-viewer.png)
+
 ## Features
 
 - **Session Browser**: View all Claude Code projects and sessions in a tree view

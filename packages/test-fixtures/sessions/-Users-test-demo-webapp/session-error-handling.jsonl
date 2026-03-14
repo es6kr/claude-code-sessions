@@ -1,0 +1,3 @@
+{"type":"summary","summary":"Add global error boundary and logging","leafUuid":"err-1","timestamp":"2025-12-19T13:00:00.000Z"}
+{"type":"user","uuid":"err-1","cwd":"/Users/test/demo-webapp","timestamp":"2025-12-19T13:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Add error handling across the application"}]}}
+{"type":"assistant","uuid":"err-2","parentUuid":"err-1","cwd":"/Users/test/demo-webapp","timestamp":"2025-12-19T13:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Added React error boundary at app root and structured logging with Pino for server-side errors."}]}}

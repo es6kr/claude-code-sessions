@@ -1,0 +1,3 @@
+{"type":"summary","summary":"Add REST API endpoints for user management","leafUuid":"api-2","timestamp":"2025-12-25T14:00:00.000Z"}
+{"type":"user","uuid":"api-1","cwd":"/Users/test/demo-webapp","timestamp":"2025-12-25T14:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Create CRUD endpoints for user management"}]}}
+{"type":"assistant","uuid":"api-2","parentUuid":"api-1","cwd":"/Users/test/demo-webapp","timestamp":"2025-12-25T14:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Created GET/POST/PUT/DELETE endpoints for /api/users with validation middleware."}]}}
