@@ -6,14 +6,22 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 /** Absolute path to the sessions fixture directory */
 export const SESSIONS_DIR = path.join(__dirname, 'sessions')
 
-/** Test project name (matches folder name) */
-export const TEST_PROJECT_NAME = '-Users-test-project'
+/** Project names (match folder names) */
+export const PROJECTS = {
+  apiServer: '-Users-test-api-server',
+  cliTooling: '-Users-test-cli-tooling',
+  demoWebapp: '-Users-test-demo-webapp',
+  testProject: '-Users-test-project',
+} as const
+
+/** @deprecated Use PROJECTS.testProject instead */
+export const TEST_PROJECT_NAME = PROJECTS.testProject
 
 /** Session IDs (match JSONL filenames without extension) */
 export const SESSION_IDS = {
   basic: 'session-basic',
-  withSummary: 'session-with-summary',
-  withCustomTitle: 'session-with-custom-title',
-  withTools: 'session-with-tools',
   crossRef: 'session-cross-ref',
+  withCustomTitle: 'session-with-custom-title',
+  withSummary: 'session-with-summary',
+  withTools: 'session-with-tools',
 } as const
