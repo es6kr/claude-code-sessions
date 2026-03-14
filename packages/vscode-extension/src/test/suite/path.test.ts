@@ -2,31 +2,11 @@ import * as vscode from 'vscode'
 import * as assert from 'assert'
 import * as path from 'path'
 import * as os from 'os'
+import { ensureExtensionActive } from './helpers'
 
 // Core is ESM — use dynamic import
 async function importCore() {
   return await import('@claude-sessions/core')
-}
-
-/**
- * Ensure extension is loaded and activated.
- * Calls this.skip() if extension is not found (visible in Mocha output).
- */
-async function ensureExtensionActive(ctx: Mocha.Context): Promise<vscode.Extension<unknown>> {
-  ctx.timeout(30000)
-  await new Promise((resolve) => setTimeout(resolve, 2000))
-
-  const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
-  if (!extension) {
-    ctx.skip()
-    throw new Error('Extension not found')
-  }
-
-  if (!extension.isActive) {
-    await extension.activate()
-  }
-  await new Promise((resolve) => setTimeout(resolve, 1000))
-  return extension
 }
 
 suite('Path Handling Test Suite', () => {

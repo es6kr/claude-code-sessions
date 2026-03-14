@@ -1,27 +1,6 @@
 import * as vscode from 'vscode'
 import * as assert from 'assert'
-
-/**
- * Ensure extension is loaded and activated.
- * Calls this.skip() if extension is not found (visible in Mocha output).
- */
-async function ensureExtensionActive(ctx: Mocha.Context): Promise<vscode.Extension<unknown>> {
-  ctx.timeout(30000)
-  await new Promise((resolve) => setTimeout(resolve, 2000))
-
-  const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
-  if (!extension) {
-    ctx.skip()
-    // unreachable after skip, but satisfies TS return type
-    throw new Error('Extension not found')
-  }
-
-  if (!extension.isActive) {
-    await extension.activate()
-  }
-  await new Promise((resolve) => setTimeout(resolve, 1000))
-  return extension
-}
+import { ensureExtensionActive } from './helpers'
 
 suite('Filter Test Suite', () => {
   test('Filter commands are registered', async function () {
@@ -53,13 +32,9 @@ suite('Filter Test Suite', () => {
   test('View container and view contributions are defined', async function () {
     const extension = await ensureExtensionActive(this)
 
-    // Open the Claude Sessions sidebar
-    try {
-      await vscode.commands.executeCommand('workbench.view.extension.claude-sessions')
-      console.log('Claude Sessions view opened')
-    } catch (e) {
-      console.log('Could not open Claude Sessions view:', e)
-    }
+    // Open the Claude Sessions sidebar — let errors propagate to fail the test
+    await vscode.commands.executeCommand('workbench.view.extension.claude-sessions')
+    console.log('Claude Sessions view opened')
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
     // Verify the view container contribution exists in package.json
