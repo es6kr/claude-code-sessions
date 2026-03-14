@@ -169,13 +169,13 @@
 
             // Refresh session metadata so title/summary reflects the new first message
             try {
-              const sessions = await api.listSessions(session!.projectName)
-              const updatedSession = sessions.find((s) => s.id === session!.id)
-              if (updatedSession) session = updatedSession
-
               const sessionData = await api.getSessionTreeData(session!.projectName, session!.id)
               currentSummary = sessionData.currentSummary
               customTitle = sessionData.customTitle
+              agents = sessionData.agents ?? []
+              const sessionTodos = sessionData.todos?.sessionTodos ?? []
+              const agentTodoItems = sessionData.todos?.agentTodos?.flatMap((a) => a.todos) ?? []
+              todos = [...sessionTodos, ...agentTodoItems]
             } catch {
               // Non-critical: metadata refresh failure does not block the split result
             }
