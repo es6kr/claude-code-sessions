@@ -20,7 +20,7 @@ export const GET: RequestHandler = async ({ url }) => {
   const sortOptions =
     sortField && sortOrder
       ? { field: sortField, order: sortOrder }
-      : { field: 'summary' as SessionSortField, order: 'desc' as SessionSortOrder }
+      : { field: 'updated' as SessionSortField, order: 'desc' as SessionSortOrder }
 
   const result = await Effect.runPromise(core.loadProjectTreeData(projectName, sortOptions))
 

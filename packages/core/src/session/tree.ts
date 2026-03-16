@@ -268,8 +268,8 @@ const loadSessionTreeDataInternal = (
 export const loadSessionTreeData = (projectName: string, sessionId: string) =>
   loadSessionTreeDataInternal(projectName, sessionId, undefined)
 
-/** Default sort: by oldest summary timestamp (matches official extension) */
-const DEFAULT_SORT: SessionSortOptions = { field: 'summary', order: 'desc' }
+/** Default sort: by latest message timestamp (matches official extension) */
+const DEFAULT_SORT: SessionSortOptions = { field: 'updated', order: 'desc' }
 
 // ============================================================================
 // Phase 1 helpers (UUID map + summaries)

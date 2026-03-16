@@ -356,10 +356,10 @@ export interface ProjectTreeData {
  * Sort options for session list
  */
 export type SessionSortField =
-  | 'summary' // summaries[0].timestamp (oldest summary) - default
+  | 'summary' // summaries[0].timestamp (oldest summary)
   | 'modified' // file modification time (fileMtime)
   | 'created' // session creation time
-  | 'updated' // last message timestamp
+  | 'updated' // last message timestamp - default
   | 'messageCount' // number of messages
   | 'title' // alphabetical by title
 
