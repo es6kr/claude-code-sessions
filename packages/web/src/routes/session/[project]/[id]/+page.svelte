@@ -198,7 +198,7 @@
     showInput(
       'Rename Session',
       'Session title:',
-      customTitle ?? currentSummary ?? session.title,
+      customTitle ?? currentSummary ?? session.title ?? '',
       async (newTitle) => {
         closeInput()
         const trimmed = newTitle.trim()
