@@ -455,8 +455,14 @@ export function activate(context: vscode.ExtensionContext) {
         order: session.SessionSortOrder
       }> = [
         {
+          label: '$(clock) Recently Updated',
+          description: 'Most recent message first (default)',
+          field: 'updated',
+          order: 'desc',
+        },
+        {
           label: '$(history) Latest Summary',
-          description: 'Most recent summary first (default)',
+          description: 'Most recent summary first',
           field: 'summary',
           order: 'desc',
         },
