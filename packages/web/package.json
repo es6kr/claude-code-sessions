@@ -10,6 +10,9 @@
     "url": "https://github.com/es6kr/claude-code-sessions",
     "directory": "packages/web"
   },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "bin": {
     "claude-sessions-web": "./dist/cli.js"
   },
