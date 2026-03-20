@@ -58,7 +58,7 @@ export class SessionTreeProvider
   private filterText = ''
 
   // Sort options (persisted in memory, reset on restart)
-  private sortOptions: SessionSortOptions = { field: 'summary', order: 'desc' }
+  private sortOptions: SessionSortOptions = { field: 'updated', order: 'desc' }
 
   getSortOptions(): SessionSortOptions {
     return this.sortOptions

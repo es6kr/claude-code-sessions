@@ -13,7 +13,7 @@ vi.mock('../paths.js', async () => {
   }
 })
 
-import { loadProjectTreeData, loadSessionTreeData } from '../session.js'
+import { getCachePath, loadProjectTreeData, loadSessionTreeData } from '../session.js'
 import { getSessionsDir } from '../paths.js'
 
 describe('loadProjectTreeData - cross-session leafUuid lookup', () => {
@@ -297,6 +297,180 @@ describe('loadProjectTreeData - cross-session leafUuid lookup', () => {
     expect(foundSession2!.summaries).toHaveLength(1)
     expect(foundSession2!.summaries[0].summary).toBe('Summary FROM session 1 pointing TO session 2')
     expect(foundSession2!.summaries[0].timestamp).toBe(timestampInSession2)
+  })
+})
+
+describe('loadProjectTreeData - cache behavior', () => {
+  let tempDir: string
+  let projectDir: string
+  const projectName = '-Users-test-cache-project'
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-cache-test-'))
+    projectDir = path.join(tempDir, projectName)
+    await fs.mkdir(projectDir, { recursive: true })
+    vi.mocked(getSessionsDir).mockReturnValue(tempDir)
+  })
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
+    vi.clearAllMocks()
+  })
+
+  const writeSession = async (id: string, messages: object[]) => {
+    await fs.writeFile(
+      path.join(projectDir, `${id}.jsonl`),
+      messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    )
+  }
+
+  const cachePath = () => getCachePath(projectName)
+
+  const cacheExists = async () => {
+    try {
+      await fs.access(cachePath())
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const readCacheFile = async () => {
+    const raw = await fs.readFile(cachePath(), 'utf-8')
+    return JSON.parse(raw)
+  }
+
+  /** Poll until cache file appears (max 2s) */
+  const waitForCache = async (timeoutMs = 2000) => {
+    const start = Date.now()
+    while (Date.now() - start < timeoutMs) {
+      if (await cacheExists()) return
+      await new Promise((r) => setTimeout(r, 20))
+    }
+    throw new Error(`Cache file did not appear within ${timeoutMs}ms`)
+  }
+
+  it('should write cache file after first load', async () => {
+    await writeSession('session-a', [
+      {
+        type: 'user',
+        uuid: 'msg-1',
+        timestamp: '2025-01-01T00:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+      },
+    ])
+
+    expect(await cacheExists()).toBe(false)
+
+    await Effect.runPromise(loadProjectTreeData(projectName))
+
+    // Cache write is async (fire-and-forget), poll until file appears
+    await waitForCache()
+
+    expect(await cacheExists()).toBe(true)
+    const cache = await readCacheFile()
+    expect(cache.version).toBe(1)
+    expect(cache.sessions['session-a']).toBeDefined()
+  })
+
+  it('should return cached data on second call with unchanged files', async () => {
+    await writeSession('session-b', [
+      {
+        type: 'user',
+        uuid: 'msg-2',
+        timestamp: '2025-01-02T00:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Cached test' }] },
+      },
+    ])
+
+    // First call: full load + cache write
+    const result1 = await Effect.runPromise(loadProjectTreeData(projectName))
+    await waitForCache()
+
+    // Record cache file mtime before second call
+    const cacheMtimeBefore = (await fs.stat(cachePath())).mtimeMs
+
+    // Second call: should use cache (no file changes)
+    const result2 = await Effect.runPromise(loadProjectTreeData(projectName))
+
+    // Prove cache hit: cache file was NOT rewritten (mtime unchanged)
+    const cacheMtimeAfter = (await fs.stat(cachePath())).mtimeMs
+    expect(cacheMtimeAfter).toBe(cacheMtimeBefore)
+
+    expect(result1!.sessions).toHaveLength(1)
+    expect(result2!.sessions).toHaveLength(1)
+    expect(result2!.sessions[0].title).toBe(result1!.sessions[0].title)
+  })
+
+  it('should incrementally rebuild when a subset of sessions change', async () => {
+    // Create 3 sessions
+    for (const id of ['s1', 's2', 's3']) {
+      await writeSession(id, [
+        {
+          type: 'user',
+          uuid: `${id}-msg`,
+          timestamp: '2025-01-01T00:00:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: `Session ${id}` }] },
+        },
+      ])
+    }
+
+    // First call: full load
+    await Effect.runPromise(loadProjectTreeData(projectName))
+    await waitForCache()
+
+    const cacheBeforeUpdate = await readCacheFile()
+    const s2MtimeBefore = cacheBeforeUpdate.sessions['s2']?.mtimeMs
+
+    // Modify only s1 (touch to update mtime)
+    await writeSession('s1', [
+      {
+        type: 'user',
+        uuid: 's1-msg',
+        timestamp: '2025-01-01T00:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Session s1 updated' }] },
+      },
+    ])
+
+    // Second call: should take incremental path (1 changed < 3/2)
+    const result = await Effect.runPromise(loadProjectTreeData(projectName))
+    await waitForCache()
+
+    // Verify incremental: unchanged session s2 keeps same mtime in cache
+    const cacheAfterUpdate = await readCacheFile()
+    expect(cacheAfterUpdate.sessions['s2']?.mtimeMs).toBe(s2MtimeBefore)
+
+    expect(result!.sessions).toHaveLength(3)
+    const s1 = result!.sessions.find((s) => s.id === 's1')
+    expect(s1!.title).toBe('Session s1 updated')
+  })
+
+  it('should handle new session added after cache was written', async () => {
+    await writeSession('existing', [
+      {
+        type: 'user',
+        uuid: 'e-msg',
+        timestamp: '2025-01-01T00:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Existing session' }] },
+      },
+    ])
+
+    await Effect.runPromise(loadProjectTreeData(projectName))
+    await waitForCache()
+
+    // Add new session
+    await writeSession('brand-new', [
+      {
+        type: 'user',
+        uuid: 'n-msg',
+        timestamp: '2025-01-02T00:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'New session' }] },
+      },
+    ])
+
+    const result = await Effect.runPromise(loadProjectTreeData(projectName))
+    expect(result!.sessions).toHaveLength(2)
+    expect(result!.sessions.find((s) => s.id === 'brand-new')).toBeDefined()
   })
 })
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
@@ -166,6 +167,19 @@
             // Keep messages from split point onwards (original session keeps newer messages)
             messages = messages.slice(msgIndex)
             toast = `Session split! Old messages moved to new session: ${result.newSessionId.slice(0, 8)}...`
+
+            // Refresh session metadata so title/summary reflects the new first message
+            try {
+              const sessionData = await api.getSessionTreeData(session!.projectName, session!.id)
+              currentSummary = sessionData.currentSummary
+              customTitle = sessionData.customTitle
+              agents = sessionData.agents ?? []
+              const sessionTodos = sessionData.todos?.sessionTodos ?? []
+              const agentTodoItems = sessionData.todos?.agentTodos?.flatMap((a) => a.todos) ?? []
+              todos = [...sessionTodos, ...agentTodoItems]
+            } catch {
+              // Non-critical: metadata refresh failure does not block the split result
+            }
           } else {
             error = result.error ?? 'Failed to split session'
           }
@@ -175,6 +189,50 @@
           loading = false
         }
       }
+    )
+  }
+
+  const handleRenameSession = () => {
+    if (!session) return
+
+    showInput(
+      'Rename Session',
+      'Session title:',
+      customTitle ?? currentSummary ?? session.title ?? '',
+      async (newTitle) => {
+        closeInput()
+        const trimmed = newTitle.trim()
+        if (!trimmed) return
+
+        try {
+          await api.renameSession(session!.projectName, session!.id, trimmed)
+          customTitle = trimmed
+          // Also refresh currentSummary to stay in sync
+          const sessionData = await api.getSessionTreeData(session!.projectName, session!.id)
+          currentSummary = sessionData.currentSummary
+        } catch (e) {
+          error = String(e)
+        }
+      }
+    )
+  }
+
+  const handleDeleteSession = () => {
+    if (!session) return
+
+    showConfirm(
+      'Delete Session',
+      `Delete this session?\n\n"${customTitle ?? session.title}"\n\nThis action cannot be undone.`,
+      async () => {
+        closeConfirm()
+        try {
+          await api.deleteSession(session!.projectName, session!.id)
+          goto(backUrl)
+        } catch (e) {
+          error = String(e)
+        }
+      },
+      'danger'
     )
   }
 
@@ -212,6 +270,8 @@
       }}
       onEditTitle={handleEditTitle}
       onSplitSession={handleSplitSession}
+      onRenameSession={handleRenameSession}
+      onDeleteSession={handleDeleteSession}
       enableScroll={true}
       fullWidth={true}
     />
