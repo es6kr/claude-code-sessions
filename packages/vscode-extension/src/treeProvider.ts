@@ -1,6 +1,12 @@
 import * as vscode from 'vscode'
 import * as session from '@claude-sessions/core'
-import type { TodoItem, SessionSortOptions, TreeItemType } from '@claude-sessions/core'
+import type {
+  SessionSortField,
+  SessionSortOptions,
+  SessionTreeData,
+  TodoItem,
+  TreeItemType,
+} from '@claude-sessions/core'
 import {
   maskHomePath,
   sortProjects,
@@ -24,6 +30,20 @@ import { outputChannel } from './output'
 
 const debug = (msg: string, ...args: unknown[]) => {
   outputChannel.appendLine(`[DnD] ${msg} ${args.length > 0 ? JSON.stringify(args) : ''}`)
+}
+
+/** Select the display timestamp that matches the current sort field */
+const getDisplayTimestamp = (s: SessionTreeData, sortField: SessionSortField): number => {
+  switch (sortField) {
+    case 'updated':
+      return s.updatedAt ? new Date(s.updatedAt).getTime() : s.sortTimestamp
+    case 'created':
+      return s.createdAt ? new Date(s.createdAt).getTime() : s.sortTimestamp
+    case 'modified':
+      return s.fileMtime ?? s.sortTimestamp
+    default:
+      return s.sortTimestamp
+  }
 }
 
 interface SessionDTO {
@@ -329,6 +349,9 @@ export class SessionTreeProvider
         // When filtering, show sessions collapsed (flat feel)
         const shouldExpand = !this.filterText && isCurrentProject && index === 0 && hasSubItems
 
+        // Select display timestamp based on current sort field
+        const displayTimestamp = getDisplayTimestamp(s, this.sortOptions.field)
+
         return new SessionTreeItem(
           session.getDisplayTitle(s.customTitle, s.currentSummary, s.title),
           hasSubItems
@@ -340,7 +363,7 @@ export class SessionTreeProvider
           element.projectName,
           s.id,
           s.messageCount,
-          s.sortTimestamp,
+          displayTimestamp,
           undefined, // todo
           undefined, // agentId
           undefined, // itemIndex
