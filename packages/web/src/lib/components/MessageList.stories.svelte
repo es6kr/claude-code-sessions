@@ -162,6 +162,35 @@
     },
   ]
 
+  // Slash command with args
+  const slashCommandMessages = [
+    {
+      type: 'human',
+      uuid: 'cmd-1',
+      parentUuid: null,
+      timestamp: '2026-01-20T10:00:00.000Z',
+      message: {
+        content:
+          '<command-name>/session</command-name>\n<command-args>repair --dry-run e15f9f9a</command-args>',
+      },
+    },
+    {
+      type: 'assistant',
+      uuid: 'cmd-2',
+      parentUuid: 'cmd-1',
+      timestamp: '2026-01-20T10:00:05.000Z',
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'text',
+            text: 'Running session repair in dry-run mode for e15f9f9a...\n\nNo issues found. The session chain is intact.',
+          },
+        ],
+      },
+    },
+  ]
+
   // Empty messages
   const emptyMessages = []
 
@@ -233,6 +262,22 @@
 >
   {#snippet children(args)}
     <MessageList {...args} />
+  {/snippet}
+</Story>
+
+<Story
+  name="Slash Command With Args"
+  args={{
+    sessionId: mockSessionId,
+    messages: slashCommandMessages,
+    onDeleteMessage: handleDelete,
+    onSplitSession: handleSplit,
+  }}
+>
+  {#snippet children(args)}
+    <div class="max-w-4xl">
+      <MessageList {...args} />
+    </div>
   {/snippet}
 </Story>
 
