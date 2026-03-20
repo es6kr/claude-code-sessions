@@ -294,6 +294,9 @@
   >
     <div class="flex justify-between items-center text-xs text-gh-text-secondary">
       <span class="font-semibold text-gh-accent">{commandData.name || 'Command'}</span>
+      {#if commandData.args}
+        <span class="text-gh-text-secondary ml-1">{commandData.args}</span>
+      {/if}
       <div class="flex items-center gap-2">
         <span>{formatDate(msg.timestamp)}</span>
         {@render splitButton()}
