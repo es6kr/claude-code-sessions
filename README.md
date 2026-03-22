@@ -1,14 +1,20 @@
 # claude-code-sessions
 
-Monorepo for Claude Code session management tools
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+![Unofficial](https://img.shields.io/badge/unofficial-community%20project-orange)
+
+Browse, search, rename, split, and clean up [Claude Code](https://claude.ai/code) sessions — via MCP server, Web UI, or VSCode extension.
+
+> **Note**: This is a community project and is not affiliated with or endorsed by Anthropic.
 
 ## Packages
 
-| Package                                | npm                     | Description  |
-| -------------------------------------- | ----------------------- | ------------ |
-| [@claude-sessions/core](packages/core) | `@claude-sessions/core` | Core library |
-| [@claude-sessions/web](packages/web)   | `@claude-sessions/web`  | Web UI       |
-| [claude-sessions-mcp](packages/mcp)    | `claude-sessions-mcp`   | MCP server   |
+| Package                                      | Version                                                                                                                                                                                                                                                                                                  | Description      |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
+| [@claude-sessions/core](packages/core)       | [![npm](https://img.shields.io/npm/v/@claude-sessions/core)](https://www.npmjs.com/package/@claude-sessions/core)                                                                                                                                                                                        | Core library     |
+| [@claude-sessions/web](packages/web)         | [![npm](https://img.shields.io/npm/v/@claude-sessions/web)](https://www.npmjs.com/package/@claude-sessions/web)                                                                                                                                                                                          | Web UI           |
+| [claude-sessions-mcp](packages/mcp)          | [![npm](https://img.shields.io/npm/v/claude-sessions-mcp)](https://www.npmjs.com/package/claude-sessions-mcp)                                                                                                                                                                                            | MCP server       |
+| [claude-sessions](packages/vscode-extension) | [![VS Marketplace](https://img.shields.io/visual-studio-marketplace/v/es6kr.claude-sessions)](https://marketplace.visualstudio.com/items?itemName=es6kr.claude-sessions)<br>[![Open VSX](https://img.shields.io/open-vsx/v/es6kr/claude-sessions)](https://open-vsx.org/extension/es6kr/claude-sessions) | VSCode extension |
 
 ## Installation
 

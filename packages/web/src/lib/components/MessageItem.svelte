@@ -293,7 +293,12 @@
     class="p-3 rounded-lg bg-gh-accent/15 border-l-3 border-l-gh-accent group relative"
   >
     <div class="flex justify-between items-center text-xs text-gh-text-secondary">
-      <span class="font-semibold text-gh-accent">{commandData.name || 'Command'}</span>
+      <span>
+        <span class="font-semibold text-gh-accent">{commandData.name || 'Command'}</span>
+        {#if commandData.args}
+          <span class="text-gh-text-secondary">{commandData.args}</span>
+        {/if}
+      </span>
       <div class="flex items-center gap-2">
         <span>{formatDate(msg.timestamp)}</span>
         {@render splitButton()}
