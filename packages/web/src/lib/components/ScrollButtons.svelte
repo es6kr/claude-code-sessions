@@ -1,13 +1,32 @@
 <script lang="ts">
   import type { Message } from '$lib/api'
 
+  export type PinMode = 'compact' | 'compact_boundary' | 'hook_stop' | 'hook_any'
+
+  const PIN_MODE_LABELS: Record<PinMode, string> = {
+    compact: 'Compact Summary',
+    compact_boundary: 'Compact Boundary',
+    hook_stop: 'Stop Hook',
+    hook_any: 'Any Hook',
+  }
+
   interface Props {
     messages: Message[]
     scrollContainer: HTMLElement | null | undefined
     class?: string
+    pinMode?: PinMode
+    onPinModeChange?: (mode: PinMode) => void
   }
 
-  let { messages, scrollContainer, class: className = '' }: Props = $props()
+  let {
+    messages,
+    scrollContainer,
+    class: className = '',
+    pinMode = 'compact',
+    onPinModeChange,
+  }: Props = $props()
+
+  let showPinDropdown = $state(false)
 
   // Check if message has user text content (not just tool_result without user input)
   const hasUserTextContent = (m: Message): boolean => {
@@ -67,41 +86,64 @@
     return cachedIndices
   }
 
-  // Lazy-compute compact index and visibility
-  let cachedCompactIndex: number = -1
-  let cachedCompactMessagesRef: Message[] | null = null
-
-  const computeCompactCache = () => {
-    if (cachedCompactMessagesRef !== messages) {
-      cachedCompactIndex = -1
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if ((messages[i] as Message & { isCompactSummary?: boolean }).isCompactSummary) {
-          cachedCompactIndex = i
-          break
-        }
+  // Check if a message matches the given pin mode
+  const matchesPinMode = (msg: Message, mode: PinMode): boolean => {
+    switch (mode) {
+      case 'compact':
+        return (msg as Message & { isCompactSummary?: boolean }).isCompactSummary === true
+      case 'compact_boundary':
+        return (
+          msg.type === 'compact_boundary' ||
+          (msg.type === 'system' && msg.subtype === 'compact_boundary')
+        )
+      case 'hook_stop': {
+        if (msg.type !== 'progress') return false
+        const data = (msg as { data?: { hookEvent?: string } }).data
+        return data?.hookEvent === 'Stop'
       }
-      cachedCompactMessagesRef = messages
+      case 'hook_any':
+        return msg.type === 'progress'
     }
   }
 
-  const getLastCompactIndex = (): number => {
-    computeCompactCache()
-    return cachedCompactIndex
+  // Lazy-compute pin target index and visibility
+  let cachedPinIndex: number = -1
+  let cachedPinMessagesRef: Message[] | null = null
+  let cachedPinMode: PinMode | null = null
+
+  const computePinCache = () => {
+    if (cachedPinMessagesRef !== messages || cachedPinMode !== pinMode) {
+      cachedPinIndex = -1
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (matchesPinMode(messages[i], pinMode)) {
+          cachedPinIndex = i
+          break
+        }
+      }
+      cachedPinMessagesRef = messages
+      cachedPinMode = pinMode
+    }
   }
 
-  // For button visibility - computed lazily via function
-  const checkHasCompactSummary = (): boolean => {
-    computeCompactCache()
-    return cachedCompactIndex >= 0
+  const getLastPinIndex = (): number => {
+    computePinCache()
+    return cachedPinIndex
+  }
+
+  // For button visibility
+  const checkHasPinTarget = (): boolean => {
+    computePinCache()
+    return cachedPinIndex >= 0
   }
 
   // Use $state for button visibility (updated on user interaction)
-  let showCompactButton = $state(false)
+  let showPinButton = $state(false)
 
-  // Update button visibility when messages change - single check
+  // Update button visibility when messages or pinMode change
   $effect(() => {
     const _len = messages.length // Track changes
-    showCompactButton = checkHasCompactSummary()
+    const _mode = pinMode
+    showPinButton = checkHasPinTarget()
   })
 
   // Track currently visible message index (used for debugging, kept for future use)
@@ -150,10 +192,25 @@
     _currentVisibleIndex = messages.length - 1
   }
 
-  const scrollToCompact = () => {
-    const compactIdx = getLastCompactIndex()
-    if (compactIdx >= 0) {
-      scrollToIndex(compactIdx)
+  const scrollToPin = () => {
+    const pinIdx = getLastPinIndex()
+    if (pinIdx >= 0) {
+      scrollToIndex(pinIdx)
+    }
+  }
+
+  const selectPinMode = (mode: PinMode) => {
+    showPinDropdown = false
+    onPinModeChange?.(mode)
+  }
+
+  // Close dropdown when clicking outside
+  const handleClickOutside = (e: MouseEvent) => {
+    if (showPinDropdown) {
+      const target = e.target as HTMLElement
+      if (!target.closest('.pin-dropdown-container')) {
+        showPinDropdown = false
+      }
     }
   }
 
@@ -191,6 +248,8 @@
     'p-1.5 text-sm rounded border border-gh-border hover:bg-gh-border-subtle text-gh-text-secondary hover:text-gh-text transition-colors bg-gh-bg'
 </script>
 
+<svelte:window onclick={handleClickOutside} />
+
 {#if messages.length > 0}
   <div class="flex gap-0.5 {className}">
     <button class="nav-btn {buttonClass}" onclick={scrollToTop}>
@@ -210,24 +269,59 @@
       </svg>
       <span class="tooltip">Previous user message</span>
     </button>
-    {#if showCompactButton}
-      <button class="nav-btn {buttonClass}" onclick={scrollToCompact}>
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-          />
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-          />
-        </svg>
-        <span class="tooltip">Last compacted point</span>
-      </button>
+    {#if showPinButton}
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div class="pin-dropdown-container relative">
+        <button class="nav-btn {buttonClass}" onclick={scrollToPin}>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+            />
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+            />
+          </svg>
+          <span class="tooltip">{PIN_MODE_LABELS[pinMode]}</span>
+        </button>
+        <button
+          class="pin-mode-toggle p-0.5 rounded text-gh-text-secondary hover:text-gh-text hover:bg-gh-border-subtle transition-colors"
+          onclick={() => (showPinDropdown = !showPinDropdown)}
+          title="Change pin navigation mode"
+          aria-label="Change pin navigation mode"
+        >
+          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </button>
+        {#if showPinDropdown}
+          <div
+            class="pin-dropdown absolute top-full left-0 mt-1 py-1 bg-gh-bg border border-gh-border rounded-md shadow-lg z-50 min-w-[160px]"
+            onclick={(e) => e.stopPropagation()}
+          >
+            {#each Object.entries(PIN_MODE_LABELS) as [mode, label]}
+              <button
+                class="w-full text-left px-3 py-1.5 text-xs hover:bg-gh-border-subtle transition-colors
+                       {mode === pinMode ? 'text-gh-accent font-medium' : 'text-gh-text-secondary'}"
+                onclick={() => selectPinMode(mode as PinMode)}
+              >
+                {label}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
     {/if}
     <button class="nav-btn {buttonClass}" onclick={scrollToNext}>
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

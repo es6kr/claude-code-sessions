@@ -8,7 +8,7 @@
   import * as api from '$lib/api'
   import { getDisplayTitle, truncate } from '$lib/utils'
   import MessageList from './MessageList.svelte'
-  import ScrollButtons from './ScrollButtons.svelte'
+  import ScrollButtons, { type PinMode } from './ScrollButtons.svelte'
   import ValidationBadge from './ValidationBadge.svelte'
   import CommandTitle from './CommandTitle.svelte'
 
@@ -298,6 +298,19 @@
   // Scroll container reference for navigation (internal or external)
   let internalScrollContainer: HTMLDivElement | undefined = $state()
   const scrollContainer = $derived(externalScrollContainer ?? internalScrollContainer)
+
+  // PIN navigation mode - persisted in localStorage
+  const PIN_MODE_KEY = 'claude-sessions-pin-mode'
+  let pinMode = $state<PinMode>(
+    (typeof localStorage !== 'undefined' && (localStorage.getItem(PIN_MODE_KEY) as PinMode)) ||
+      'compact'
+  )
+  const handlePinModeChange = (mode: PinMode) => {
+    pinMode = mode
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(PIN_MODE_KEY, mode)
+    }
+  }
 </script>
 
 <section
@@ -352,7 +365,7 @@
       {/if}
     </div>
     {#if activeTab !== 'todos'}
-      <ScrollButtons {messages} {scrollContainer} />
+      <ScrollButtons {messages} {scrollContainer} {pinMode} onPinModeChange={handlePinModeChange} />
     {/if}
     {#if session && (onRenameSession || onDeleteSession)}
       <div class="flex items-center gap-0.5">
