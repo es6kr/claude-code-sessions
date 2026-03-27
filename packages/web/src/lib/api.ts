@@ -220,6 +220,19 @@ export interface MoveSessionResult {
 export const moveSession = (sourceProject: string, sessionId: string, targetProject: string) =>
   post<MoveSessionResult>('/session/move', { sourceProject, sessionId, targetProject })
 
+export interface CompressSessionResult {
+  success: boolean
+  originalSize: number
+  compressedSize: number
+  removedCustomTitles: number
+  removedProgress: number
+  removedSnapshots: number
+  truncatedOutputs: number
+}
+
+export const compressSession = (project: string, sessionId: string) =>
+  post<CompressSessionResult>('/session/compress', { project, sessionId })
+
 export const checkFileExists = async (filePath: string): Promise<boolean> => {
   try {
     const res = await get<{ exists: boolean }>(`/file-exists?path=${encodeURIComponent(filePath)}`)
