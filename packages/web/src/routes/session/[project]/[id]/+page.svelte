@@ -217,6 +217,34 @@
     )
   }
 
+  const handleCompressSession = () => {
+    if (!session) return
+
+    showConfirm(
+      'Compress Session',
+      'Compress this session?\n\nThis will remove redundant data (progress messages, duplicate snapshots) to reduce file size. This action cannot be undone.',
+      async () => {
+        closeConfirm()
+        try {
+          loading = true
+          const result = await api.compressSession(session!.projectName, session!.id)
+          if (result.success) {
+            const saved =
+              result.originalSize > 0
+                ? Math.round((1 - result.compressedSize / result.originalSize) * 100)
+                : 0
+            toast = `Session compressed! Saved ~${saved}% (removed ${result.removedProgress} progress, ${result.removedSnapshots} snapshots)`
+            messages = await api.getSession(session!.projectName, session!.id)
+          }
+        } catch (e) {
+          error = String(e)
+        } finally {
+          loading = false
+        }
+      }
+    )
+  }
+
   const handleDeleteSession = () => {
     if (!session) return
 
@@ -270,6 +298,7 @@
       }}
       onEditTitle={handleEditTitle}
       onSplitSession={handleSplitSession}
+      onCompressSession={handleCompressSession}
       onRenameSession={handleRenameSession}
       onDeleteSession={handleDeleteSession}
       enableScroll={true}

@@ -29,6 +29,7 @@
     onRefresh?: () => Promise<void> // Called to refresh messages from server
     onEditTitle?: (msg: Message) => void
     onSplitSession?: (msg: Message) => void
+    onCompressSession?: () => void
     onRenameSession?: () => void
     onDeleteSession?: () => void
     enableScroll?: boolean
@@ -49,6 +50,7 @@
     onRefresh,
     onEditTitle,
     onSplitSession,
+    onCompressSession,
     onRenameSession,
     onDeleteSession,
     enableScroll = true,
@@ -354,7 +356,7 @@
     {#if activeTab !== 'todos'}
       <ScrollButtons {messages} {scrollContainer} />
     {/if}
-    {#if session && (onRenameSession || onDeleteSession)}
+    {#if session && (onRenameSession || onCompressSession || onDeleteSession)}
       <div class="flex items-center gap-0.5">
         {#if onRenameSession}
           <button
@@ -369,6 +371,29 @@
                 stroke-linejoin="round"
                 stroke-width="2"
                 d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+              />
+            </svg>
+          </button>
+        {/if}
+        {#if onCompressSession}
+          <button
+            class="p-1.5 rounded text-gh-text-secondary hover:text-gh-fg hover:bg-gh-border text-sm transition-colors"
+            onclick={onCompressSession}
+            title="Compress session"
+            aria-label="Compress session"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M19 9l-7 7-7-7"
+              />
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M19 15l-7-7-7 7"
               />
             </svg>
           </button>
