@@ -222,7 +222,7 @@
 
     showConfirm(
       'Compress Session',
-      'Compress this session?\n\nThis will remove redundant data (progress messages, duplicate snapshots) to reduce file size. This action cannot be undone.',
+      'Compress this session?\n\nThis will remove redundant data (progress messages and intermediate snapshots, keeping only the first and last) to reduce file size. This action cannot be undone.',
       async () => {
         closeConfirm()
         try {

@@ -55,66 +55,104 @@
   const noop = () => {}
 </script>
 
-<Story name="Default">
-  <div style="height: 600px;">
-    <SessionViewer session={mockSession} messages={mockMessages} enableScroll={true} />
-  </div>
+<Story
+  name="Default"
+  args={{
+    session: mockSession,
+    messages: mockMessages,
+    enableScroll: true,
+  }}
+>
+  {#snippet children(args)}
+    <div class="bg-gh-canvas" style="height: 600px;">
+      <SessionViewer {...args} />
+    </div>
+  {/snippet}
 </Story>
 
-<Story name="With All Header Buttons">
-  <div style="height: 600px;">
-    <SessionViewer
-      session={mockSession}
-      messages={mockMessages}
-      backUrl="/"
-      onRenameSession={noop}
-      onCompressSession={noop}
-      onDeleteSession={noop}
-      enableScroll={true}
-    />
-  </div>
+<Story
+  name="With All Header Buttons"
+  args={{
+    session: mockSession,
+    messages: mockMessages,
+    backUrl: '/',
+    onRenameSession: noop,
+    onCompressSession: noop,
+    onDeleteSession: noop,
+    enableScroll: true,
+  }}
+>
+  {#snippet children(args)}
+    <div class="bg-gh-canvas" style="height: 600px;">
+      <SessionViewer {...args} />
+    </div>
+  {/snippet}
 </Story>
 
-<Story name="With Compress Button Only">
-  <div style="height: 600px;">
-    <SessionViewer
-      session={mockSession}
-      messages={mockMessages}
-      onCompressSession={noop}
-      enableScroll={true}
-    />
-  </div>
+<Story
+  name="With Compress Button Only"
+  args={{
+    session: mockSession,
+    messages: mockMessages,
+    onCompressSession: noop,
+    enableScroll: true,
+  }}
+>
+  {#snippet children(args)}
+    <div class="bg-gh-canvas" style="height: 600px;">
+      <SessionViewer {...args} />
+    </div>
+  {/snippet}
 </Story>
 
-<Story name="With Todos">
-  <div style="height: 600px;">
-    <SessionViewer
-      session={mockSession}
-      messages={mockMessages}
-      todos={mockTodos}
-      onRenameSession={noop}
-      onCompressSession={noop}
-      onDeleteSession={noop}
-      enableScroll={true}
-    />
-  </div>
+<Story
+  name="With Todos"
+  args={{
+    session: mockSession,
+    messages: mockMessages,
+    todos: mockTodos,
+    onRenameSession: noop,
+    onCompressSession: noop,
+    onDeleteSession: noop,
+    enableScroll: true,
+  }}
+>
+  {#snippet children(args)}
+    <div class="bg-gh-canvas" style="height: 600px;">
+      <SessionViewer {...args} />
+    </div>
+  {/snippet}
 </Story>
 
-<Story name="No Session Selected">
-  <div style="height: 400px;">
-    <SessionViewer session={null} messages={[]} enableScroll={true} />
-  </div>
+<Story
+  name="No Session Selected"
+  args={{
+    session: null,
+    messages: [],
+    enableScroll: true,
+  }}
+>
+  {#snippet children(args)}
+    <div class="bg-gh-canvas" style="height: 400px;">
+      <SessionViewer {...args} />
+    </div>
+  {/snippet}
 </Story>
 
-<Story name="Empty Messages">
-  <div style="height: 400px;">
-    <SessionViewer
-      session={mockSession}
-      messages={[]}
-      onRenameSession={noop}
-      onCompressSession={noop}
-      onDeleteSession={noop}
-      enableScroll={true}
-    />
-  </div>
+<Story
+  name="Empty Messages"
+  args={{
+    session: mockSession,
+    messages: [],
+    onRenameSession: noop,
+    onCompressSession: noop,
+    onDeleteSession: noop,
+    enableScroll: true,
+  }}
+>
+  {#snippet children(args)}
+    <div class="bg-gh-canvas" style="height: 400px;">
+      <SessionViewer {...args} />
+    </div>
+  {/snippet}
 </Story>
