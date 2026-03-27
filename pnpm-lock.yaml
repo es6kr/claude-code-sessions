@@ -158,8 +158,8 @@ importers:
         specifier: ^3.21.0
         version: 3.21.0
       marked:
-        specifier: ^17.0.3
-        version: 17.0.4
+        specifier: ^17.0.5
+        version: 17.0.5
     devDependencies:
       '@chromatic-com/storybook':
         specifier: ^5.0.2
@@ -2959,8 +2959,8 @@ packages:
     resolution: {integrity: sha512-a54IwgWPaeBCAAsv13YgmALOF1elABB08FxO9i+r4VFk5Vl4pKokRPeX8u5TCgSsPi6ec1otfLjdOpVcgbpshg==}
     hasBin: true
 
-  marked@17.0.4:
-    resolution: {integrity: sha512-NOmVMM+KAokHMvjWmC5N/ZOvgmSWuqJB8FoYI019j4ogb/PeRMKoKIjReZ2w3376kkA8dSJIP8uD993Kxc0iRQ==}
+  marked@17.0.5:
+    resolution: {integrity: sha512-6hLvc0/JEbRjRgzI6wnT2P1XuM1/RrrDEX0kPt0N7jGm1133g6X7DlxFasUIx+72aKAr904GTxhSLDrd5DIlZg==}
     engines: {node: '>= 20'}
     hasBin: true
 
@@ -6914,7 +6914,7 @@ snapshots:
       punycode.js: 2.3.1
       uc.micro: 2.1.0
 
-  marked@17.0.4: {}
+  marked@17.0.5: {}
 
   math-intrinsics@1.1.0: {}
 
