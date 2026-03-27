@@ -14,6 +14,7 @@
   let loading = $state(true)
   let error = $state<string | null>(null)
   let toast = $state<string | null>(null)
+  let toastDuration = $state(3000)
   let projectDisplayName = $state<string>('')
   let customTitle = $state<string | undefined>(undefined)
   let currentSummary = $state<string | undefined>(undefined)
@@ -233,6 +234,7 @@
               result.originalSize > 0
                 ? Math.round((1 - result.compressedSize / result.originalSize) * 100)
                 : 0
+            toastDuration = 8000
             toast = `Session compressed! Saved ~${saved}% (removed ${result.removedProgress} progress, ${result.removedSnapshots} snapshots)`
             messages = await api.getSession(session!.projectName, session!.id)
           }
@@ -243,6 +245,20 @@
         }
       }
     )
+  }
+
+  const handleResumeSession = async () => {
+    if (!session) return
+    try {
+      const result = await api.resumeSession(session.projectName, session.id)
+      if (result.success) {
+        toast = `Session resumed (PID: ${result.pid})`
+      } else {
+        error = result.error ?? 'Failed to resume session'
+      }
+    } catch (e) {
+      error = String(e)
+    }
   }
 
   const handleDeleteSession = () => {
@@ -300,6 +316,7 @@
       onSplitSession={handleSplitSession}
       onCompressSession={handleCompressSession}
       onRenameSession={handleRenameSession}
+      onResumeSession={handleResumeSession}
       onDeleteSession={handleDeleteSession}
       enableScroll={true}
       fullWidth={true}
@@ -307,7 +324,7 @@
   {/if}
 </div>
 
-<Toast bind:message={toast} />
+<Toast bind:message={toast} duration={toastDuration} />
 
 <ConfirmModal
   show={confirmModal.show}

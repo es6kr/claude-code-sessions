@@ -11,6 +11,7 @@
   import ScrollButtons from './ScrollButtons.svelte'
   import ValidationBadge from './ValidationBadge.svelte'
   import CommandTitle from './CommandTitle.svelte'
+  import SessionActions from './SessionActions.svelte'
 
   // Tab type - messages, todos, or agent:<agentId>
   type TabType = 'messages' | 'todos' | `agent:${string}`
@@ -31,6 +32,7 @@
     onSplitSession?: (msg: Message) => void
     onCompressSession?: () => void
     onRenameSession?: () => void
+    onResumeSession?: () => void
     onDeleteSession?: () => void
     enableScroll?: boolean
     externalScrollContainer?: HTMLElement | null
@@ -52,6 +54,7 @@
     onSplitSession,
     onCompressSession,
     onRenameSession,
+    onResumeSession,
     onDeleteSession,
     enableScroll = true,
     externalScrollContainer = null,
@@ -353,70 +356,14 @@
         <h2 class="text-base font-semibold">Messages</h2>
       {/if}
     </div>
-    {#if activeTab !== 'todos'}
-      <ScrollButtons {messages} {scrollContainer} />
-    {/if}
-    {#if session && (onRenameSession || onCompressSession || onDeleteSession)}
-      <div class="flex items-center gap-0.5">
-        {#if onRenameSession}
-          <button
-            class="p-1.5 rounded text-gh-text-secondary hover:text-gh-fg hover:bg-gh-border text-sm transition-colors"
-            onclick={onRenameSession}
-            title="Rename session"
-            aria-label="Rename session"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
-              />
-            </svg>
-          </button>
-        {/if}
-        {#if onCompressSession}
-          <button
-            class="p-1.5 rounded text-gh-text-secondary hover:text-gh-fg hover:bg-gh-border text-sm transition-colors"
-            onclick={onCompressSession}
-            title="Compress session"
-            aria-label="Compress session"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M19 9l-7 7-7-7"
-              />
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M19 15l-7-7-7 7"
-              />
-            </svg>
-          </button>
-        {/if}
-        {#if onDeleteSession}
-          <button
-            class="p-1.5 rounded text-gh-text-secondary hover:text-gh-red hover:bg-gh-red/10 text-sm transition-colors"
-            onclick={onDeleteSession}
-            title="Delete session"
-            aria-label="Delete session"
-          >
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
-            </svg>
-          </button>
-        {/if}
-      </div>
-    {/if}
+    <div class="flex flex-col items-end gap-2">
+      {#if session}
+        <SessionActions {onResumeSession} {onCompressSession} {onRenameSession} {onDeleteSession} />
+      {/if}
+      {#if activeTab !== 'todos'}
+        <ScrollButtons {messages} {scrollContainer} />
+      {/if}
+    </div>
   </div>
 
   <!-- Tabs -->
