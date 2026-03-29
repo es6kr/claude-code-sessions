@@ -558,7 +558,9 @@ export function activate(context: vscode.ExtensionContext) {
         if (result.deletedCount > 0) msgs.push(`${result.deletedCount} sessions`)
         if (result.deletedStaleProjectCount)
           msgs.push(`${result.deletedStaleProjectCount} stale projects`)
-        vscode.window.showInformationMessage(`Cleaned up ${msgs.join(', ')}`)
+        vscode.window.showInformationMessage(
+          msgs.length > 0 ? `Cleaned up ${msgs.join(', ')}` : 'Cleanup complete'
+        )
       }
     }),
 

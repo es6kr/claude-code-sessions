@@ -40,7 +40,9 @@ export const listProjects = Effect.gen(function* () {
           if (sessionFiles.length > 0) {
             const stats = yield* Effect.all(
               sessionFiles.map((f) =>
-                Effect.tryPromise(() => fs.stat(path.join(projectPath, f)).then((s) => s.mtimeMs))
+                Effect.tryPromise(() => fs.stat(path.join(projectPath, f)).then((s) => s.mtimeMs)).pipe(
+                  Effect.orElseSucceed(() => 0)
+                )
               ),
               { concurrency: 20 }
             )

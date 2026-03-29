@@ -245,8 +245,8 @@ export const clearSessions = (options: {
     let deletedStaleProjectCount = 0
     if (clearStale && staleProjects.length > 0) {
       const sessionsDir = getSessionsDir()
-      for (const projectName of staleProjects) {
-        const projectSessionsPath = path.join(sessionsDir, projectName)
+      for (const staleProjectName of staleProjects) {
+        const projectSessionsPath = path.join(sessionsDir, staleProjectName)
         yield* Effect.tryPromise(() => fs.rm(projectSessionsPath, { recursive: true, force: true }))
         deletedStaleProjectCount++
       }
