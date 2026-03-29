@@ -666,11 +666,9 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'claudeSessions.openTerminalHere',
       async (item: SessionTreeItem) => {
-        if (item.type !== 'session') return
+        if (!item || item.type !== 'session') return
 
-        const folderPath = await session.folderNameToPath(item.projectName)
-        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
-        const cwd = session.expandHomePath(folderPath, homeDir)
+        const cwd = await resolveProjectCwd(item.projectName)
 
         const terminal = vscode.window.createTerminal({
           name: `Terminal: ${shortProjectName(item.projectName)}`,
@@ -683,11 +681,9 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'claudeSessions.startClaudeYolo',
       async (item: SessionTreeItem) => {
-        if (item.type !== 'session') return
+        if (!item || item.type !== 'session') return
 
-        const folderPath = await session.folderNameToPath(item.projectName)
-        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
-        const cwd = session.expandHomePath(folderPath, homeDir)
+        const cwd = await resolveProjectCwd(item.projectName)
 
         const terminal = vscode.window.createTerminal({
           name: `Claude: ${shortProjectName(item.projectName)}`,
@@ -701,18 +697,22 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'claudeSessions.resumeSessionYolo',
       async (item: SessionTreeItem) => {
-        if (item.type !== 'session') return
+        if (!item || item.type !== 'session') return
 
-        const folderPath = await session.folderNameToPath(item.projectName)
-        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
-        const cwd = session.expandHomePath(folderPath, homeDir)
+        const sessionId = String(item.sessionId ?? '')
+        if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+          void vscode.window.showErrorMessage('Invalid session id; cannot resume session.')
+          return
+        }
+
+        const cwd = await resolveProjectCwd(item.projectName)
 
         const terminal = vscode.window.createTerminal({
           name: `Claude: ${shortLabel(item.label as string)}`,
           cwd,
         })
         terminal.show()
-        terminal.sendText(`claude --resume ${item.sessionId} --dangerously-skip-permissions`)
+        terminal.sendText(`claude --resume ${sessionId} --dangerously-skip-permissions`)
       }
     ),
 
