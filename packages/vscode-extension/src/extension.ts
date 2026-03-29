@@ -629,6 +629,9 @@ export function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (e.affectsConfiguration('claudeSessions.titleDisplayMode')) {
+        treeProvider.refresh()
+      }
       if (
         e.affectsConfiguration('claudeSessions.packageTag') ||
         e.affectsConfiguration('claudeSessions.useBetaVersion')
