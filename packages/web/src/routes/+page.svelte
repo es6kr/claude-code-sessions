@@ -7,7 +7,7 @@
   import { getDisplayTitle } from '$lib/utils'
   import { appConfig } from '$lib/stores/config'
   import { deleteMessageWithChainRepair } from '@claude-sessions/core'
-  import type { SessionSortField, SessionSortOrder } from '@claude-sessions/core'
+  import type { SessionSortField, SessionSortOrder, TitleDisplayMode } from '@claude-sessions/core'
 
   // State
   let projects = $state<Project[]>([])
@@ -26,6 +26,7 @@
   // Sort options state (persisted in localStorage)
   let sortField = $state<SessionSortField>('summary')
   let sortOrder = $state<SessionSortOrder>('desc')
+  let titleDisplayMode = $state<TitleDisplayMode>('message')
 
   // Modal states
   let confirmModal = $state<{
@@ -574,13 +575,24 @@
     loadingProject = null
   }
 
+  const handleTitleModeChange = (mode: TitleDisplayMode) => {
+    titleDisplayMode = mode
+    if (browser) {
+      localStorage.setItem('claudeSessionsTitleMode', mode)
+    }
+  }
+
   // Restore sort options from localStorage
   const restoreSortOptions = () => {
     if (!browser) return
     const savedField = localStorage.getItem('claudeSessionsSortField') as SessionSortField | null
     const savedOrder = localStorage.getItem('claudeSessionsSortOrder') as SessionSortOrder | null
+    const savedTitleMode = localStorage.getItem(
+      'claudeSessionsTitleMode'
+    ) as TitleDisplayMode | null
     if (savedField) sortField = savedField
     if (savedOrder) sortOrder = savedOrder
+    if (savedTitleMode) titleDisplayMode = savedTitleMode
   }
 
   // Lifecycle
@@ -603,6 +615,7 @@
     {loadingProject}
     {sortField}
     {sortOrder}
+    {titleDisplayMode}
     onToggleProject={toggleProject}
     onSelectSession={selectSession}
     onRenameSession={handleRenameSession}
@@ -610,6 +623,7 @@
     onMoveSession={handleMoveSession}
     onResumeSession={handleResumeSession}
     onSortChange={handleSortChange}
+    onTitleModeChange={handleTitleModeChange}
   />
 
   <SessionViewer

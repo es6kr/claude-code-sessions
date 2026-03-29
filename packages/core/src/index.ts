@@ -40,6 +40,7 @@ export type {
   SessionSortField,
   SessionSortOrder,
   SessionSortOptions,
+  TitleDisplayMode,
 } from './types.js'
 
 // Path utilities
@@ -65,6 +66,7 @@ export {
   isContinuationSummary,
   parseCommandMessage,
   getDisplayTitle,
+  type DisplayTitleOptions,
   maskHomePath,
   getSessionSortTimestamp,
   tryParseJsonLine,
