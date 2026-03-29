@@ -234,6 +234,12 @@ async function openOrRevealFolder(absolutePath: string) {
   await vscode.env.openExternal(vscode.Uri.file(absolutePath))
 }
 
+async function resolveProjectCwd(projectName: string): Promise<string> {
+  const folderPath = await session.folderNameToPath(projectName)
+  const homeDir = process.env.HOME || process.env.USERPROFILE || ''
+  return session.expandHomePath(folderPath, homeDir)
+}
+
 export function activate(context: vscode.ExtensionContext) {
   const treeProvider = new SessionTreeProvider()
 
@@ -330,9 +336,7 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (item.type !== 'project') return
 
-        const folderPath = await session.folderNameToPath(item.projectName)
-        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
-        const absolutePath = session.expandHomePath(folderPath, homeDir)
+        const absolutePath = await resolveProjectCwd(item.projectName)
 
         await openOrRevealFolder(absolutePath)
       }
@@ -560,9 +564,7 @@ export function activate(context: vscode.ExtensionContext) {
           : `claude --resume ${item.sessionId}`
 
         // Get project path for cwd (needed for all modes)
-        const folderPath = await session.folderNameToPath(item.projectName)
-        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
-        const cwd = session.expandHomePath(folderPath, homeDir)
+        const cwd = await resolveProjectCwd(item.projectName)
 
         // Determine terminal mode: skip picker if pre-configured
         let mode: 'internal' | 'external'
