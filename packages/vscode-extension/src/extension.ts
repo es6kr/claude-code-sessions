@@ -516,26 +516,49 @@ export function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand('claudeSessions.cleanup', async () => {
-      const preview = await Effect.runPromise(session.previewCleanup())
+      const preview = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'Scanning sessions...' },
+        () => Effect.runPromise(session.previewCleanup())
+      )
 
       const totalEmpty = preview.reduce((sum, p) => sum + p.emptySessions.length, 0)
       const totalInvalid = preview.reduce((sum, p) => sum + p.invalidSessions.length, 0)
+      const staleProjects = preview.filter((p) => p.isStale).map((p) => p.project)
+      const totalStale = staleProjects.length
 
-      if (totalEmpty === 0 && totalInvalid === 0) {
+      if (totalEmpty === 0 && totalInvalid === 0 && totalStale === 0) {
         vscode.window.showInformationMessage('No sessions to clean up')
         return
       }
 
+      const parts: string[] = []
+      if (totalEmpty > 0) parts.push(`${totalEmpty} empty sessions`)
+      if (totalInvalid > 0) parts.push(`${totalInvalid} invalid sessions`)
+      if (totalStale > 0) parts.push(`${totalStale} stale projects (directory gone)`)
+
       const confirm = await vscode.window.showWarningMessage(
-        `Clean up ${totalEmpty} empty sessions and ${totalInvalid} invalid sessions?`,
+        `Clean up ${parts.join(', ')}?`,
         { modal: true },
         'Clean Up'
       )
 
       if (confirm === 'Clean Up') {
-        const result = await Effect.runPromise(session.clearSessions({}))
+        const result = await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, title: 'Cleaning up sessions...' },
+          () =>
+            Effect.runPromise(
+              session.clearSessions({
+                clearStale: totalStale > 0,
+                staleProjects,
+              })
+            )
+        )
         treeProvider.refresh()
-        vscode.window.showInformationMessage(`Cleaned up ${result.deletedCount} sessions`)
+        const msgs: string[] = []
+        if (result.deletedCount > 0) msgs.push(`${result.deletedCount} sessions`)
+        if (result.deletedStaleProjectCount)
+          msgs.push(`${result.deletedStaleProjectCount} stale projects`)
+        vscode.window.showInformationMessage(`Cleaned up ${msgs.join(', ')}`)
       }
     }),
 
