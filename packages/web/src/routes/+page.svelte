@@ -587,12 +587,12 @@
     if (!browser) return
     const savedField = localStorage.getItem('claudeSessionsSortField') as SessionSortField | null
     const savedOrder = localStorage.getItem('claudeSessionsSortOrder') as SessionSortOrder | null
-    const savedTitleMode = localStorage.getItem(
-      'claudeSessionsTitleMode'
-    ) as TitleDisplayMode | null
+    const savedTitleMode = localStorage.getItem('claudeSessionsTitleMode')
     if (savedField) sortField = savedField
     if (savedOrder) sortOrder = savedOrder
-    if (savedTitleMode) titleDisplayMode = savedTitleMode
+    if (savedTitleMode === 'message' || savedTitleMode === 'datetime') {
+      titleDisplayMode = savedTitleMode
+    }
   }
 
   // Lifecycle
