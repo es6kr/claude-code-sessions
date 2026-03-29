@@ -93,9 +93,16 @@ export const previewCleanup = (projectName?: string) =>
           const displayPath = await folderNameToPath(project.name)
           const absPath = expandHomePath(displayPath, homeDir)
           try {
-            await fs.access(absPath)
-          } catch {
-            staleSet.add(project.name)
+            const stats = await fs.stat(absPath)
+            if (!stats.isDirectory()) {
+              staleSet.add(project.name)
+            }
+          } catch (error) {
+            const err = error as NodeJS.ErrnoException
+            if (err.code === 'ENOENT') {
+              staleSet.add(project.name)
+            }
+            // Other errors (permissions, IO) should not mark as stale
           }
         })
       ),
@@ -247,8 +254,10 @@ export const clearSessions = (options: {
       const sessionsDir = getSessionsDir()
       for (const staleProjectName of staleProjects) {
         const projectSessionsPath = path.join(sessionsDir, staleProjectName)
-        yield* Effect.tryPromise(() => fs.rm(projectSessionsPath, { recursive: true, force: true }))
-        deletedStaleProjectCount++
+        const deleted = yield* Effect.tryPromise(() =>
+          fs.rm(projectSessionsPath, { recursive: true, force: true }).then(() => true)
+        ).pipe(Effect.orElse(() => Effect.succeed(false)))
+        if (deleted) deletedStaleProjectCount++
       }
     }
 
