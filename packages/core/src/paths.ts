@@ -59,12 +59,6 @@ const WINDOWS_PATTERNS = {
 
 type WindowsPathResult = { isWindows: true; drive: string; rest: string } | { isWindows: false }
 
-/** Parse Windows absolute path, extracting drive letter and rest */
-const parseWindowsAbsPath = (p: string): WindowsPathResult => {
-  const match = p.match(WINDOWS_PATTERNS.absolutePath)
-  return match ? { isWindows: true, drive: match[1], rest: p.slice(3) } : { isWindows: false }
-}
-
 /** Parse Windows folder name format, extracting drive letter and rest */
 const parseWindowsFolderName = (name: string): WindowsPathResult => {
   const match = name.match(WINDOWS_PATTERNS.folderName)
@@ -73,10 +67,6 @@ const parseWindowsFolderName = (name: string): WindowsPathResult => {
 
 /** Check if path looks like Windows format */
 const isWindowsPath = (p: string): boolean => WINDOWS_PATTERNS.absolutePath.test(p)
-
-/** Convert separators to folder name format (no dot handling) */
-const separatorsToFolderName = (str: string): string =>
-  str.replace(/[/\\]\./g, '--').replace(/[/\\]/g, '-')
 
 // ============================================
 // Pure Functions (No I/O)
@@ -154,20 +144,6 @@ export const folderNameToDisplayPath = (folderName: string): string => {
 
   // Unix path
   return folderName.replace(/^-/, '/').replace(/--/g, '/.').replace(/-/g, '/')
-}
-
-/**
- * Convert display path to folder name (reverse of folderNameToDisplayPath)
- * @deprecated Use pathToFolderName for absolute paths. This function exists
- * for roundtrip testing and does not handle non-ASCII or normalize drive case.
- */
-export const displayPathToFolderName = (displayPath: string): string => {
-  const parsed = parseWindowsAbsPath(displayPath)
-  if (parsed.isWindows) {
-    return parsed.drive + '--' + separatorsToFolderName(parsed.rest)
-  }
-
-  return displayPath.replace(/^\//g, '-').replace(/\/\./g, '--').replace(/\//g, '-')
 }
 
 /**
@@ -298,23 +274,28 @@ export const resolvePathFromClaudeConfig = async (
 /**
  * Convert folder name to relative or absolute path for display
  * If path is under home directory, show relative (~/...)
+ *
+ * Priority order (fastest first):
+ * 1. Claude config lookup (~/.claude.json) - single async file read, cached by OS
+ * 2. Session cwd extraction (sync reads session files - expensive but accurate)
+ * 3. Pattern-based conversion (pure function, zero I/O - fallback, may be inaccurate for dots/spaces)
  */
 export const folderNameToPath = async (folderName: string): Promise<string> => {
   const homeDir = os.homedir()
 
-  // First try to get real path from session cwd
-  const realPath = getRealPathFromSession(folderName)
-  if (realPath) {
-    return toRelativePath(realPath, homeDir)
-  }
-
-  // Second, try Claude config lookup (handles spaces, dots in folder names)
+  // First try Claude config lookup (fast: single file read, handles spaces/dots correctly)
   const configPath = await resolvePathFromClaudeConfig(folderName)
   if (configPath) {
     return toRelativePath(configPath, homeDir)
   }
 
-  // Fallback to pattern-based conversion (may be incorrect for special chars)
+  // Second, try session cwd extraction (accurate but reads session files)
+  const realPath = getRealPathFromSession(folderName)
+  if (realPath) {
+    return toRelativePath(realPath, homeDir)
+  }
+
+  // Fallback to pattern-based conversion (may be incorrect for dots/spaces in path)
   const absolutePath = folderNameToDisplayPath(folderName)
   return toRelativePath(absolutePath, homeDir)
 }

@@ -2,7 +2,7 @@
   "name": "claude-sessions",
   "displayName": "Claude Code Sessions",
   "description": "Manage Claude Code sessions from VS Code sidebar",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "publisher": "es6kr",
   "license": "MIT",
   "repository": {
@@ -30,7 +30,7 @@
       "activitybar": [
         {
           "id": "claude-sessions",
-          "title": "Claude Code Sessions",
+          "title": "Claude Sessions",
           "icon": "resources/activity-bar.svg"
         }
       ]
@@ -39,9 +39,8 @@
       "claude-sessions": [
         {
           "id": "claudeSessions",
-          "name": "Sessions",
+          "name": "Claude Sessions",
           "icon": "resources/activity-bar.svg",
-          "contextualTitle": "Claude Code Sessions",
           "canSelectMany": true
         }
       ]
@@ -100,34 +99,67 @@
         "command": "claudeSessions.sortBy",
         "title": "Sort Sessions",
         "icon": "$(sort-precedence)"
+      },
+      {
+        "command": "claudeSessions.filterSessions",
+        "title": "Filter Sessions",
+        "icon": "$(search)"
+      },
+      {
+        "command": "claudeSessions.clearFilter",
+        "title": "Clear Filter",
+        "icon": "$(close)"
+      },
+      {
+        "command": "claudeSessions.restartWebServer",
+        "title": "Restart Web Server",
+        "category": "Claude Sessions"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "claudeSessions.filterSessions",
+        "key": "ctrl+f",
+        "mac": "cmd+f",
+        "when": "focusedView == claudeSessions"
       }
     ],
     "menus": {
       "view/title": [
         {
-          "command": "claudeSessions.sortBy",
+          "command": "claudeSessions.clearFilter",
+          "when": "view == claudeSessions && claudeSessions.filterActive",
+          "group": "navigation@0"
+        },
+        {
+          "command": "claudeSessions.filterSessions",
           "when": "view == claudeSessions",
           "group": "navigation@1"
         },
         {
-          "command": "claudeSessions.cleanup",
+          "command": "claudeSessions.sortBy",
           "when": "view == claudeSessions",
           "group": "navigation@2"
         },
         {
-          "command": "claudeSessions.openWebUI",
+          "command": "claudeSessions.cleanup",
           "when": "view == claudeSessions",
           "group": "navigation@3"
         },
         {
-          "command": "claudeSessions.refresh",
+          "command": "claudeSessions.openWebUI",
           "when": "view == claudeSessions",
           "group": "navigation@4"
         },
         {
-          "command": "workbench.action.restartExtensionHost",
+          "command": "claudeSessions.refresh",
           "when": "view == claudeSessions",
           "group": "navigation@5"
+        },
+        {
+          "command": "workbench.action.restartExtensionHost",
+          "when": "view == claudeSessions",
+          "group": "navigation@6"
         }
       ],
       "view/item/context": [
@@ -227,10 +259,46 @@
           "default": [],
           "description": "Patterns to exclude from project list (e.g., 'es6.kr' to hide personal projects)"
         },
+        "claudeSessions.packageTag": {
+          "type": "string",
+          "enum": [
+            "",
+            "latest",
+            "beta"
+          ],
+          "default": "",
+          "enumDescriptions": [
+            "No tag — uses npx default resolution (may use cached version)",
+            "Always fetch the latest published version",
+            "Use the beta channel"
+          ],
+          "description": "npm dist-tag for @claude-sessions/web package. Empty string uses npx default behavior."
+        },
         "claudeSessions.useBetaVersion": {
           "type": "boolean",
           "default": false,
-          "description": "Use beta version of @claude-sessions/web package instead of latest"
+          "description": "Use beta version of @claude-sessions/web package instead of latest",
+          "deprecationMessage": "Use 'claudeSessions.packageTag' instead. Set it to 'beta' for the same behavior."
+        },
+        "claudeSessions.cliFlags": {
+          "type": "string",
+          "default": "",
+          "description": "Additional CLI flags appended to the claude command when resuming sessions (e.g., '--dangerously-skip-permissions')"
+        },
+        "claudeSessions.defaultTerminalMode": {
+          "type": "string",
+          "enum": [
+            "ask",
+            "external",
+            "internal"
+          ],
+          "default": "ask",
+          "description": "Default terminal mode when resuming sessions: 'ask' shows a picker, 'internal' uses the integrated terminal, 'external' uses the system terminal"
+        },
+        "claudeSessions.webServerPath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a local @claude-sessions/web CLI script (e.g., '/path/to/packages/web/dist/cli.js'). When set, uses this instead of npx."
         }
       }
     }
@@ -241,22 +309,20 @@
     "dev": "tsup --watch",
     "package": "vsce package --no-dependencies",
     "lint": "eslint src",
-    "pretest": "node -e \"const p=require('./package.json'); delete p.extensionDependencies; require('fs').writeFileSync('./package.json', JSON.stringify(p,null,2)+'\\n')\"",
-    "test": "tsc -p tsconfig.test.json && node ./out/test/runTest.js",
-    "posttest": "node -e \"const p=require('./package.json'); p.extensionDependencies=['Anthropic.claude-code']; require('fs').writeFileSync('./package.json', JSON.stringify(p,null,2)+'\\n')\""
+    "test": "tsc -p tsconfig.test.json && node ./out/test/runTest.js"
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
-    "effect": "^3.19.16"
+    "effect": "^3.21.0"
   },
   "devDependencies": {
     "@types/glob": "^9.0.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.0.9",
+    "@types/node": "^25.5.0",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.0.0",
-    "glob": "^13.0.0",
+    "glob": "^13.0.6",
     "mocha": "^11.7.5",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"

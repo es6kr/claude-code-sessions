@@ -48,7 +48,6 @@ export {
   getSessionsDir,
   getTodosDir,
   folderNameToDisplayPath,
-  displayPathToFolderName,
   pathToFolderName,
   folderNameToPath,
   getRealPathFromSession,
@@ -123,6 +122,7 @@ export {
   searchSessions,
   loadSessionTreeData,
   loadProjectTreeData,
+  getCachePath,
   updateSessionSummary,
   repairChain,
 } from './session.js'

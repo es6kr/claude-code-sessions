@@ -11,6 +11,7 @@
   import ScrollButtons from './ScrollButtons.svelte'
   import ValidationBadge from './ValidationBadge.svelte'
   import CommandTitle from './CommandTitle.svelte'
+  import SessionActions from './SessionActions.svelte'
 
   // Tab type - messages, todos, or agent:<agentId>
   type TabType = 'messages' | 'todos' | `agent:${string}`
@@ -29,6 +30,10 @@
     onRefresh?: () => Promise<void> // Called to refresh messages from server
     onEditTitle?: (msg: Message) => void
     onSplitSession?: (msg: Message) => void
+    onCompressSession?: () => void
+    onRenameSession?: () => void
+    onResumeSession?: () => void
+    onDeleteSession?: () => void
     enableScroll?: boolean
     externalScrollContainer?: HTMLElement | null
     fullWidth?: boolean
@@ -47,6 +52,10 @@
     onRefresh,
     onEditTitle,
     onSplitSession,
+    onCompressSession,
+    onRenameSession,
+    onResumeSession,
+    onDeleteSession,
     enableScroll = true,
     externalScrollContainer = null,
     fullWidth = false,
@@ -347,9 +356,14 @@
         <h2 class="text-base font-semibold">Messages</h2>
       {/if}
     </div>
-    {#if activeTab !== 'todos'}
-      <ScrollButtons {messages} {scrollContainer} />
-    {/if}
+    <div class="flex flex-col items-end gap-2">
+      {#if session}
+        <SessionActions {onResumeSession} {onCompressSession} {onRenameSession} {onDeleteSession} />
+      {/if}
+      {#if activeTab !== 'todos'}
+        <ScrollButtons {messages} {scrollContainer} />
+      {/if}
+    </div>
   </div>
 
   <!-- Tabs -->

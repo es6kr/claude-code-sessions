@@ -1,6 +1,6 @@
 {
   "name": "claude-sessions-mcp",
-  "version": "0.4.4",
+  "version": "0.4.7",
   "description": "MCP server for managing Claude Code conversation sessions",
   "type": "module",
   "license": "MIT",
@@ -40,15 +40,15 @@
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.26.0",
-    "effect": "^3.19.16",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "effect": "^3.21.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/node": "^25.0.9",
+    "@types/node": "^25.5.0",
     "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.0"
   }
 }

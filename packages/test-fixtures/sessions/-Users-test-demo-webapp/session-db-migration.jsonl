@@ -1,0 +1,3 @@
+{"type":"custom-title","customTitle":"Database schema migration v3"}
+{"type":"user","uuid":"db-1","cwd":"/Users/test/demo-webapp","timestamp":"2025-12-24T09:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Migrate the database schema to add the new user_preferences table"}]}}
+{"type":"assistant","uuid":"db-2","parentUuid":"db-1","cwd":"/Users/test/demo-webapp","timestamp":"2025-12-24T09:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Migration script created. Added user_preferences table with foreign key to users."}]}}

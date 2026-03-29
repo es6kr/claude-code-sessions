@@ -1,10 +1,44 @@
 #!/bin/sh
 
+# Buffer stdin to detect deletion-only pushes before installing deps
+input=$(cat)
+
+# Exit early if no input
+if [ -z "$input" ]; then
+  exit 0
+fi
+
+# Check if all pushes are deletions (all local SHAs are zero)
+zero="0000000000000000000000000000000000000000"
+has_code_push=false
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ -n "$local_sha" ] && [ "$local_sha" != "$zero" ]; then
+    has_code_push=true
+    break
+  fi
+done <<EOF
+$input
+EOF
+
+if [ "$has_code_push" = false ]; then
+  echo "🗑️  All refs are deletions — skipping tests."
+  exit 0
+fi
+
+# Install dependencies (only for non-deletion pushes)
+pnpm install --frozen-lockfile
+
 # Get the current branch
 current_branch=$(git rev-parse --abbrev-ref HEAD)
 
-# Read stdin to check what's being pushed (branch or tag)
+# Process each ref being pushed
 while read local_ref local_sha remote_ref remote_sha; do
+  # Skip individual deletions in mixed pushes
+  if [ "$local_sha" = "$zero" ]; then
+    echo "🗑️  Deletion: $remote_ref — skipping tests."
+    continue
+  fi
+
   # Check if pushing a tag
   if echo "$remote_ref" | grep -q "^refs/tags/"; then
     tag_name=$(echo "$remote_ref" | sed 's|refs/tags/||')
@@ -21,13 +55,22 @@ while read local_ref local_sha remote_ref remote_sha; do
       exit $?
     fi
   fi
-done
 
-# Branch push
-if [ "$current_branch" = "main" ]; then
-  echo "🔍 Main branch: running full CI with act..."
-  pnpm test:act
-else
-  echo "🧪 Branch $current_branch: running typecheck and tests..."
-  pnpm typecheck && pnpm test
-fi
+  # Branch push — check remote ref, not local branch
+  remote_branch=$(echo "$remote_ref" | sed 's|refs/heads/||')
+  if [ "$remote_branch" = "main" ]; then
+    if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+      echo "🔍 Pushing to main: running full CI with act..."
+      pnpm test:act
+    else
+      echo "⚠️  Docker not available, falling back to typecheck and tests..."
+      pnpm typecheck && pnpm test
+    fi
+  else
+    echo "🧪 Pushing to $remote_branch: running typecheck and tests..."
+    pnpm typecheck && pnpm test
+  fi
+  exit $?
+done <<EOF
+$input
+EOF

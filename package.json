@@ -1,6 +1,6 @@
 {
   "name": "claude-code-sessions",
-  "version": "0.4.4",
+  "version": "0.4.7",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.9",
@@ -22,6 +22,7 @@
     "test": "pnpm -r --workspace-concurrency=1 test",
     "test:act": "act push --job test -P ubuntu-latest=-self-hosted",
     "test:core": "pnpm --filter @claude-sessions/core test",
+    "test:e2e": "pnpm --filter @claude-sessions/web exec playwright test",
     "test:mcp": "pnpm --filter claude-sessions-mcp test",
     "test:web": "pnpm --filter @claude-sessions/web test",
     "typecheck": "pnpm -r typecheck",
@@ -31,20 +32,20 @@
     "version": "node -e \"const fs=require('fs');const v=process.env.npm_package_version;['packages/core','packages/web','packages/mcp'].forEach(d=>{const p=d+'/package.json';const j=JSON.parse(fs.readFileSync(p));j.version=v;fs.writeFileSync(p,JSON.stringify(j,null,2)+'\\n')})\" && git add packages/*/package.json"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
+    "@eslint/js": "^10.0.1",
     "changelogen": "^0.6.2",
     "editorconfig-checker": "^6.1.1",
-    "eslint": "^9.0.0",
+    "eslint": "^10.0.2",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-svelte": "^3.14.0",
-    "globals": "^17.0.0",
+    "eslint-plugin-svelte": "^3.15.2",
+    "globals": "^17.4.0",
     "husky": "^9.1.7",
-    "lint-staged": "^16.2.7",
-    "prettier": "^3.8.0",
-    "prettier-plugin-svelte": "^3.3.3",
-    "svelte-eslint-parser": "^1.4.1",
+    "lint-staged": "^16.4.0",
+    "prettier": "^3.8.1",
+    "prettier-plugin-svelte": "^3.5.0",
+    "svelte-eslint-parser": "^1.5.1",
     "typescript": "^5.7.0",
-    "typescript-eslint": "^8.53.0"
+    "typescript-eslint": "^8.57.1"
   },
   "lint-staged": {
     "*.svelte": [
@@ -60,6 +61,11 @@
       "prettier --write",
       "editorconfig-checker"
     ]
+  },
+  "pnpm": {
+    "overrides": {
+      "@typescript-eslint/utils": "^8.56.0"
+    }
   },
   "prettier": {
     "printWidth": 100,

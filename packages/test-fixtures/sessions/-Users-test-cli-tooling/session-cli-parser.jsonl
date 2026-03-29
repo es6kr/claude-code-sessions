@@ -1,0 +1,3 @@
+{"type":"custom-title","customTitle":"Build CLI argument parser"}
+{"type":"user","uuid":"cli-1","cwd":"/Users/test/cli-tooling","timestamp":"2025-12-26T06:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Create a CLI argument parser with subcommand support"}]}}
+{"type":"assistant","uuid":"cli-2","parentUuid":"cli-1","cwd":"/Users/test/cli-tooling","timestamp":"2025-12-26T06:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"CLI parser built with yargs, supporting subcommands and option validation."}]}}

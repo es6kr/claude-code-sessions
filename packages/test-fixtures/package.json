@@ -1,0 +1,9 @@
+{
+  "name": "@claude-sessions/test-fixtures",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./index.ts",
+    "./sessions": "./sessions/"
+  }
+}

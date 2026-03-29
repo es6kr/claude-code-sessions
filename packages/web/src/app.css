@@ -14,6 +14,20 @@
   --color-gh-red: #f85149;
 }
 
+/* GitHub Light theme overrides */
+[data-theme='light'] {
+  --color-gh-bg: #ffffff;
+  --color-gh-bg-secondary: #f6f8fa;
+  --color-gh-border: #d0d7de;
+  --color-gh-border-subtle: #e8ebef;
+  --color-gh-text: #1f2328;
+  --color-gh-text-secondary: #656d76;
+  --color-gh-accent: #0969da;
+  --color-gh-accent-subtle: #0969da33;
+  --color-gh-green: #1a7f37;
+  --color-gh-red: #cf222e;
+}
+
 /* Markdown content styles */
 .message-content {
   word-break: break-word;
@@ -39,7 +53,7 @@
   }
 
   pre {
-    background: var(--color-gh-bg);
+    background: var(--color-gh-border-subtle);
     border: 1px solid var(--color-gh-border);
     border-radius: 6px;
     padding: 1em;

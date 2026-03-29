@@ -112,7 +112,7 @@
         {#each progressErrors as error}
           <li class="text-red-400">
             <span class="text-gh-text-secondary">L{error.line}:</span>
-            {error.hookName || error.hookEvent || 'unknown'}
+            {error.hookName || error.hookEvent || error.messageType || 'unknown'}
           </li>
         {/each}
       </ul>

@@ -21,7 +21,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v5
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -54,3 +54,30 @@ jobs:
       - name: Test (vscode extension - Windows)
         if: ${{ !env.ACT && matrix.os == 'windows-latest' }}
         run: pnpm --filter claude-sessions test
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build core
+        run: pnpm build:core
+
+      - name: Install Playwright browsers
+        run: pnpm --filter @claude-sessions/web exec playwright install chromium --with-deps
+
+      - name: Run e2e tests
+        run: pnpm test:e2e

@@ -32,10 +32,10 @@ const emptyTodos = (sessionId: string): SessionTodos => ({
  * TDD for session sorting by different fields
  *
  * SessionSortField options:
- * - 'summary': oldest summary timestamp (default)
+ * - 'summary': oldest summary timestamp
  * - 'modified': file modification time
  * - 'created': session creation time
- * - 'updated': last message timestamp
+ * - 'updated': last message timestamp (default)
  * - 'messageCount': number of messages
  * - 'title': alphabetical by title
  */

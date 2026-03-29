@@ -26,6 +26,7 @@ export interface ProgressError {
   line: number
   hookEvent?: string
   hookName?: string
+  messageType?: string
 }
 
 export interface ValidationResult {
@@ -171,6 +172,12 @@ export function validateProgressMessages(
           hookName,
         })
       }
+    } else if (msg.type === 'saved_hook_context') {
+      errors.push({
+        type: 'unwanted_progress',
+        line: i + 1,
+        messageType: 'saved_hook_context',
+      })
     }
   }
 

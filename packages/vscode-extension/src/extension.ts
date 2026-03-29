@@ -19,46 +19,115 @@ session.setLogger({
 function getConfig() {
   const config = vscode.workspace.getConfiguration('claudeSessions')
   return {
-    port: config.get<number>('port', 5174),
     autoStartServer: config.get<boolean>('autoStartServer', true),
+    cliFlags: config.get<string>('cliFlags', ''),
+    defaultTerminalMode: config.get<string>('defaultTerminalMode', 'ask'),
     openInEditor: config.get<boolean>('openInEditor', true),
+    packageTag: config.get<string>('packageTag', ''),
+    port: config.get<number>('port', 5174),
     useBetaVersion: config.get<boolean>('useBetaVersion', false),
+    webServerPath: config.get<string>('webServerPath', ''),
   }
 }
 
-async function ensureWebServer(): Promise<number> {
+function killWebServer(): Promise<void> {
+  return new Promise((resolve) => {
+    if (!webServerProcess) {
+      resolve()
+      return
+    }
+    const proc = webServerProcess
+    // Escalate to SIGKILL if process doesn't exit within 3s
+    const timeout = setTimeout(() => {
+      try {
+        if (proc.pid && process.platform !== 'win32') {
+          process.kill(-proc.pid, 'SIGKILL')
+        } else {
+          proc.kill('SIGKILL')
+        }
+      } catch {
+        // Process already terminated
+      }
+      webServerProcess = null
+      resolve()
+    }, 3000)
+    proc.once('exit', () => {
+      clearTimeout(timeout)
+      webServerProcess = null
+      resolve()
+    })
+    // shell: true + detached: true spawns a new process group.
+    // Use negative PID to kill the entire group (shell + npx + node).
+    // On Windows, detached creates a new console so proc.kill() suffices.
+    if (proc.pid && process.platform !== 'win32') {
+      try {
+        process.kill(-proc.pid, 'SIGTERM')
+      } catch {
+        try {
+          proc.kill()
+        } catch {
+          // Process already terminated
+        }
+      }
+    } else {
+      try {
+        proc.kill()
+      } catch {
+        // Process already terminated
+      }
+    }
+  })
+}
+
+async function ensureWebServer({
+  forceRestart = false,
+  skipAutoStartCheck = false,
+} = {}): Promise<number> {
   const { port, autoStartServer } = getConfig()
 
-  // Check if server is running
-  try {
-    const response = await fetch(`http://localhost:${port}/api/version`)
-    if (response.ok) return port
-  } catch {
-    // Server not running
+  // Check if server is running (skip when force-restarting with new config)
+  if (!forceRestart) {
+    try {
+      const response = await fetch(`http://localhost:${port}/api/version`)
+      if (response.ok) return port
+    } catch {
+      // Server not running
+    }
   }
 
-  if (!autoStartServer) {
+  if (!autoStartServer && !skipAutoStartCheck) {
     throw new Error(
       `Web server not running on port ${port}. Start it manually or enable autoStartServer.`
     )
   }
 
   // Start the server
-  if (webServerProcess) {
-    webServerProcess.kill()
-    webServerProcess = null
+  await killWebServer()
+
+  const { packageTag, useBetaVersion, webServerPath } = getConfig()
+
+  let spawnCmd: string
+  let spawnArgs: string[]
+
+  if (webServerPath) {
+    spawnCmd = 'node'
+    spawnArgs = [webServerPath, '--port', String(port)]
+  } else {
+    // Resolve effective tag: packageTag takes precedence, useBetaVersion as fallback
+    const tag = packageTag || (useBetaVersion ? 'beta' : '')
+    const packageSpec = tag ? `@claude-sessions/web@${tag}` : '@claude-sessions/web'
+    spawnCmd = 'npx'
+    spawnArgs = ['-y', packageSpec, '--port', String(port)]
   }
 
-  const { useBetaVersion } = getConfig()
-  const packageSpec = useBetaVersion ? '@claude-sessions/web@beta' : '@claude-sessions/web'
-
   outputChannel.appendLine('=== Starting Web Server ===')
-  outputChannel.appendLine(`Command: npx ${packageSpec} --port ${port}`)
+  outputChannel.appendLine(`Command: ${spawnCmd} ${spawnArgs.join(' ')}`)
 
   return new Promise((resolve, reject) => {
-    const child = spawn('npx', ['-y', packageSpec, '--port', String(port)], {
+    const child = spawn(spawnCmd, spawnArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
+      detached: process.platform !== 'win32',
     })
 
     webServerProcess = child
@@ -177,14 +246,13 @@ export function activate(context: vscode.ExtensionContext) {
         try {
           const port = await ensureWebServer()
           const { openInEditor } = getConfig()
-          const url = `http://localhost:${port}/session/${encodeURIComponent(item.projectName)}/${encodeURIComponent(item.sessionId)}`
+          const localUrl = `http://localhost:${port}/session/${encodeURIComponent(item.projectName)}/${encodeURIComponent(item.sessionId)}`
+          const externalUri = await vscode.env.asExternalUri(vscode.Uri.parse(localUrl))
 
           if (openInEditor) {
-            // Open in VS Code Simple Browser (expects string URL)
-            await vscode.commands.executeCommand('simpleBrowser.show', url)
+            await vscode.commands.executeCommand('simpleBrowser.show', externalUri.toString())
           } else {
-            // Open in external browser
-            await vscode.env.openExternal(vscode.Uri.parse(url))
+            await vscode.env.openExternal(externalUri)
           }
         } catch (e) {
           vscode.window.showErrorMessage(`Failed to open session: ${e}`)
@@ -238,7 +306,10 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('claudeSessions.openWebUI', async () => {
       try {
         const port = await ensureWebServer()
-        vscode.env.openExternal(vscode.Uri.parse(`http://localhost:${port}`))
+        const externalUri = await vscode.env.asExternalUri(
+          vscode.Uri.parse(`http://localhost:${port}`)
+        )
+        vscode.env.openExternal(externalUri)
       } catch (e) {
         vscode.window.showErrorMessage(`Failed to open Web UI: ${e}`)
       }
@@ -352,6 +423,30 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
+    vscode.commands.registerCommand('claudeSessions.filterSessions', async () => {
+      const value = await vscode.window.showInputBox({
+        prompt: 'Filter sessions by title or summary',
+        value: treeProvider.getFilterText(),
+        placeHolder: 'Type to filter sessions...',
+      })
+
+      if (value !== undefined) {
+        treeProvider.setFilterText(value)
+        treeView.message = value.trim() ? `Filter: "${value.trim()}"` : undefined
+        vscode.commands.executeCommand(
+          'setContext',
+          'claudeSessions.filterActive',
+          value.trim().length > 0
+        )
+      }
+    }),
+
+    vscode.commands.registerCommand('claudeSessions.clearFilter', () => {
+      treeProvider.setFilterText('')
+      treeView.message = undefined
+      vscode.commands.executeCommand('setContext', 'claudeSessions.filterActive', false)
+    }),
+
     vscode.commands.registerCommand('claudeSessions.sortBy', async () => {
       const sortOptions: Array<{
         label: string
@@ -360,8 +455,14 @@ export function activate(context: vscode.ExtensionContext) {
         order: session.SessionSortOrder
       }> = [
         {
+          label: '$(clock) Recently Updated',
+          description: 'Most recent message first (default)',
+          field: 'updated',
+          order: 'desc',
+        },
+        {
           label: '$(history) Latest Summary',
-          description: 'Most recent summary first (default)',
+          description: 'Most recent summary first',
           field: 'summary',
           order: 'desc',
         },
@@ -443,45 +544,59 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (item.type !== 'session') return
 
-        const choice = await vscode.window.showQuickPick(
-          [
-            {
-              label: '$(terminal) Internal Terminal',
-              description: 'Open in VSCode integrated terminal',
-              mode: 'internal' as const,
-            },
-            {
-              label: '$(link-external) External Terminal',
-              description: 'Open in system default terminal',
-              mode: 'external' as const,
-            },
-          ],
-          {
-            placeHolder: 'Where to open Claude session?',
-            title: 'Resume Session',
-          }
-        )
+        const { defaultTerminalMode, cliFlags } = getConfig()
+        const cliCommand = cliFlags
+          ? `claude --resume ${item.sessionId} ${cliFlags}`
+          : `claude --resume ${item.sessionId}`
 
-        if (!choice) return
-
-        // Get project path for cwd
+        // Get project path for cwd (needed for all modes)
         const folderPath = await session.folderNameToPath(item.projectName)
         const homeDir = process.env.HOME || process.env.USERPROFILE || ''
         const cwd = session.expandHomePath(folderPath, homeDir)
 
-        if (choice.mode === 'internal') {
+        // Determine terminal mode: skip picker if pre-configured
+        let mode: 'internal' | 'external'
+        if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
+          mode = defaultTerminalMode
+        } else {
+          const choice = await vscode.window.showQuickPick(
+            [
+              {
+                label: '$(terminal) Internal Terminal',
+                description: 'Open in VSCode integrated terminal',
+                mode: 'internal' as const,
+              },
+              {
+                label: '$(link-external) External Terminal',
+                description: 'Open in system default terminal',
+                mode: 'external' as const,
+              },
+            ],
+            {
+              placeHolder: 'Where to open Claude session?',
+              title: 'Resume Session',
+            }
+          )
+
+          if (!choice) return
+          mode = choice.mode
+        }
+
+        if (mode === 'internal') {
           // Create terminal with proper name and cwd
           const terminal = vscode.window.createTerminal({
             name: `Claude: ${item.label}`,
             cwd,
           })
           terminal.show()
-          terminal.sendText(`claude --resume ${item.sessionId}`)
+          terminal.sendText(cliCommand)
         } else {
           // External: spawn detached process
+          const extraArgs = cliFlags ? cliFlags.split(/\s+/).filter(Boolean) : []
           const result = resumeSession({
             sessionId: item.sessionId,
             cwd,
+            args: extraArgs,
           })
 
           if (result.success) {
@@ -499,15 +614,53 @@ export function activate(context: vscode.ExtensionContext) {
       if (e.affectsConfiguration('claudeSessions.titleDisplayMode')) {
         treeProvider.refresh()
       }
+    }
+
+    vscode.commands.registerCommand('claudeSessions.restartWebServer', async () => {
+      await killWebServer()
+      try {
+        await ensureWebServer({ forceRestart: true, skipAutoStartCheck: true })
+        vscode.window.showInformationMessage('Web server restarted successfully')
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Failed to restart web server: ${err instanceof Error ? err.message : String(err)}`
+        )
+      }
+    }),
+
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (
+        e.affectsConfiguration('claudeSessions.packageTag') ||
+        e.affectsConfiguration('claudeSessions.useBetaVersion')
+      ) {
+        if (!webServerProcess) {
+          outputChannel.appendLine(
+            'Package tag setting changed; no managed web server is running, skipping restart'
+          )
+          return
+        }
+        outputChannel.appendLine('Package tag setting changed, restarting web server...')
+        await killWebServer()
+        try {
+          await ensureWebServer({ forceRestart: true })
+          outputChannel.appendLine('Web server restarted with new configuration')
+        } catch (err) {
+          outputChannel.appendLine(
+            `Failed to restart web server: ${
+              err instanceof Error ? (err.stack ?? err.message) : String(err)
+            }`
+          )
+          vscode.window.showErrorMessage(
+            `Failed to restart web server: ${err instanceof Error ? err.message : String(err)}`
+          )
+        }
+      }
     }),
 
     treeView
   )
 }
 
-export function deactivate() {
-  if (webServerProcess) {
-    webServerProcess.kill()
-    webServerProcess = null
-  }
+export async function deactivate() {
+  await killWebServer()
 }

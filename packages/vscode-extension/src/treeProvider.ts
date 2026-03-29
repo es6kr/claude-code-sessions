@@ -53,8 +53,17 @@ export class SessionTreeProvider
   readonly dropMimeTypes = [MIME_TYPE]
   readonly dragMimeTypes = ['text/uri-list', MIME_TYPE]
 
+  private currentProjectName: string | null = null
+
+  // In-memory project data cache (survives filter changes, cleared on explicit refresh)
+  private inFlightRequests = new Map<string, Promise<session.ProjectTreeData | null>>()
+  private projectDataCache = new Map<string, session.ProjectTreeData>()
+
+  // Filter text for session search
+  private filterText = ''
+
   // Sort options (persisted in memory, reset on restart)
-  private sortOptions: SessionSortOptions = { field: 'summary', order: 'desc' }
+  private sortOptions: SessionSortOptions = { field: 'updated', order: 'desc' }
 
   getSortOptions(): SessionSortOptions {
     return this.sortOptions
@@ -65,7 +74,19 @@ export class SessionTreeProvider
     this.refresh()
   }
 
+  getFilterText(): string {
+    return this.filterText
+  }
+
+  setFilterText(text: string): void {
+    this.filterText = text.trim().toLowerCase()
+    this._onDidChangeTreeData.fire()
+  }
+
   refresh(): void {
+    this.currentProjectName = null
+    this.inFlightRequests.clear()
+    this.projectDataCache.clear()
     this._onDidChangeTreeData.fire()
   }
 
@@ -194,6 +215,39 @@ export class SessionTreeProvider
     return session.findProjectByWorkspacePath(fsPath, projectNames)
   }
 
+  private async getProjectData(projectName: string): Promise<session.ProjectTreeData | null> {
+    const cached = this.projectDataCache.get(projectName)
+    if (cached) return cached
+
+    const inFlight = this.inFlightRequests.get(projectName)
+    if (inFlight) return inFlight
+
+    const promise = Effect.runPromise(session.loadProjectTreeData(projectName, this.sortOptions))
+      .then((data) => {
+        if (data) this.projectDataCache.set(projectName, data)
+        return data
+      })
+      .finally(() => {
+        this.inFlightRequests.delete(projectName)
+      })
+    this.inFlightRequests.set(projectName, promise)
+    return promise
+  }
+
+  private filterSessions(sessions: session.SessionTreeData[]): session.SessionTreeData[] {
+    if (!this.filterText) return sessions
+    return sessions.filter((s) => {
+      // Search across all available text: title, custom title, all summaries
+      const texts = [
+        s.title,
+        s.customTitle,
+        s.currentSummary,
+        ...s.summaries.map((sum) => sum.summary),
+      ]
+      return texts.some((t) => t && t.toLowerCase().includes(this.filterText))
+    })
+  }
+
   async getChildren(element?: SessionTreeItem): Promise<SessionTreeItem[]> {
     if (!element) {
       // Root level - show projects
@@ -211,53 +265,79 @@ export class SessionTreeProvider
       const projectNames = projects.map((p) => p.name)
       const currentProjectName = this.findCurrentProject(projectNames)
 
+      this.currentProjectName = currentProjectName
+
       // Sort: 1) current project, 2) current user's home subpaths, 3) others
       const sorted = sortProjects(projects, {
         currentProjectName,
         homeDir: USER_HOME,
       })
 
-      return Promise.all(
-        sorted.map(
-          async (p) =>
-            new SessionTreeItem(
-              maskHomePath(await session.folderNameToPath(p.name), USER_HOME), // Show ~/... for current user only
-              // Expand current project by default
-              p.name === currentProjectName
-                ? vscode.TreeItemCollapsibleState.Expanded
-                : vscode.TreeItemCollapsibleState.Collapsed,
-              'project',
-              p.name,
-              '',
-              p.sessionCount
-            )
-        )
+      // When filter is active, load projects with bounded concurrency and only show those with matches
+      if (this.filterText) {
+        const CONCURRENCY = 5
+        const projectResults: (SessionTreeItem | null)[] = []
+        for (let i = 0; i < sorted.length; i += CONCURRENCY) {
+          const batch = sorted.slice(i, i + CONCURRENCY)
+          const batchResults = await Promise.all(
+            batch.map(async (p) => {
+              const data = await this.getProjectData(p.name)
+              if (!data) return null
+              const matches = this.filterSessions(data.sessions)
+              if (matches.length === 0) return null
+              return new SessionTreeItem(
+                maskHomePath(p.displayName, USER_HOME),
+                vscode.TreeItemCollapsibleState.Expanded, // auto-expand filtered projects
+                'project',
+                p.name,
+                '',
+                data.sessionCount // show total count, filtered children convey match info
+              )
+            })
+          )
+          projectResults.push(...batchResults)
+        }
+        return projectResults.filter((item): item is SessionTreeItem => item !== null)
+      }
+
+      return sorted.map(
+        (p) =>
+          new SessionTreeItem(
+            maskHomePath(p.displayName, USER_HOME), // displayName already computed by listProjects
+            // Expand current project by default
+            p.name === currentProjectName
+              ? vscode.TreeItemCollapsibleState.Expanded
+              : vscode.TreeItemCollapsibleState.Collapsed,
+            'project',
+            p.name,
+            '',
+            p.sessionCount
+          )
       )
     }
 
     if (element.type === 'project') {
-      // Show sessions under project using loadProjectTreeData for full metadata
-      const projectData = await Effect.runPromise(
-        session.loadProjectTreeData(element.projectName, this.sortOptions)
-      )
+      // Show sessions under project (uses in-memory cache if available)
+      const projectData = await this.getProjectData(element.projectName)
       if (!projectData) return []
 
-      // Check if this is the current project (should auto-expand first session)
-      const projectNames = (await Effect.runPromise(session.listProjects)).map((p) => p.name)
-      const currentProjectName = this.findCurrentProject(projectNames)
-      const isCurrentProject = element.projectName === currentProjectName
+      // Apply filter if set
+      const sessions = this.filterSessions(projectData.sessions)
+
+      // Check if this is the current project (use cache from root getChildren)
+      const isCurrentProject = element.projectName === this.currentProjectName
 
       const titleMode = vscode.workspace
         .getConfiguration('claudeSessions')
         .get<TitleDisplayMode>('titleDisplayMode', 'message')
       const locale = vscode.env.language
 
-      return projectData.sessions.map((s, index) => {
+      return sessions.map((s, index) => {
         // Calculate if session has sub-items (summaries, agents, todos)
         const hasSubItems = sessionHasSubItems(s)
 
-        // Auto-expand first session in current project
-        const shouldExpand = isCurrentProject && index === 0 && hasSubItems
+        // When filtering, show sessions collapsed (flat feel)
+        const shouldExpand = !this.filterText && isCurrentProject && index === 0 && hasSubItems
 
         // In datetime mode, show first message as description instead of timestamp
         const descriptionText =
