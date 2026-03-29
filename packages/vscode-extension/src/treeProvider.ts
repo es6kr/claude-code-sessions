@@ -1,6 +1,11 @@
 import * as vscode from 'vscode'
 import * as session from '@claude-sessions/core'
-import type { TodoItem, SessionSortOptions, TreeItemType } from '@claude-sessions/core'
+import type {
+  TodoItem,
+  SessionSortOptions,
+  TreeItemType,
+  TitleDisplayMode,
+} from '@claude-sessions/core'
 import {
   maskHomePath,
   sortProjects,
@@ -242,6 +247,11 @@ export class SessionTreeProvider
       const currentProjectName = this.findCurrentProject(projectNames)
       const isCurrentProject = element.projectName === currentProjectName
 
+      const titleMode = vscode.workspace
+        .getConfiguration('claudeSessions')
+        .get<TitleDisplayMode>('titleDisplayMode', 'message')
+      const locale = vscode.env.language
+
       return projectData.sessions.map((s, index) => {
         // Calculate if session has sub-items (summaries, agents, todos)
         const hasSubItems = sessionHasSubItems(s)
@@ -249,8 +259,21 @@ export class SessionTreeProvider
         // Auto-expand first session in current project
         const shouldExpand = isCurrentProject && index === 0 && hasSubItems
 
+        // In datetime mode, show first message as description instead of timestamp
+        const descriptionText =
+          titleMode === 'datetime' && !s.customTitle && !s.currentSummary
+            ? session.getDisplayTitle(undefined, undefined, s.title)
+            : undefined
+
         return new SessionTreeItem(
-          session.getDisplayTitle(s.customTitle, s.currentSummary, s.title),
+          session.getDisplayTitle({
+            customTitle: s.customTitle,
+            currentSummary: s.currentSummary,
+            title: s.title,
+            createdAt: s.createdAt,
+            mode: titleMode,
+            locale,
+          }),
           hasSubItems
             ? shouldExpand
               ? vscode.TreeItemCollapsibleState.Expanded
@@ -264,7 +287,8 @@ export class SessionTreeProvider
           undefined, // todo
           undefined, // agentId
           undefined, // itemIndex
-          getSessionTooltip(s) // tooltip
+          getSessionTooltip(s), // tooltip
+          descriptionText // session description (first message in datetime mode)
         )
       })
     }
@@ -437,7 +461,8 @@ export class SessionTreeItem extends vscode.TreeItem {
     public readonly todo?: TodoItem,
     public readonly agentId?: string,
     public readonly itemIndex?: number,
-    public readonly sessionTooltipText?: string
+    public readonly sessionTooltipText?: string,
+    public readonly sessionDescription?: string
   ) {
     super(label, collapsibleState)
 
@@ -451,9 +476,11 @@ export class SessionTreeItem extends vscode.TreeItem {
     } else if (type === 'session') {
       this.iconPath = new vscode.ThemeIcon(TREE_ICONS.session.codicon)
 
-      // Simple description: count + timestamp
+      // Description: count + context (message text or timestamp)
       const parts: string[] = [`${count ?? 0}`]
-      if (sortTimestamp) {
+      if (sessionDescription) {
+        parts.push(sessionDescription)
+      } else if (sortTimestamp) {
         parts.push(formatRelativeTime(sortTimestamp))
       }
       this.description = parts.join(' · ')

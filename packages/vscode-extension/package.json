@@ -206,6 +206,19 @@
           "default": true,
           "description": "Open sessions in VS Code Simple Browser (true) or external browser (false)"
         },
+        "claudeSessions.titleDisplayMode": {
+          "type": "string",
+          "enum": [
+            "message",
+            "datetime"
+          ],
+          "default": "message",
+          "enumDescriptions": [
+            "Show first user message as session title",
+            "Show relative date/time (e.g. '3h ago', 'yesterday') as session title"
+          ],
+          "description": "How to display session titles when no custom title or summary is set"
+        },
         "claudeSessions.excludeProjectPatterns": {
           "type": "array",
           "items": {
@@ -247,8 +260,5 @@
     "mocha": "^11.7.5",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0"
-  },
-  "extensionDependencies": [
-    "Anthropic.claude-code"
-  ]
+  }
 }
