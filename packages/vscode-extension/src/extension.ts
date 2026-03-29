@@ -8,6 +8,16 @@ import { outputChannel } from './output'
 
 let webServerProcess: ChildProcess | null = null
 
+function shortLabel(text: string, max = 30): string {
+  return text.length > max ? text.slice(0, max - 1) + '…' : text
+}
+
+function shortProjectName(projectName: string): string {
+  // Extract last path segment from encoded folder name (e.g. "-home-work-projects-Foo" → "Foo")
+  const parts = projectName.split('-').filter(Boolean)
+  return parts.length > 0 ? parts[parts.length - 1] : projectName
+}
+
 // Configure core library to use VSCode output channel
 session.setLogger({
   debug: (msg: string) => outputChannel.appendLine(`[DEBUG] ${msg}`),
@@ -585,7 +595,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (mode === 'internal') {
           // Create terminal with proper name and cwd
           const terminal = vscode.window.createTerminal({
-            name: `Claude: ${item.label}`,
+            name: `Claude: ${shortLabel(item.label as string)}`,
             cwd,
           })
           terminal.show()
@@ -650,6 +660,59 @@ export function activate(context: vscode.ExtensionContext) {
         }
       }
     }),
+
+    vscode.commands.registerCommand(
+      'claudeSessions.openTerminalHere',
+      async (item: SessionTreeItem) => {
+        if (item.type !== 'session') return
+
+        const folderPath = await session.folderNameToPath(item.projectName)
+        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
+        const cwd = session.expandHomePath(folderPath, homeDir)
+
+        const terminal = vscode.window.createTerminal({
+          name: `Terminal: ${shortProjectName(item.projectName)}`,
+          cwd,
+        })
+        terminal.show()
+      }
+    ),
+
+    vscode.commands.registerCommand(
+      'claudeSessions.startClaudeYolo',
+      async (item: SessionTreeItem) => {
+        if (item.type !== 'session') return
+
+        const folderPath = await session.folderNameToPath(item.projectName)
+        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
+        const cwd = session.expandHomePath(folderPath, homeDir)
+
+        const terminal = vscode.window.createTerminal({
+          name: `Claude: ${shortProjectName(item.projectName)}`,
+          cwd,
+        })
+        terminal.show()
+        terminal.sendText('claude --dangerously-skip-permissions')
+      }
+    ),
+
+    vscode.commands.registerCommand(
+      'claudeSessions.resumeSessionYolo',
+      async (item: SessionTreeItem) => {
+        if (item.type !== 'session') return
+
+        const folderPath = await session.folderNameToPath(item.projectName)
+        const homeDir = process.env.HOME || process.env.USERPROFILE || ''
+        const cwd = session.expandHomePath(folderPath, homeDir)
+
+        const terminal = vscode.window.createTerminal({
+          name: `Claude: ${shortLabel(item.label as string)}`,
+          cwd,
+        })
+        terminal.show()
+        terminal.sendText(`claude --resume ${item.sessionId} --dangerously-skip-permissions`)
+      }
+    ),
 
     treeView
   )
