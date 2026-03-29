@@ -610,6 +610,12 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('claudeSessions.titleDisplayMode')) {
+        treeProvider.refresh()
+      }
+    }),
+
     vscode.commands.registerCommand('claudeSessions.restartWebServer', async () => {
       await killWebServer()
       try {

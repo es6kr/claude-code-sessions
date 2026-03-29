@@ -11,6 +11,7 @@
     TREE_ICONS,
     type SessionSortField,
     type SessionSortOrder,
+    type TitleDisplayMode,
   } from '@claude-sessions/core'
   import { appConfig } from '$lib/stores/config'
   import TooltipButton from './TooltipButton.svelte'
@@ -26,6 +27,7 @@
     loadingProject: string | null
     sortField: SessionSortField
     sortOrder: SessionSortOrder
+    titleDisplayMode: TitleDisplayMode
     onToggleProject: (name: string) => void
     onSelectSession: (session: SessionMeta) => void
     onRenameSession: (e: Event, session: SessionMeta) => void
@@ -33,6 +35,7 @@
     onMoveSession?: (session: SessionMeta, targetProject: string) => void
     onResumeSession?: (e: Event, session: SessionMeta) => void
     onSortChange?: (field: SessionSortField, order: SessionSortOrder) => void
+    onTitleModeChange?: (mode: TitleDisplayMode) => void
   }
 
   let {
@@ -44,6 +47,7 @@
     loadingProject,
     sortField,
     sortOrder,
+    titleDisplayMode,
     onToggleProject,
     onSelectSession,
     onRenameSession,
@@ -51,6 +55,7 @@
     onMoveSession,
     onResumeSession,
     onSortChange,
+    onTitleModeChange,
   }: Props = $props()
 
   // Sort field labels for display
@@ -80,7 +85,13 @@
   // Get display title using core utility
   const getDisplayTitle = (session: SessionMeta): string => {
     const data = getSessionData(session.projectName, session.id)
-    return coreGetDisplayTitle(data?.customTitle, data?.currentSummary, session.title)
+    return coreGetDisplayTitle({
+      customTitle: data?.customTitle,
+      currentSummary: data?.currentSummary,
+      title: session.title,
+      createdAt: session.createdAt,
+      mode: titleDisplayMode,
+    })
   }
 
   // Check if session has agents or todos (using core utilities)
@@ -216,6 +227,22 @@
         title={sortOrder === 'desc' ? 'Descending (newest first)' : 'Ascending (oldest first)'}
       >
         {sortOrder === 'desc' ? '↓' : '↑'}
+      </button>
+      <span class="border-l border-gh-border h-4"></span>
+      <button
+        class="bg-gh-bg-secondary border border-gh-border rounded px-2 py-1 text-sm cursor-pointer hover:border-gh-accent hover:bg-gh-border-subtle {titleDisplayMode ===
+        'datetime'
+          ? 'border-gh-accent text-gh-accent'
+          : ''}"
+        onclick={() => onTitleModeChange?.(titleDisplayMode === 'message' ? 'datetime' : 'message')}
+        aria-label={titleDisplayMode === 'message'
+          ? 'Showing first message — click for date/time'
+          : 'Showing date/time — click for first message'}
+        title={titleDisplayMode === 'message'
+          ? 'Showing first message — click for date/time'
+          : 'Showing date/time — click for first message'}
+      >
+        {titleDisplayMode === 'datetime' ? '🕐' : 'Aa'}
       </button>
     </div>
   </div>

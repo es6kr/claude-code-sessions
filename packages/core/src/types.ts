@@ -365,6 +365,13 @@ export type SessionSortField =
 
 export type SessionSortOrder = 'asc' | 'desc'
 
+/**
+ * Title display mode for session list
+ * - 'message': Show first user message (default, legacy behavior)
+ * - 'datetime': Show relative/absolute date when no custom title or summary
+ */
+export type TitleDisplayMode = 'message' | 'datetime'
+
 export interface SessionSortOptions {
   field: SessionSortField
   order: SessionSortOrder

@@ -10,6 +10,7 @@ import type {
   AskUserQuestionResult,
   SummaryInfo,
   SessionTodos,
+  TitleDisplayMode,
 } from './types.js'
 import { createLogger } from './logger.js'
 
@@ -131,23 +132,75 @@ export const isContinuationSummary = (msg: Message): boolean => {
 }
 
 /**
- * Get display title with fallback logic
- * Priority: customTitle > currentSummary (truncated) > title > fallback
- * Also handles slash command format in title
+ * Options for getDisplayTitle when using the options-based signature
  */
-export const getDisplayTitle = (
+export interface DisplayTitleOptions {
+  customTitle?: string
+  currentSummary?: string
+  title?: string
+  createdAt?: string
+  maxLength?: number
+  fallback?: string
+  /** 'message' = first user message (default), 'datetime' = relative date/time */
+  mode?: TitleDisplayMode
+  /** Locale for date formatting (e.g. 'de-DE', 'en-GB'). Defaults to system locale. */
+  locale?: string
+}
+
+/**
+ * Get display title with fallback logic
+ * Priority: customTitle > currentSummary (truncated) > title/datetime > fallback
+ * Also handles slash command format in title
+ *
+ * Supports two call signatures:
+ * - Legacy: getDisplayTitle(customTitle, currentSummary, title, maxLength?, fallback?)
+ * - Options: getDisplayTitle(options)
+ */
+export function getDisplayTitle(options: DisplayTitleOptions): string
+export function getDisplayTitle(
   customTitle: string | undefined,
   currentSummary: string | undefined,
   title: string | undefined,
+  maxLength?: number,
+  fallback?: string
+): string
+export function getDisplayTitle(
+  customTitleOrOptions: string | undefined | DisplayTitleOptions,
+  currentSummary?: string | undefined,
+  title?: string | undefined,
   maxLength = 60,
   fallback = 'Untitled'
-): string => {
+): string {
+  let mode: TitleDisplayMode = 'message'
+  let createdAt: string | undefined
+  let customTitle: string | undefined
+  let locale: string | undefined
+
+  if (typeof customTitleOrOptions === 'object' && customTitleOrOptions !== null) {
+    const opts = customTitleOrOptions
+    customTitle = opts.customTitle
+    currentSummary = opts.currentSummary
+    title = opts.title
+    createdAt = opts.createdAt
+    maxLength = opts.maxLength ?? 60
+    fallback = opts.fallback ?? 'Untitled'
+    mode = opts.mode ?? 'message'
+    locale = opts.locale
+  } else {
+    customTitle = customTitleOrOptions
+  }
+
   if (customTitle) return customTitle
   if (currentSummary) {
     return currentSummary.length > maxLength
       ? currentSummary.slice(0, maxLength - 3) + '...'
       : currentSummary
   }
+
+  if (mode === 'datetime' && createdAt) {
+    return formatRelativeTime(createdAt, locale)
+  }
+
   if (title && title !== 'Untitled') {
     // Extract first paragraph to avoid parsing embedded JSON/code
     const firstParagraph = title.includes('\n\n') ? title.split('\n\n')[0] : title
@@ -158,6 +211,7 @@ export const getDisplayTitle = (
     }
     return firstParagraph
   }
+
   return fallback
 }
 
@@ -296,7 +350,7 @@ export const readJsonlFile = <T = Record<string, unknown>>(
  * @param timestamp - Unix timestamp (ms) or ISO date string
  * @returns Relative time string
  */
-export const formatRelativeTime = (timestamp: number | string): string => {
+export const formatRelativeTime = (timestamp: number | string, locale?: string): string => {
   const date = typeof timestamp === 'string' ? new Date(timestamp) : new Date(timestamp)
   const now = new Date()
   const diff = now.getTime() - date.getTime()
@@ -310,7 +364,7 @@ export const formatRelativeTime = (timestamp: number | string): string => {
   if (hours < 24) return `${hours}h ago`
   if (days < 7) return `${days}d ago`
 
-  return date.toLocaleDateString()
+  return date.toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 /**
