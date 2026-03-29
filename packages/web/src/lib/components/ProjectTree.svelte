@@ -235,6 +235,9 @@
           ? 'border-gh-accent text-gh-accent'
           : ''}"
         onclick={() => onTitleModeChange?.(titleDisplayMode === 'message' ? 'datetime' : 'message')}
+        aria-label={titleDisplayMode === 'message'
+          ? 'Showing first message — click for date/time'
+          : 'Showing date/time — click for first message'}
         title={titleDisplayMode === 'message'
           ? 'Showing first message — click for date/time'
           : 'Showing date/time — click for first message'}
