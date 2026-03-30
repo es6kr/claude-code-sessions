@@ -110,7 +110,11 @@ export const searchSessions = (
         listSessions(project.name),
         Effect.map((sessions) =>
           sessions
-            .filter((session) => (session.title ?? '').toLowerCase().includes(queryLower))
+            .filter(
+              (session) =>
+                (session.title ?? '').toLowerCase().includes(queryLower) ||
+                project.name.toLowerCase().includes(queryLower)
+            )
             .map(
               (session) =>
                 ({

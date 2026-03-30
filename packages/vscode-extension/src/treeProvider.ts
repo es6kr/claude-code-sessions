@@ -234,8 +234,15 @@ export class SessionTreeProvider
     return promise
   }
 
-  private filterSessions(sessions: session.SessionTreeData[]): session.SessionTreeData[] {
+  private filterSessions(
+    sessions: session.SessionTreeData[],
+    projectName?: string
+  ): session.SessionTreeData[] {
     if (!this.filterText) return sessions
+    // If the project name itself matches, show all its sessions
+    if (projectName && projectName.toLowerCase().includes(this.filterText)) {
+      return sessions
+    }
     return sessions.filter((s) => {
       // Search across all available text: title, custom title, all summaries
       const texts = [
@@ -283,7 +290,7 @@ export class SessionTreeProvider
             batch.map(async (p) => {
               const data = await this.getProjectData(p.name)
               if (!data) return null
-              const matches = this.filterSessions(data.sessions)
+              const matches = this.filterSessions(data.sessions, p.name)
               if (matches.length === 0) return null
               return new SessionTreeItem(
                 maskHomePath(p.displayName, USER_HOME),
@@ -322,7 +329,7 @@ export class SessionTreeProvider
       if (!projectData) return []
 
       // Apply filter if set
-      const sessions = this.filterSessions(projectData.sessions)
+      const sessions = this.filterSessions(projectData.sessions, element.projectName)
 
       // Check if this is the current project (use cache from root getChildren)
       const isCurrentProject = element.projectName === this.currentProjectName

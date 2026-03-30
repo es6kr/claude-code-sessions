@@ -614,7 +614,7 @@ export function activate(context: vscode.ExtensionContext) {
       if (e.affectsConfiguration('claudeSessions.titleDisplayMode')) {
         treeProvider.refresh()
       }
-    }
+    }),
 
     vscode.commands.registerCommand('claudeSessions.restartWebServer', async () => {
       await killWebServer()
