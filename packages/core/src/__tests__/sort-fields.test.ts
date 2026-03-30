@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { SummaryInfo, AgentInfo, SessionTodos } from '../types.js'
-import { sortSessions } from '../session/tree.js'
+import { buildProjectTreeResult, sortSessions } from '../session/tree.js'
 import { getSessionSortTimestamp } from '../utils.js'
 
 /** Test session type with required fields for sorting */
@@ -354,5 +354,82 @@ describe('Edge cases for sorting', () => {
     expect(sortByCount.length).toBe(2)
     expect(sortByCount[0].messageCount).toBe(10)
     expect(sortByCount[1].messageCount).toBe(10)
+  })
+})
+
+describe('buildProjectTreeResult remaps sortTimestamp to match sort field', () => {
+  const project = { name: 'test', displayName: 'Test', path: '/tmp/test' }
+
+  const makeSession = (overrides: Partial<TestSession> & { id: string }): TestSession => ({
+    title: 'Test',
+    customTitle: undefined,
+    currentSummary: undefined,
+    messageCount: 1,
+    summaries: [],
+    projectName: 'test',
+    agents: [],
+    todos: emptyTodos(overrides.id),
+    sortTimestamp: 0,
+    ...overrides,
+  })
+
+  it('should use updatedAt when sorted by updated', () => {
+    const sessions = [
+      makeSession({
+        id: 's1',
+        updatedAt: '2026-01-20T00:00:00.000Z',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        summaries: [{ summary: 'old', timestamp: '2026-01-05T00:00:00.000Z' }],
+        sortTimestamp: getSessionSortTimestamp({
+          summaries: [{ summary: 'old', timestamp: '2026-01-05T00:00:00.000Z' }],
+          createdAt: '2026-01-01T00:00:00.000Z',
+        }),
+      }),
+    ]
+
+    const result = buildProjectTreeResult(project, sessions, { field: 'updated', order: 'desc' })
+    expect(result.sessions[0].sortTimestamp).toBe(new Date('2026-01-20T00:00:00.000Z').getTime())
+  })
+
+  it('should use createdAt when sorted by created', () => {
+    const sessions = [
+      makeSession({
+        id: 's1',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-20T00:00:00.000Z',
+        sortTimestamp: 999,
+      }),
+    ]
+
+    const result = buildProjectTreeResult(project, sessions, { field: 'created', order: 'desc' })
+    expect(result.sessions[0].sortTimestamp).toBe(new Date('2026-01-01T00:00:00.000Z').getTime())
+  })
+
+  it('should use fileMtime when sorted by modified', () => {
+    const sessions = [
+      makeSession({
+        id: 's1',
+        fileMtime: 1705708800000,
+        sortTimestamp: 999,
+      }),
+    ]
+
+    const result = buildProjectTreeResult(project, sessions, { field: 'modified', order: 'desc' })
+    expect(result.sessions[0].sortTimestamp).toBe(1705708800000)
+  })
+
+  it('should keep summary-based sortTimestamp when sorted by summary', () => {
+    const summaryTs = new Date('2026-01-12T00:00:00.000Z').getTime()
+    const sessions = [
+      makeSession({
+        id: 's1',
+        summaries: [{ summary: 'test', timestamp: '2026-01-12T00:00:00.000Z' }],
+        updatedAt: '2026-01-20T00:00:00.000Z',
+        sortTimestamp: summaryTs,
+      }),
+    ]
+
+    const result = buildProjectTreeResult(project, sessions, { field: 'summary', order: 'desc' })
+    expect(result.sessions[0].sortTimestamp).toBe(summaryTs)
   })
 })

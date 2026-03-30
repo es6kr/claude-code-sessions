@@ -374,7 +374,7 @@ const sortSummaries = (summaries: SummaryInfo[]): SummaryInfo[] => {
 }
 
 /** Apply sort, filter error sessions, and wrap as ProjectTreeData */
-const buildProjectTreeResult = (
+export const buildProjectTreeResult = (
   project: { name: string; displayName: string; path: string },
   sessions: SessionTreeData[],
   sort: SessionSortOptions
