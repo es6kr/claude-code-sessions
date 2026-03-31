@@ -444,3 +444,61 @@ export const getSessionTooltip = (session: {
 export const canMoveSession = (sourceProject: string, targetProject: string): boolean => {
   return sourceProject !== targetProject
 }
+
+// ============================================================================
+// Date Grouping
+// ============================================================================
+
+export type DateGroupKey = 'today' | 'thisWeek' | 'older'
+
+export interface DateGroup<T> {
+  key: DateGroupKey
+  label: string
+  sessions: T[]
+}
+
+/**
+ * Group sessions by date: Today, This Week, Older.
+ * Sessions must already be sorted; grouping preserves their order within each group.
+ *
+ * @param sessions - Pre-sorted sessions
+ * @param getTimestamp - Extract a timestamp (ms) from each session for grouping
+ * @returns Array of DateGroup (only non-empty groups)
+ */
+export const groupSessionsByDate = <T>(
+  sessions: T[],
+  getTimestamp: (s: T) => number | undefined
+): DateGroup<T>[] => {
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+
+  // Start of this week (Monday)
+  const dayOfWeek = now.getDay()
+  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+  const weekStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - daysSinceMonday
+  ).getTime()
+
+  const today: T[] = []
+  const thisWeek: T[] = []
+  const older: T[] = []
+
+  for (const s of sessions) {
+    const ts = getTimestamp(s)
+    if (!ts || ts < weekStart) {
+      older.push(s)
+    } else if (ts >= todayStart) {
+      today.push(s)
+    } else {
+      thisWeek.push(s)
+    }
+  }
+
+  const groups: DateGroup<T>[] = []
+  if (today.length > 0) groups.push({ key: 'today', label: 'Today', sessions: today })
+  if (thisWeek.length > 0) groups.push({ key: 'thisWeek', label: 'This Week', sessions: thisWeek })
+  if (older.length > 0) groups.push({ key: 'older', label: 'Older', sessions: older })
+  return groups
+}

@@ -101,6 +101,11 @@
         "icon": "$(sort-precedence)"
       },
       {
+        "command": "claudeSessions.toggleGroupByDate",
+        "title": "Toggle Group by Date",
+        "icon": "$(calendar)"
+      },
+      {
         "command": "claudeSessions.filterSessions",
         "title": "Filter Sessions",
         "icon": "$(search)"
@@ -142,24 +147,29 @@
           "group": "navigation@2"
         },
         {
-          "command": "claudeSessions.cleanup",
+          "command": "claudeSessions.toggleGroupByDate",
           "when": "view == claudeSessions",
           "group": "navigation@3"
         },
         {
-          "command": "claudeSessions.openWebUI",
+          "command": "claudeSessions.cleanup",
           "when": "view == claudeSessions",
           "group": "navigation@4"
         },
         {
-          "command": "claudeSessions.refresh",
+          "command": "claudeSessions.openWebUI",
           "when": "view == claudeSessions",
           "group": "navigation@5"
         },
         {
-          "command": "workbench.action.restartExtensionHost",
+          "command": "claudeSessions.refresh",
           "when": "view == claudeSessions",
           "group": "navigation@6"
+        },
+        {
+          "command": "workbench.action.restartExtensionHost",
+          "when": "view == claudeSessions",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [
