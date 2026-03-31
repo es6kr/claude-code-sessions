@@ -71,6 +71,9 @@ export class SessionTreeProvider
   // Date grouping toggle
   private groupByDate = false
 
+  // Project display name cache (for date-grouped mode)
+  private projectDisplayNames = new Map<string, string>()
+
   getSortOptions(): SessionSortOptions {
     return this.sortOptions
   }
@@ -102,6 +105,7 @@ export class SessionTreeProvider
     this.currentProjectName = null
     this.inFlightRequests.clear()
     this.projectDataCache.clear()
+    this.projectDisplayNames.clear()
     this._onDidChangeTreeData.fire()
   }
 
@@ -322,7 +326,8 @@ export class SessionTreeProvider
         undefined, // itemIndex
         getSessionTooltip(s), // tooltip
         descriptionText, // session description (first message in datetime mode)
-        dateGrouped // pass through so session knows it's in grouped mode
+        dateGrouped, // pass through so session knows it's in grouped mode
+        dateGrouped ? this.projectDisplayNames.get(s.projectName) : undefined
       )
     })
   }
@@ -337,6 +342,15 @@ export class SessionTreeProvider
       excludePatterns.length > 0
         ? allProjects.filter((p) => !excludePatterns.some((pattern) => p.name.includes(pattern)))
         : allProjects
+
+    // Build project display name map for short labels
+    for (const p of projects) {
+      if (!this.projectDisplayNames.has(p.name)) {
+        const displayPath = maskHomePath(p.displayName, USER_HOME)
+        const lastSegment = displayPath.split('/').filter(Boolean).pop() ?? p.name
+        this.projectDisplayNames.set(p.name, lastSegment)
+      }
+    }
 
     const CONCURRENCY = 5
     const allSessions: session.SessionTreeData[] = []
@@ -626,7 +640,7 @@ export class SessionTreeProvider
 
 export class SessionTreeItem extends vscode.TreeItem {
   constructor(
-    public readonly label: string,
+    label: string,
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,
     public readonly type: TreeItemType,
     public readonly projectName: string,
@@ -638,7 +652,8 @@ export class SessionTreeItem extends vscode.TreeItem {
     public readonly itemIndex?: number,
     public readonly sessionTooltipText?: string,
     public readonly sessionDescription?: string,
-    public readonly dateGroupKey?: DateGroupKey
+    public readonly dateGroupKey?: DateGroupKey,
+    public readonly shortProjectName?: string
   ) {
     super(label, collapsibleState)
 
@@ -658,12 +673,10 @@ export class SessionTreeItem extends vscode.TreeItem {
       this.description = `${count ?? 0}`
     } else if (type === 'session') {
       // No icon for sessions - saves horizontal space
-      // Description: [project ·] count · context
+      // Description: [PROJECT ·] count · context
       const parts: string[] = []
-      if (dateGroupKey) {
-        // In date-grouped mode, show project name
-        const shortProject = projectName.split('-').pop() ?? projectName
-        parts.push(shortProject)
+      if (dateGroupKey && shortProjectName) {
+        parts.push(shortProjectName.toUpperCase())
       }
       parts.push(`${count ?? 0}`)
       if (sessionDescription) {
