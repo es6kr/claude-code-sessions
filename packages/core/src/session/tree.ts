@@ -8,7 +8,8 @@ import { getSessionsDir, folderNameToPath } from '../paths.js'
 import {
   extractTextContent,
   extractTitle,
-  getSessionSortTimestamp,
+  getDisplaySortTimestamp,
+  getSummarySortTimestamp,
   isErrorSessionTitle,
   parseJsonlLines,
   tryParseJsonLine,
@@ -239,7 +240,7 @@ const loadSessionTreeDataInternal = (
 
     // Pre-calculate sort timestamp for 'summary' field
     const createdAt = (firstMessage?.timestamp as string) ?? undefined
-    const sortTimestamp = getSessionSortTimestamp({ summaries, createdAt })
+    const sortTimestamp = getSummarySortTimestamp({ summaries, createdAt })
 
     return {
       id: sessionId,
@@ -374,7 +375,7 @@ const sortSummaries = (summaries: SummaryInfo[]): SummaryInfo[] => {
 }
 
 /** Apply sort, filter error sessions, and wrap as ProjectTreeData */
-const buildProjectTreeResult = (
+export const buildProjectTreeResult = (
   project: { name: string; displayName: string; path: string },
   sessions: SessionTreeData[],
   sort: SessionSortOptions
@@ -388,12 +389,18 @@ const buildProjectTreeResult = (
     return true
   })
 
+  // Remap sortTimestamp to match active sort field for display
+  const displaySessions = filteredSessions.map((s) => ({
+    ...s,
+    sortTimestamp: getDisplaySortTimestamp(s, sort.field),
+  }))
+
   return {
     name: project.name,
     displayName: project.displayName,
     path: project.path,
-    sessionCount: filteredSessions.length,
-    sessions: filteredSessions,
+    sessionCount: displaySessions.length,
+    sessions: displaySessions,
   }
 }
 
@@ -441,7 +448,7 @@ const updateSessionSummaries = (
   const newJson = JSON.stringify(newSummaries)
   if (oldJson === newJson) return cached
 
-  const newSortTimestamp = getSessionSortTimestamp({
+  const newSortTimestamp = getSummarySortTimestamp({
     summaries: newSummaries,
     createdAt: cached.createdAt,
   })

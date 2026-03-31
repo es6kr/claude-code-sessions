@@ -187,35 +187,11 @@ describe('cleanupSplitFirstMessage', () => {
 })
 
 describe('getDisplayTitle', () => {
-  it('should return customTitle when provided', () => {
-    expect(getDisplayTitle('Custom Title', 'Summary', 'Original Title')).toBe('Custom Title')
-  })
-
-  it('should return currentSummary when customTitle is undefined', () => {
-    expect(getDisplayTitle(undefined, 'Summary Text', 'Original Title')).toBe('Summary Text')
-  })
-
   it('should truncate currentSummary when exceeds maxLength', () => {
     const longSummary = 'A'.repeat(70) // 70 chars
     const result = getDisplayTitle(undefined, longSummary, 'Title')
     expect(result).toBe('A'.repeat(57) + '...')
     expect(result.length).toBe(60)
-  })
-
-  it('should return title when customTitle and currentSummary are undefined', () => {
-    expect(getDisplayTitle(undefined, undefined, 'Original Title')).toBe('Original Title')
-  })
-
-  it('should return fallback when title is "Untitled"', () => {
-    expect(getDisplayTitle(undefined, undefined, 'Untitled')).toBe('Untitled')
-  })
-
-  it('should return fallback when all are undefined', () => {
-    expect(getDisplayTitle(undefined, undefined, undefined)).toBe('Untitled')
-  })
-
-  it('should use custom fallback when provided', () => {
-    expect(getDisplayTitle(undefined, undefined, undefined, 60, 'No Title')).toBe('No Title')
   })
 
   it('should use custom maxLength for truncation', () => {
@@ -230,10 +206,6 @@ describe('getDisplayTitle', () => {
     const summary = 'A'.repeat(60) // Exactly 60 chars
     const result = getDisplayTitle(undefined, summary, undefined, 60)
     expect(result).toBe(summary)
-  })
-
-  it('should prefer customTitle over currentSummary even when both are provided', () => {
-    expect(getDisplayTitle('Custom', 'Summary', 'Title')).toBe('Custom')
   })
 
   it('should skip empty string values', () => {

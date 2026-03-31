@@ -8,6 +8,7 @@ import type {
   MessagePayload,
   TextContent,
   AskUserQuestionResult,
+  SessionSortField,
   SummaryInfo,
   SessionTodos,
   TitleDisplayMode,
@@ -269,15 +270,47 @@ export const maskHomePath = (text: string, homeDir: string): string => {
 }
 
 /**
- * Get sort timestamp for session (Unix timestamp ms)
- * Priority: summaries[0].timestamp > createdAt > 0
+ * Get summary-based sort timestamp for session (Unix timestamp ms)
+ * Used for 'summary' sort field. Priority: summaries[0].timestamp > createdAt > 0
  */
-export const getSessionSortTimestamp = (session: {
+export const getSummarySortTimestamp = (session: {
   summaries?: SummaryInfo[]
   createdAt?: string
 }): number => {
   const timestampStr = session.summaries?.[0]?.timestamp ?? session.createdAt
   return timestampStr ? new Date(timestampStr).getTime() : 0
+}
+
+/** @deprecated Use getSummarySortTimestamp instead */
+export const getSessionSortTimestamp = getSummarySortTimestamp
+
+/**
+ * Get display-ready sort timestamp based on active sort field.
+ * Returns the timestamp matching what the user sees as the sort order.
+ */
+export const getDisplaySortTimestamp = (
+  session: {
+    summaries?: SummaryInfo[]
+    createdAt?: string
+    updatedAt?: string
+    fileMtime?: number
+  },
+  sortField: SessionSortField
+): number => {
+  switch (sortField) {
+    case 'updated': {
+      if (session.updatedAt) return new Date(session.updatedAt).getTime()
+      return getSummarySortTimestamp(session)
+    }
+    case 'created': {
+      if (session.createdAt) return new Date(session.createdAt).getTime()
+      return getSummarySortTimestamp(session)
+    }
+    case 'modified':
+      return session.fileMtime ?? getSummarySortTimestamp(session)
+    default:
+      return getSummarySortTimestamp(session)
+  }
 }
 
 /**

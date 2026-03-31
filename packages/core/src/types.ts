@@ -333,7 +333,7 @@ export interface SessionTreeData {
   updatedAt?: string
   /** File modification time (Unix timestamp ms) */
   fileMtime?: number
-  /** Pre-calculated sort timestamp (Unix timestamp ms) for 'summary' field */
+  /** Pre-calculated sort timestamp (Unix timestamp ms) - reflects active sort field for display */
   sortTimestamp: number
   /** All summaries in reverse order (newest first) */
   summaries: SummaryInfo[]
