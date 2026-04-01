@@ -96,6 +96,21 @@
         "icon": "$(play)"
       },
       {
+        "command": "claudeSessions.openTerminalHere",
+        "title": "Open Terminal Here",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "claudeSessions.startClaudeYolo",
+        "title": "Start Claude (YOLO)",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "claudeSessions.resumeSessionYolo",
+        "title": "Resume Session (YOLO)",
+        "icon": "$(run-all)"
+      },
+      {
         "command": "claudeSessions.sortBy",
         "title": "Sort Sessions",
         "icon": "$(sort-precedence)"
@@ -164,6 +179,11 @@
       ],
       "view/item/context": [
         {
+          "command": "claudeSessions.openSession",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "1_open"
+        },
+        {
           "command": "claudeSessions.renameSession",
           "when": "view == claudeSessions && viewItem == session",
           "group": "inline@1"
@@ -187,6 +207,21 @@
           "command": "claudeSessions.moveSession",
           "when": "view == claudeSessions && viewItem == session",
           "group": "3_move"
+        },
+        {
+          "command": "claudeSessions.openTerminalHere",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "4_terminal"
+        },
+        {
+          "command": "claudeSessions.startClaudeYolo",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "4_terminal"
+        },
+        {
+          "command": "claudeSessions.resumeSessionYolo",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "4_terminal"
         },
         {
           "command": "claudeSessions.resumeSession",

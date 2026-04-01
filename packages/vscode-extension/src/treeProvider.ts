@@ -570,11 +570,7 @@ export class SessionTreeItem extends vscode.TreeItem {
         this.tooltip = sessionTooltipText
       }
 
-      this.command = {
-        command: 'claudeSessions.openSession',
-        title: 'Open Session',
-        arguments: [this],
-      }
+      // No click action - expanding shows sub-items, context menu has all actions
     } else if (type === 'summaries-group') {
       this.iconPath = new vscode.ThemeIcon(TREE_ICONS['summaries-group'].codicon)
       this.description = `${count ?? 0}`
