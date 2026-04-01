@@ -86,6 +86,14 @@
         "icon": "$(history)"
       },
       {
+        "command": "claudeSessions.revealInFinder",
+        "title": "Reveal in Finder"
+      },
+      {
+        "command": "claudeSessions.copyPath",
+        "title": "Copy Path"
+      },
+      {
         "command": "claudeSessions.moveSession",
         "title": "Move to Project...",
         "icon": "$(move)"
@@ -179,59 +187,59 @@
       ],
       "view/item/context": [
         {
-          "command": "claudeSessions.openSession",
-          "when": "view == claudeSessions && viewItem == session",
-          "group": "1_open"
-        },
-        {
-          "command": "claudeSessions.renameSession",
-          "when": "view == claudeSessions && viewItem == session",
-          "group": "inline@1"
-        },
-        {
-          "command": "claudeSessions.deleteSession",
-          "when": "view == claudeSessions && viewItem == session",
-          "group": "inline@2"
-        },
-        {
-          "command": "claudeSessions.renameSession",
-          "when": "view == claudeSessions && viewItem == session",
-          "group": "1_edit"
-        },
-        {
-          "command": "claudeSessions.deleteSession",
-          "when": "view == claudeSessions && viewItem == session",
-          "group": "2_delete"
-        },
-        {
-          "command": "claudeSessions.moveSession",
-          "when": "view == claudeSessions && viewItem == session",
-          "group": "3_move"
-        },
-        {
-          "command": "claudeSessions.openTerminalHere",
-          "when": "view == claudeSessions && viewItem == session",
-          "group": "4_terminal"
-        },
-        {
-          "command": "claudeSessions.startClaudeYolo",
-          "when": "view == claudeSessions && viewItem == session",
-          "group": "4_terminal"
-        },
-        {
-          "command": "claudeSessions.resumeSessionYolo",
-          "when": "view == claudeSessions && viewItem == session",
-          "group": "4_terminal"
-        },
-        {
           "command": "claudeSessions.resumeSession",
           "when": "view == claudeSessions && viewItem == session",
           "group": "inline@0"
         },
         {
+          "command": "claudeSessions.renameSession",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "inline@1"
+        },
+        {
+          "command": "claudeSessions.deleteSession",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "inline@2"
+        },
+        {
           "command": "claudeSessions.resumeSession",
           "when": "view == claudeSessions && viewItem == session",
-          "group": "0_resume"
+          "group": "0_open"
+        },
+        {
+          "command": "claudeSessions.openSession",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "0_open"
+        },
+        {
+          "command": "claudeSessions.resumeSessionYolo",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "0_open"
+        },
+        {
+          "command": "claudeSessions.renameSession",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "1_file"
+        },
+        {
+          "command": "claudeSessions.moveSession",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "1_file"
+        },
+        {
+          "command": "claudeSessions.deleteSession",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "1_file"
+        },
+        {
+          "command": "claudeSessions.revealInFinder",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "1_file"
+        },
+        {
+          "command": "claudeSessions.copyPath",
+          "when": "view == claudeSessions && viewItem == session",
+          "group": "1_file"
         },
         {
           "command": "claudeSessions.openProjectFolder",
@@ -250,6 +258,16 @@
         },
         {
           "command": "claudeSessions.openSessionsFolder",
+          "when": "view == claudeSessions && viewItem == project",
+          "group": "1_open"
+        },
+        {
+          "command": "claudeSessions.openTerminalHere",
+          "when": "view == claudeSessions && viewItem == project",
+          "group": "1_open"
+        },
+        {
+          "command": "claudeSessions.startClaudeYolo",
           "when": "view == claudeSessions && viewItem == project",
           "group": "1_open"
         }

@@ -356,6 +356,18 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
+    vscode.commands.registerCommand('claudeSessions.revealInFinder', (item: SessionTreeItem) => {
+      if (item && 'resourceUri' in item && item.resourceUri) {
+        vscode.commands.executeCommand('revealFileInOS', item.resourceUri)
+      }
+    }),
+
+    vscode.commands.registerCommand('claudeSessions.copyPath', (item: SessionTreeItem) => {
+      if (item && 'resourceUri' in item && item.resourceUri) {
+        vscode.env.clipboard.writeText(item.resourceUri.fsPath)
+      }
+    }),
+
     vscode.commands.registerCommand(
       'claudeSessions.moveSession',
       async (item: SessionTreeItem, selectedItems?: SessionTreeItem[]) => {
@@ -672,7 +684,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'claudeSessions.openTerminalHere',
       async (item: SessionTreeItem) => {
-        if (!item || item.type !== 'session') return
+        if (!item || (item.type !== 'session' && item.type !== 'project')) return
 
         const cwd = await resolveProjectCwd(item.projectName)
 
@@ -687,7 +699,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'claudeSessions.startClaudeYolo',
       async (item: SessionTreeItem) => {
-        if (!item || item.type !== 'session') return
+        if (!item || (item.type !== 'session' && item.type !== 'project')) return
 
         const cwd = await resolveProjectCwd(item.projectName)
 
