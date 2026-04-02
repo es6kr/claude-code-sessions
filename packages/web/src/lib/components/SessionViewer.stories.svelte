@@ -76,6 +76,7 @@
     session: mockSession,
     messages: mockMessages,
     backUrl: '/',
+    onResumeSession: noop,
     onRenameSession: noop,
     onCompressSession: noop,
     onDeleteSession: noop,
@@ -106,11 +107,28 @@
 </Story>
 
 <Story
+  name="With Resume Button"
+  args={{
+    session: mockSession,
+    messages: mockMessages,
+    onResumeSession: noop,
+    enableScroll: true,
+  }}
+>
+  {#snippet children(args)}
+    <div class="bg-gh-canvas" style="height: 600px;">
+      <SessionViewer {...args} />
+    </div>
+  {/snippet}
+</Story>
+
+<Story
   name="With Todos"
   args={{
     session: mockSession,
     messages: mockMessages,
     todos: mockTodos,
+    onResumeSession: noop,
     onRenameSession: noop,
     onCompressSession: noop,
     onDeleteSession: noop,
@@ -144,6 +162,7 @@
   args={{
     session: mockSession,
     messages: [],
+    onResumeSession: noop,
     onRenameSession: noop,
     onCompressSession: noop,
     onDeleteSession: noop,
