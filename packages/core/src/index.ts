@@ -80,6 +80,9 @@ export {
   sessionHasSubItems,
   getSessionTooltip,
   canMoveSession,
+  groupSessionsByDate,
+  type DateGroupKey,
+  type DateGroup,
 } from './utils.js'
 
 // Tree view constants and utilities
@@ -104,6 +107,8 @@ export {
 } from './todos.js'
 
 // Session operations
+export { sortSessions } from './session/tree.js'
+
 export {
   listProjects,
   listSessions,
