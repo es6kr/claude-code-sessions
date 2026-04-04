@@ -2,9 +2,7 @@
   import { defineMeta } from '@storybook/addon-svelte-csf'
   import ScrollButtons from './ScrollButtons.svelte'
 
-  const noop = () => {}
-
-  // Sample messages with various types for PIN navigation
+  // Sample messages with various types for navigation modes
   const baseMessages = [
     {
       uuid: 'msg-1',
@@ -65,50 +63,23 @@
     args: {
       messages: baseMessages,
       scrollContainer: null,
-      pinMode: 'compact',
-      onPinModeChange: noop,
     },
   })
 </script>
 
-<Story name="Default (Compact Mode)">
+<Story name="Default (User Mode)">
   {#snippet children(args)}
     <div class="p-4 bg-gh-canvas text-gh-text">
-      <p class="text-sm text-gh-text-secondary mb-4">PIN mode: Compact Summary (default)</p>
-      <ScrollButtons {...args} />
-    </div>
-  {/snippet}
-</Story>
-
-<Story name="Compact Boundary Mode" args={{ pinMode: 'compact_boundary' }}>
-  {#snippet children(args)}
-    <div class="p-4 bg-gh-canvas text-gh-text">
-      <p class="text-sm text-gh-text-secondary mb-4">PIN mode: Compact Boundary</p>
-      <ScrollButtons {...args} />
-    </div>
-  {/snippet}
-</Story>
-
-<Story name="Stop Hook Mode" args={{ pinMode: 'hook_stop' }}>
-  {#snippet children(args)}
-    <div class="p-4 bg-gh-canvas text-gh-text">
-      <p class="text-sm text-gh-text-secondary mb-4">PIN mode: Stop Hook</p>
-      <ScrollButtons {...args} />
-    </div>
-  {/snippet}
-</Story>
-
-<Story name="Any Hook Mode" args={{ pinMode: 'hook_any' }}>
-  {#snippet children(args)}
-    <div class="p-4 bg-gh-canvas text-gh-text">
-      <p class="text-sm text-gh-text-secondary mb-4">PIN mode: Any Hook</p>
+      <p class="text-sm text-gh-text-secondary mb-4">
+        Click the middle button to cycle navigation mode: User → Compact → Stop Hook
+      </p>
       <ScrollButtons {...args} />
     </div>
   {/snippet}
 </Story>
 
 <Story
-  name="No Pin Target"
+  name="Minimal Messages"
   args={{
     messages: [
       {
@@ -122,7 +93,18 @@
 >
   {#snippet children(args)}
     <div class="p-4 bg-gh-canvas text-gh-text">
-      <p class="text-sm text-gh-text-secondary mb-4">No pin target available (pin button hidden)</p>
+      <p class="text-sm text-gh-text-secondary mb-4">
+        Single user message — only user mode has targets
+      </p>
+      <ScrollButtons {...args} />
+    </div>
+  {/snippet}
+</Story>
+
+<Story name="Empty Messages" args={{ messages: [] }}>
+  {#snippet children(args)}
+    <div class="p-4 bg-gh-canvas text-gh-text">
+      <p class="text-sm text-gh-text-secondary mb-4">No messages — buttons hidden</p>
       <ScrollButtons {...args} />
     </div>
   {/snippet}

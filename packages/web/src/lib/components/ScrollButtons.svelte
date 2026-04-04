@@ -1,32 +1,48 @@
 <script lang="ts">
   import type { Message } from '$lib/api'
 
-  export type PinMode = 'compact' | 'compact_boundary' | 'hook_stop' | 'hook_any'
+  const NAV_MODES = ['user', 'compact', 'hook_stop'] as const
+  export type NavMode = (typeof NAV_MODES)[number]
 
-  const PIN_MODE_LABELS: Record<PinMode, string> = {
-    compact: 'Compact Summary',
-    compact_boundary: 'Compact Boundary',
-    hook_stop: 'Stop Hook',
-    hook_any: 'Any Hook',
-  }
+  const NAV_MODE_CONFIG: Record<NavMode, { label: string; prevLabel: string; nextLabel: string }> =
+    {
+      user: {
+        label: 'User messages',
+        prevLabel: 'Previous user message',
+        nextLabel: 'Next user message',
+      },
+      compact: {
+        label: 'Compact summaries',
+        prevLabel: 'Previous compact summary',
+        nextLabel: 'Next compact summary',
+      },
+      hook_stop: {
+        label: 'Stop hooks',
+        prevLabel: 'Previous stop hook',
+        nextLabel: 'Next stop hook',
+      },
+    }
 
   interface Props {
     messages: Message[]
     scrollContainer: HTMLElement | null | undefined
     class?: string
-    pinMode?: PinMode
-    onPinModeChange?: (mode: PinMode) => void
   }
 
-  let {
-    messages,
-    scrollContainer,
-    class: className = '',
-    pinMode = 'compact',
-    onPinModeChange,
-  }: Props = $props()
+  let { messages, scrollContainer, class: className = '' }: Props = $props()
 
-  let showPinDropdown = $state(false)
+  // Navigation mode state with localStorage persistence
+  const storedMode =
+    typeof window !== 'undefined'
+      ? (localStorage.getItem('claude-sessions-nav-mode') as NavMode | null)
+      : null
+  let navMode = $state<NavMode>(storedMode && NAV_MODES.includes(storedMode) ? storedMode : 'user')
+
+  const cycleNavMode = () => {
+    const idx = NAV_MODES.indexOf(navMode)
+    navMode = NAV_MODES[(idx + 1) % NAV_MODES.length]
+    localStorage.setItem('claude-sessions-nav-mode', navMode)
+  }
 
   // Check if message has user text content (not just tool_result without user input)
   const hasUserTextContent = (m: Message): boolean => {
@@ -45,7 +61,6 @@
         const marker = 'The user provided the following reason for the rejection:'
         const idx = toolUseResult.indexOf(marker)
         if (idx !== -1) {
-          // Check if there's non-whitespace content after marker
           const afterMarker = toolUseResult.slice(idx + marker.length)
           return afterMarker.trim().length > 0
         }
@@ -59,7 +74,6 @@
     if (typeof content === 'string') return content.trim().length > 0
     if (!Array.isArray(content)) return false
 
-    // Array of content items - look for text type (not tool_result)
     for (const item of content as Array<{ type?: string; text?: string }>) {
       if (item.type === 'text' && item.text?.trim()) {
         return true
@@ -68,85 +82,41 @@
     return false
   }
 
-  // Lazy-compute navigable indices only when needed (on button click)
+  // Check if message matches current navigation mode
+  const matchesNavMode = (m: Message, mode: NavMode): boolean => {
+    switch (mode) {
+      case 'user':
+        return hasUserTextContent(m)
+      case 'compact':
+        return (m as Message & { isCompactSummary?: boolean }).isCompactSummary === true
+      case 'hook_stop': {
+        if (m.type !== 'progress') return false
+        const data = (m as { data?: { hookEvent?: string } }).data
+        return data?.hookEvent === 'Stop'
+      }
+    }
+  }
+
+  // Lazy-compute navigable indices based on current mode
   let cachedIndices: number[] | null = null
   let cachedMessagesRef: Message[] | null = null
+  let cachedMode: NavMode | null = null
 
-  const getSplittableIndices = (): number[] => {
-    // Invalidate cache if messages array reference changed
-    if (cachedIndices === null || cachedMessagesRef !== messages) {
+  const getNavigableIndices = (): number[] => {
+    if (cachedIndices === null || cachedMessagesRef !== messages || cachedMode !== navMode) {
       cachedIndices = []
       for (let i = 0; i < messages.length; i++) {
-        if (hasUserTextContent(messages[i])) {
+        if (matchesNavMode(messages[i], navMode)) {
           cachedIndices.push(i)
         }
       }
       cachedMessagesRef = messages
+      cachedMode = navMode
     }
     return cachedIndices
   }
 
-  // Check if a message matches the given pin mode
-  const matchesPinMode = (msg: Message, mode: PinMode): boolean => {
-    switch (mode) {
-      case 'compact':
-        return (msg as Message & { isCompactSummary?: boolean }).isCompactSummary === true
-      case 'compact_boundary':
-        return (
-          msg.type === 'compact_boundary' ||
-          (msg.type === 'system' && msg.subtype === 'compact_boundary')
-        )
-      case 'hook_stop': {
-        if (msg.type !== 'progress') return false
-        const data = (msg as { data?: { hookEvent?: string } }).data
-        return data?.hookEvent === 'Stop'
-      }
-      case 'hook_any':
-        return msg.type === 'progress'
-    }
-  }
-
-  // Lazy-compute pin target index and visibility
-  let cachedPinIndex: number = -1
-  let cachedPinMessagesRef: Message[] | null = null
-  let cachedPinMode: PinMode | null = null
-
-  const computePinCache = () => {
-    if (cachedPinMessagesRef !== messages || cachedPinMode !== pinMode) {
-      cachedPinIndex = -1
-      for (let i = messages.length - 1; i >= 0; i--) {
-        if (matchesPinMode(messages[i], pinMode)) {
-          cachedPinIndex = i
-          break
-        }
-      }
-      cachedPinMessagesRef = messages
-      cachedPinMode = pinMode
-    }
-  }
-
-  const getLastPinIndex = (): number => {
-    computePinCache()
-    return cachedPinIndex
-  }
-
-  // For button visibility
-  const checkHasPinTarget = (): boolean => {
-    computePinCache()
-    return cachedPinIndex >= 0
-  }
-
-  // Use $state for button visibility (updated on user interaction)
-  let showPinButton = $state(false)
-
-  // Update button visibility when messages or pinMode change
-  $effect(() => {
-    const _len = messages.length // Track changes
-    const _mode = pinMode
-    showPinButton = checkHasPinTarget()
-  })
-
-  // Track currently visible message index (used for debugging, kept for future use)
+  // Track currently visible message index
   let _currentVisibleIndex = $state(0)
 
   // Get currently visible message's index in the messages array
@@ -158,9 +128,7 @@
     for (let i = 0; i < elements.length; i++) {
       const el = elements[i] as HTMLElement
       const rect = el.getBoundingClientRect()
-      // Find first element whose top is at or below the container top
       if (rect.top >= containerRect.top - 50) {
-        // Return the message array index, not DOM index
         const msgId = el.getAttribute('data-msg-id')
         const msgIndex = messages.findIndex(
           (m) => (m.uuid ?? `idx-${messages.indexOf(m)}`) === msgId
@@ -192,63 +160,35 @@
     _currentVisibleIndex = messages.length - 1
   }
 
-  const scrollToPin = () => {
-    const pinIdx = getLastPinIndex()
-    if (pinIdx >= 0) {
-      scrollToIndex(pinIdx)
-    }
-  }
-
-  const selectPinMode = (mode: PinMode) => {
-    showPinDropdown = false
-    onPinModeChange?.(mode)
-  }
-
-  // Close dropdown when clicking outside
-  const handleClickOutside = (e: MouseEvent) => {
-    if (showPinDropdown) {
-      const target = e.target as HTMLElement
-      if (!target.closest('.pin-dropdown-container')) {
-        showPinDropdown = false
-      }
-    }
-  }
-
-  // Navigate to previous splittable message
+  // Navigate to previous message matching current mode
   const scrollToPrev = () => {
     const currentIdx = getCurrentVisibleMessageIndex()
-    const indices = getSplittableIndices()
-    // Find the previous splittable message index
+    const indices = getNavigableIndices()
     for (let i = indices.length - 1; i >= 0; i--) {
       if (indices[i] < currentIdx) {
         scrollToIndex(indices[i])
         return
       }
     }
-    // If at first splittable message or before, go to top
     scrollToTop()
   }
 
-  // Navigate to next splittable message
+  // Navigate to next message matching current mode
   const scrollToNext = () => {
     const currentIdx = getCurrentVisibleMessageIndex()
-    const indices = getSplittableIndices()
-    // Find the next splittable message index
+    const indices = getNavigableIndices()
     for (const idx of indices) {
       if (idx > currentIdx) {
         scrollToIndex(idx)
         return
       }
     }
-    // If at last splittable message, go to bottom
     scrollToBottom()
   }
 
   const buttonClass =
     'p-1.5 text-sm rounded border border-gh-border hover:bg-gh-border-subtle text-gh-text-secondary hover:text-gh-text transition-colors bg-gh-bg'
 </script>
-
-<svelte:window onclick={handleClickOutside} />
 
 {#if messages.length > 0}
   <div class="flex gap-0.5 {className}">
@@ -267,67 +207,56 @@
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
       </svg>
-      <span class="tooltip">Previous user message</span>
+      <span class="tooltip">{NAV_MODE_CONFIG[navMode].prevLabel}</span>
     </button>
-    {#if showPinButton}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="pin-dropdown-container relative">
-        <button class="nav-btn {buttonClass}" onclick={scrollToPin}>
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-            />
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-            />
-          </svg>
-          <span class="tooltip">{PIN_MODE_LABELS[pinMode]}</span>
-        </button>
-        <button
-          class="pin-mode-toggle p-0.5 rounded text-gh-text-secondary hover:text-gh-text hover:bg-gh-border-subtle transition-colors"
-          onclick={() => (showPinDropdown = !showPinDropdown)}
-          title="Change pin navigation mode"
-          aria-label="Change pin navigation mode"
-        >
-          <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M19 9l-7 7-7-7"
-            />
-          </svg>
-        </button>
-        {#if showPinDropdown}
-          <div
-            class="pin-dropdown absolute top-full left-0 mt-1 py-1 bg-gh-bg border border-gh-border rounded-md shadow-lg z-50 min-w-[160px]"
-            onclick={(e) => e.stopPropagation()}
-          >
-            {#each Object.entries(PIN_MODE_LABELS) as [mode, label]}
-              <button
-                class="w-full text-left px-3 py-1.5 text-xs hover:bg-gh-border-subtle transition-colors
-                       {mode === pinMode ? 'text-gh-accent font-medium' : 'text-gh-text-secondary'}"
-                onclick={() => selectPinMode(mode as PinMode)}
-              >
-                {label}
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/if}
+    <button class="nav-btn mode-btn {buttonClass}" onclick={cycleNavMode}>
+      {#if navMode === 'user'}
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+          />
+        </svg>
+      {:else if navMode === 'compact'}
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
+          />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
+          />
+        </svg>
+      {:else}
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
+          />
+        </svg>
+      {/if}
+      <span class="tooltip">Navigate: {NAV_MODE_CONFIG[navMode].label}</span>
+    </button>
     <button class="nav-btn {buttonClass}" onclick={scrollToNext}>
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 9l7 7 7-7" />
       </svg>
-      <span class="tooltip">Next user message</span>
+      <span class="tooltip">{NAV_MODE_CONFIG[navMode].nextLabel}</span>
     </button>
     <button class="nav-btn {buttonClass}" onclick={scrollToBottom}>
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -346,6 +275,9 @@
 <style>
   .nav-btn {
     position: relative;
+  }
+  .mode-btn {
+    border-style: dashed;
   }
   .tooltip {
     position: absolute;
