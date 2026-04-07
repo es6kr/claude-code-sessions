@@ -150,9 +150,9 @@ export class SessionTreeProvider
       availableMimeTypes: types,
     })
 
-    // Need a target to drop onto
-    if (!target) {
-      debug('drop rejected: no target')
+    // Need a valid target to drop onto (date-group headers are not valid targets)
+    if (!target || target.type === 'date-group' || !target.projectName) {
+      debug('drop rejected: invalid target', { targetType: target?.type })
       return
     }
 
@@ -356,12 +356,13 @@ export class SessionTreeProvider
     const allSessions: session.SessionTreeData[] = []
     for (let i = 0; i < projects.length; i += CONCURRENCY) {
       const batch = projects.slice(i, i + CONCURRENCY)
-      const results = await Promise.all(batch.map((p) => this.getProjectData(p.name)))
-      for (const data of results) {
-        if (data) {
-          const filtered = this.filterSessions(data.sessions)
-          allSessions.push(...filtered)
+      const results = await Promise.allSettled(batch.map((p) => this.getProjectData(p.name)))
+      for (const result of results) {
+        if (result.status !== 'fulfilled' || !result.value) {
+          continue
         }
+        const filtered = this.filterSessions(result.value.sessions)
+        allSessions.push(...filtered)
       }
     }
 
