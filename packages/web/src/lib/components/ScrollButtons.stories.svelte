@@ -67,11 +67,11 @@
   })
 </script>
 
-<Story name="Default (User Mode)">
+<Story name="Default (Stop Hook Mode)">
   {#snippet children(args)}
     <div class="p-4 bg-gh-canvas text-gh-text">
       <p class="text-sm text-gh-text-secondary mb-4">
-        Click the middle button to cycle navigation mode: User → Compact → Stop Hook
+        Click the middle button to cycle navigation mode: Stop Hook → Compact → User
       </p>
       <ScrollButtons {...args} />
     </div>

@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Message } from '$lib/api'
 
-  const NAV_MODES = ['user', 'compact', 'hook_stop'] as const
-  export type NavMode = (typeof NAV_MODES)[number]
+  const NAV_MODES = ['hook_stop', 'compact', 'user'] as const
+  type NavMode = (typeof NAV_MODES)[number]
 
   const NAV_MODE_CONFIG: Record<NavMode, { label: string; prevLabel: string; nextLabel: string }> =
     {
@@ -32,11 +32,22 @@
   let { messages, scrollContainer, class: className = '' }: Props = $props()
 
   // Navigation mode state with localStorage persistence
+  const normalizeStoredMode = (mode: NavMode | null): NavMode => {
+    if (mode === 'user') return 'hook_stop'
+    return mode && NAV_MODES.includes(mode) ? mode : 'hook_stop'
+  }
+
   const storedMode =
     typeof window !== 'undefined'
       ? (localStorage.getItem('claude-sessions-nav-mode') as NavMode | null)
       : null
-  let navMode = $state<NavMode>(storedMode && NAV_MODES.includes(storedMode) ? storedMode : 'user')
+  let navMode = $state<NavMode>(normalizeStoredMode(storedMode))
+
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('claude-sessions-nav-mode', navMode)
+    }
+  })
 
   const cycleNavMode = () => {
     const idx = NAV_MODES.indexOf(navMode)

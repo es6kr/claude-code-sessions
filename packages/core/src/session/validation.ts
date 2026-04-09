@@ -142,9 +142,7 @@ export function validateChain(
 }
 
 /**
- * Validate for unwanted progress messages (hook outputs)
- *
- * Only 'Stop' hookEvent is treated as an error (should be removed)
+ * Validate for unwanted cleanup artifacts that should not remain in sessions.
  */
 export function validateProgressMessages(
   messages: readonly GenericMessage[]
@@ -153,26 +151,7 @@ export function validateProgressMessages(
 
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
-    if (msg.type === 'progress') {
-      const progressMsg = msg as GenericMessage & {
-        hookEvent?: string
-        hookName?: string
-        data?: { hookEvent?: string; hookName?: string }
-      }
-      // Support both flat (hookEvent) and nested (data.hookEvent) formats
-      const hookEvent = progressMsg.hookEvent ?? progressMsg.data?.hookEvent
-      const hookName = progressMsg.hookName ?? progressMsg.data?.hookName
-
-      // 'Stop' hookEvent is an error
-      if (hookEvent === 'Stop') {
-        errors.push({
-          type: 'unwanted_progress',
-          line: i + 1,
-          hookEvent,
-          hookName,
-        })
-      }
-    } else if (msg.type === 'saved_hook_context') {
+    if (msg.type === 'saved_hook_context') {
       errors.push({
         type: 'unwanted_progress',
         line: i + 1,

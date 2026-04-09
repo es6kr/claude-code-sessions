@@ -32,7 +32,7 @@
   }
 
   function handleRepairProgress() {
-    // Remove all progress messages with hookEvent: 'Stop'
+    // Remove all cleanup artifacts reported by validation
     const progressUuids = progressResult.errors
       .map((e) => {
         // Find the message at this line (1-indexed)
@@ -149,12 +149,14 @@
       <div
         class="text-sm font-medium {progressResult.valid ? 'text-green-400' : 'text-yellow-400'}"
       >
-        Progress: {progressResult.valid ? '✓ Clean' : `⚠ ${progressResult.errors.length} found`}
+        Cleanup: {progressResult.valid ? '✓ Clean' : `⚠ ${progressResult.errors.length} found`}
       </div>
       {#if progressResult.errors.length > 0}
         <ul class="mt-1 text-xs text-yellow-300">
           {#each progressResult.errors as error}
-            <li>L{error.line}: {error.hookName || error.hookEvent || 'unknown'}</li>
+            <li>
+              L{error.line}: {error.hookName || error.hookEvent || error.messageType || 'unknown'}
+            </li>
           {/each}
         </ul>
       {/if}

@@ -389,7 +389,7 @@ describe('validateToolUseResult', () => {
 })
 
 describe('validateProgressMessages', () => {
-  it('should detect Stop hookEvent as error', () => {
+  it('should preserve Stop hookEvent progress messages', () => {
     const messages = [
       { type: 'user', uuid: 'u1', parentUuid: null },
       { type: 'progress', uuid: 'p1', parentUuid: 'u1', hookEvent: 'Stop' },
@@ -398,16 +398,11 @@ describe('validateProgressMessages', () => {
 
     const result = validateProgressMessages(messages)
 
-    expect(result.valid).toBe(false)
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0]).toMatchObject({
-      type: 'unwanted_progress',
-      line: 2,
-      hookEvent: 'Stop',
-    })
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
   })
 
-  it('should ignore non-Stop and non-SessionStart:resume progress messages', () => {
+  it('should ignore progress messages that are not cleanup artifacts', () => {
     const messages = [
       { type: 'user', uuid: 'u1', parentUuid: null },
       {
@@ -462,11 +457,12 @@ describe('validateProgressMessages', () => {
     })
   })
 
-  it('should only count Stop among multiple progress messages', () => {
+  it('should only count saved_hook_context among mixed cleanup candidates', () => {
     const messages = [
       { type: 'user', uuid: 'u1', parentUuid: null },
       { type: 'progress', uuid: 'p1', parentUuid: 'u1', hookEvent: 'SessionStart' },
       { type: 'progress', uuid: 'p2', parentUuid: 'p1', hookEvent: 'Stop' },
+      { type: 'saved_hook_context', uuid: 's1', parentUuid: 'p2' },
       { type: 'assistant', uuid: 'a1', parentUuid: 'p2' },
     ]
 
@@ -474,7 +470,7 @@ describe('validateProgressMessages', () => {
 
     expect(result.valid).toBe(false)
     expect(result.errors).toHaveLength(1)
-    expect(result.errors[0].hookEvent).toBe('Stop')
+    expect(result.errors[0].messageType).toBe('saved_hook_context')
   })
 
   it('should return valid when no progress messages', () => {
@@ -496,7 +492,7 @@ describe('validateProgressMessages', () => {
     expect(result.errors).toHaveLength(0)
   })
 
-  it('should detect Stop in nested data.hookEvent format', () => {
+  it('should preserve Stop in nested data.hookEvent format', () => {
     const messages = [
       { type: 'user', uuid: 'u1', parentUuid: null },
       {
@@ -510,13 +506,8 @@ describe('validateProgressMessages', () => {
 
     const result = validateProgressMessages(messages)
 
-    expect(result.valid).toBe(false)
-    expect(result.errors).toHaveLength(1)
-    expect(result.errors[0]).toMatchObject({
-      type: 'unwanted_progress',
-      line: 2,
-      hookEvent: 'Stop',
-    })
+    expect(result.valid).toBe(true)
+    expect(result.errors).toHaveLength(0)
   })
 })
 
