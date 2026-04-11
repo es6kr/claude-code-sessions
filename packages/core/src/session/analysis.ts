@@ -235,13 +235,20 @@ export const compressSession = (
     // Collect messages to remove
     const messagesToRemove: Record<string, unknown>[] = []
 
-    // Filter messages based on keepSnapshots option, remove progress and duplicate custom-titles
+    // Filter messages based on keepSnapshots option, preserve Stop hooks, and remove duplicate custom-titles
     const filteredMessages = messages.filter((msg, idx) => {
-      // Always remove progress messages (hook progress, etc.)
       if (msg.type === 'progress') {
-        removedProgress++
-        messagesToRemove.push(msg)
-        return false
+        const hookEvent =
+          (typeof msg.hookEvent === 'string' ? msg.hookEvent : undefined) ??
+          (typeof msg.data === 'object' && msg.data !== null && 'hookEvent' in msg.data
+            ? (msg.data as { hookEvent?: unknown }).hookEvent
+            : undefined)
+
+        if (hookEvent !== 'Stop') {
+          removedProgress++
+          messagesToRemove.push(msg)
+          return false
+        }
       }
 
       // Keep only the last custom-title record

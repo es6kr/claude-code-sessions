@@ -92,14 +92,14 @@
         {:else}
           ⚠️
         {/if}
-        {progressErrors.length} progress
+        {progressErrors.length} cleanup item{progressErrors.length > 1 ? 's' : ''}
         {#if !isRepairing}
           - Remove
         {/if}
       </button>
     {:else}
       <span class="text-xs px-2 py-0.5 rounded bg-red-900/30 text-red-400 border border-red-700">
-        ⚠️ {progressErrors.length} progress
+        ⚠️ {progressErrors.length} cleanup item{progressErrors.length > 1 ? 's' : ''}
       </span>
     {/if}
     <!-- Tooltip with progress details -->
@@ -107,7 +107,7 @@
       class="absolute left-0 top-full mt-1 z-50 hidden group-hover:block
              bg-gh-bg border border-gh-border rounded-lg shadow-xl p-2 min-w-[200px] max-w-[350px]"
     >
-      <div class="text-xs text-gh-text-secondary mb-1">Progress messages (should be removed):</div>
+      <div class="text-xs text-gh-text-secondary mb-1">Cleanup artifacts:</div>
       <ul class="text-xs space-y-1">
         {#each progressErrors as error}
           <li class="text-red-400">
@@ -118,7 +118,7 @@
       </ul>
       {#if onRepairProgress}
         <div class="text-xs text-gh-text-secondary mt-2 pt-1 border-t border-gh-border">
-          Click to remove all progress messages
+          Click to remove all cleanup artifacts
         </div>
       {/if}
     </div>

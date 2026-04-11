@@ -101,7 +101,7 @@
       // Refresh messages from server
       await syncFromServer()
     } catch (e) {
-      console.error('Failed to remove progress messages:', e)
+      console.error('Failed to remove cleanup artifacts:', e)
     } finally {
       isRepairing = false
     }
