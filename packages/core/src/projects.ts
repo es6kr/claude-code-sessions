@@ -8,7 +8,8 @@ import { pathToFolderName } from './paths.js'
  * Sort projects with priority:
  * 1. Current project (if specified)
  * 2. Current user's home directory subpaths
- * 3. Others (alphabetically by displayName)
+ * 3. Most recently modified first (by newest session file mtime)
+ * 4. Alphabetically by displayName as tiebreaker
  */
 export const sortProjects = (
   projects: Project[],
@@ -42,7 +43,12 @@ export const sortProjects = (
       if (!aIsUserHome && bIsUserHome) return 1
     }
 
-    // Finally sort by display name
+    // Sort by most recently modified (newest first)
+    const aMtime = a.lastModified ?? 0
+    const bMtime = b.lastModified ?? 0
+    if (aMtime !== bMtime) return bMtime - aMtime
+
+    // Tiebreaker: alphabetical
     return a.displayName.localeCompare(b.displayName)
   })
 }
