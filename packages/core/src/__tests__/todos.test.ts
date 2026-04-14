@@ -235,14 +235,15 @@ describe('todos', () => {
     })
 
     it('should return empty when all todos have matching sessions', async () => {
+      const sessionId = 'aabb0011-2233-4455-6677-889900aabbcc'
       // Create a project with a session
       const projectDir = path.join(sessionsDir, 'test-project')
       await fs.mkdir(projectDir, { recursive: true })
-      await fs.writeFile(path.join(projectDir, 'session-1.jsonl'), '{"type":"user"}\n')
+      await fs.writeFile(path.join(projectDir, `${sessionId}.jsonl`), '{"type":"user"}\n')
 
       // Create matching todo
       await fs.writeFile(
-        path.join(todosDir, 'session-1.json'),
+        path.join(todosDir, `${sessionId}.json`),
         JSON.stringify([{ content: 'Task', status: 'pending' }])
       )
 
