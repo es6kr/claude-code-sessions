@@ -478,7 +478,7 @@ export const canMoveSession = (sourceProject: string, targetProject: string): bo
   return sourceProject !== targetProject
 }
 
-/** Check if a file or directory exists at the given path */
+/** Check if a file or directory is accessible at the given path (returns false for both missing and permission-denied paths) */
 export const fileExists = (filePath: string): Promise<boolean> =>
   fs
     .access(filePath)
