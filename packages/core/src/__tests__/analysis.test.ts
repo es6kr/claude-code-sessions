@@ -31,13 +31,14 @@ async function writeSession(
   await fs.writeFile(path.join(projectDir, `${sessionId}.jsonl`), content)
 }
 
-describe('analyzeSession', () => {
+// Shared sandbox setup for all analysis test suites
+function createSessionSandbox(prefix: string) {
   let tempDir: string
   let projectDir: string
   const projectName = 'test-project'
 
   beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-analysis-test-'))
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), prefix))
     projectDir = path.join(tempDir, projectName)
     await fs.mkdir(projectDir, { recursive: true })
     vi.mocked(getSessionsDir).mockReturnValue(tempDir)
@@ -48,8 +49,22 @@ describe('analyzeSession', () => {
     vi.clearAllMocks()
   })
 
+  return {
+    get tempDir() {
+      return tempDir
+    },
+    get projectDir() {
+      return projectDir
+    },
+    projectName,
+  }
+}
+
+describe('analyzeSession', () => {
+  const sandbox = createSessionSandbox('claude-analysis-test-')
+
   it('should count user and assistant messages', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -75,7 +90,7 @@ describe('analyzeSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(analyzeSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(analyzeSession(sandbox.projectName, 'session-1'))
 
     expect(result.stats.userMessages).toBe(2)
     expect(result.stats.assistantMessages).toBe(1)
@@ -83,7 +98,7 @@ describe('analyzeSession', () => {
   })
 
   it('should calculate session duration', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -102,13 +117,13 @@ describe('analyzeSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(analyzeSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(analyzeSession(sandbox.projectName, 'session-1'))
 
     expect(result.durationMinutes).toBe(30)
   })
 
   it('should track tool usage', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -141,7 +156,7 @@ describe('analyzeSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(analyzeSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(analyzeSession(sandbox.projectName, 'session-1'))
 
     expect(result.toolUsage).toHaveLength(2)
     const editTool = result.toolUsage.find((t) => t.name === 'Edit')
@@ -151,7 +166,7 @@ describe('analyzeSession', () => {
   })
 
   it('should track files changed by Edit and Write tools', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'assistant',
         uuid: 'msg-1',
@@ -171,14 +186,14 @@ describe('analyzeSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(analyzeSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(analyzeSession(sandbox.projectName, 'session-1'))
 
     expect(result.filesChanged).toContain('/project/new.ts')
     expect(result.filesChanged).toContain('/project/old.ts')
   })
 
   it('should detect high error rate pattern', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'assistant',
         uuid: 'msg-1',
@@ -207,7 +222,7 @@ describe('analyzeSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(analyzeSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(analyzeSession(sandbox.projectName, 'session-1'))
 
     const highErrorPattern = result.patterns.find((p) => p.type === 'high_error_rate')
     expect(highErrorPattern).toBeDefined()
@@ -215,7 +230,7 @@ describe('analyzeSession', () => {
   })
 
   it('should count summary and snapshot messages', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'summary',
         uuid: 'msg-1',
@@ -230,7 +245,7 @@ describe('analyzeSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(analyzeSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(analyzeSession(sandbox.projectName, 'session-1'))
 
     expect(result.stats.summaryCount).toBe(1)
     expect(result.stats.snapshotCount).toBe(1)
@@ -238,7 +253,7 @@ describe('analyzeSession', () => {
   })
 
   it('should detect milestone from user messages containing commit keyword', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -249,7 +264,7 @@ describe('analyzeSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(analyzeSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(analyzeSession(sandbox.projectName, 'session-1'))
 
     expect(result.milestones).toHaveLength(1)
     expect(result.milestones[0].description).toContain('commit')
@@ -257,24 +272,10 @@ describe('analyzeSession', () => {
 })
 
 describe('compressSession', () => {
-  let tempDir: string
-  let projectDir: string
-  const projectName = 'test-project'
-
-  beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-compress-test-'))
-    projectDir = path.join(tempDir, projectName)
-    await fs.mkdir(projectDir, { recursive: true })
-    vi.mocked(getSessionsDir).mockReturnValue(tempDir)
-  })
-
-  afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true })
-    vi.clearAllMocks()
-  })
+  const sandbox = createSessionSandbox('claude-compress-test-')
 
   it('should remove intermediate snapshots with first_last option', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -302,19 +303,19 @@ describe('compressSession', () => {
     ])
 
     const result = await Effect.runPromise(
-      compressSession(projectName, 'session-1', { keepSnapshots: 'first_last' })
+      compressSession(sandbox.projectName, 'session-1', { keepSnapshots: 'first_last' })
     )
 
     expect(result.success).toBe(true)
     expect(result.removedSnapshots).toBe(1) // middle one removed
 
-    const content = await fs.readFile(path.join(projectDir, 'session-1.jsonl'), 'utf-8')
+    const content = await fs.readFile(path.join(sandbox.projectDir, 'session-1.jsonl'), 'utf-8')
     const lines = content.trim().split('\n').filter(Boolean)
     expect(lines).toHaveLength(3) // user + first snap + last snap
   })
 
   it('should remove all snapshots with none option', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -330,7 +331,7 @@ describe('compressSession', () => {
     ])
 
     const result = await Effect.runPromise(
-      compressSession(projectName, 'session-1', { keepSnapshots: 'none' })
+      compressSession(sandbox.projectName, 'session-1', { keepSnapshots: 'none' })
     )
 
     expect(result.removedSnapshots).toBe(1)
@@ -338,7 +339,7 @@ describe('compressSession', () => {
 
   it('should truncate long tool outputs', async () => {
     const longOutput = 'x'.repeat(10000)
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -348,19 +349,19 @@ describe('compressSession', () => {
     ])
 
     const result = await Effect.runPromise(
-      compressSession(projectName, 'session-1', { maxToolOutputLength: 100 })
+      compressSession(sandbox.projectName, 'session-1', { maxToolOutputLength: 100 })
     )
 
     expect(result.truncatedOutputs).toBe(1)
 
-    const content = await fs.readFile(path.join(projectDir, 'session-1.jsonl'), 'utf-8')
+    const content = await fs.readFile(path.join(sandbox.projectDir, 'session-1.jsonl'), 'utf-8')
     const msg = JSON.parse(content.trim())
     expect(msg.content[0].content.length).toBeLessThan(200)
     expect(msg.content[0].content).toContain('[truncated]')
   })
 
   it('should remove non-Stop progress messages', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -379,17 +380,17 @@ describe('compressSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(compressSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(compressSession(sandbox.projectName, 'session-1'))
 
     expect(result.removedProgress).toBe(1)
 
-    const content = await fs.readFile(path.join(projectDir, 'session-1.jsonl'), 'utf-8')
+    const content = await fs.readFile(path.join(sandbox.projectDir, 'session-1.jsonl'), 'utf-8')
     const lines = content.trim().split('\n').filter(Boolean)
     expect(lines).toHaveLength(2) // user + Stop progress
   })
 
   it('should keep only last custom-title when duplicates exist', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'custom-title',
         uuid: 'ct-1',
@@ -408,11 +409,11 @@ describe('compressSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(compressSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(compressSession(sandbox.projectName, 'session-1'))
 
     expect(result.removedCustomTitles).toBe(1)
 
-    const content = await fs.readFile(path.join(projectDir, 'session-1.jsonl'), 'utf-8')
+    const content = await fs.readFile(path.join(sandbox.projectDir, 'session-1.jsonl'), 'utf-8')
     const lines = content.trim().split('\n').filter(Boolean)
     const titles = lines
       .map((l) => JSON.parse(l))
@@ -422,7 +423,7 @@ describe('compressSession', () => {
   })
 
   it('should report compressed size smaller than original', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -437,31 +438,17 @@ describe('compressSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(compressSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(compressSession(sandbox.projectName, 'session-1'))
 
     expect(result.compressedSize).toBeLessThan(result.originalSize)
   })
 })
 
 describe('summarizeSession', () => {
-  let tempDir: string
-  let projectDir: string
-  const projectName = 'test-project'
-
-  beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-summarize-test-'))
-    projectDir = path.join(tempDir, projectName)
-    await fs.mkdir(projectDir, { recursive: true })
-    vi.mocked(getSessionsDir).mockReturnValue(tempDir)
-  })
-
-  afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true })
-    vi.clearAllMocks()
-  })
+  const sandbox = createSessionSandbox('claude-summarize-test-')
 
   it('should format user and assistant messages', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -480,7 +467,7 @@ describe('summarizeSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(summarizeSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(summarizeSession(sandbox.projectName, 'session-1'))
 
     expect(result.lines).toHaveLength(2)
     expect(result.lines[0].role).toBe('user')
@@ -503,16 +490,18 @@ describe('summarizeSession', () => {
       },
     }))
 
-    await writeSession(projectDir, 'session-1', messages)
+    await writeSession(sandbox.projectDir, 'session-1', messages)
 
-    const result = await Effect.runPromise(summarizeSession(projectName, 'session-1', { limit: 3 }))
+    const result = await Effect.runPromise(
+      summarizeSession(sandbox.projectName, 'session-1', { limit: 3 })
+    )
 
     expect(result.lines).toHaveLength(3)
   })
 
   it('should truncate long messages', async () => {
     const longText = 'A'.repeat(500)
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -522,7 +511,7 @@ describe('summarizeSession', () => {
     ])
 
     const result = await Effect.runPromise(
-      summarizeSession(projectName, 'session-1', { maxLength: 50 })
+      summarizeSession(sandbox.projectName, 'session-1', { maxLength: 50 })
     )
 
     expect(result.lines[0].content.length).toBeLessThanOrEqual(53) // 50 + '...'
@@ -530,7 +519,7 @@ describe('summarizeSession', () => {
   })
 
   it('should skip non-conversation message types', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'user',
         uuid: 'msg-1',
@@ -561,31 +550,17 @@ describe('summarizeSession', () => {
       },
     ])
 
-    const result = await Effect.runPromise(summarizeSession(projectName, 'session-1'))
+    const result = await Effect.runPromise(summarizeSession(sandbox.projectName, 'session-1'))
 
     expect(result.lines).toHaveLength(2) // only user + assistant
   })
 })
 
 describe('extractProjectKnowledge', () => {
-  let tempDir: string
-  let projectDir: string
-  const projectName = 'test-project'
-
-  beforeEach(async () => {
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-knowledge-test-'))
-    projectDir = path.join(tempDir, projectName)
-    await fs.mkdir(projectDir, { recursive: true })
-    vi.mocked(getSessionsDir).mockReturnValue(tempDir)
-  })
-
-  afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true })
-    vi.clearAllMocks()
-  })
+  const sandbox = createSessionSandbox('claude-knowledge-test-')
 
   it('should aggregate hot files across sessions', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'file-history-snapshot',
         uuid: 'snap-1',
@@ -597,7 +572,7 @@ describe('extractProjectKnowledge', () => {
       },
     ])
 
-    await writeSession(projectDir, 'session-2', [
+    await writeSession(sandbox.projectDir, 'session-2', [
       {
         type: 'file-history-snapshot',
         uuid: 'snap-2',
@@ -609,7 +584,7 @@ describe('extractProjectKnowledge', () => {
       },
     ])
 
-    const result = await Effect.runPromise(extractProjectKnowledge(projectName))
+    const result = await Effect.runPromise(extractProjectKnowledge(sandbox.projectName))
 
     expect(result.hotFiles[0].path).toBe('/project/hot-file.ts')
     expect(result.hotFiles[0].modifyCount).toBe(2)
@@ -617,7 +592,7 @@ describe('extractProjectKnowledge', () => {
 
   it('should detect workflow patterns from tool sequences', async () => {
     for (const id of ['session-1', 'session-2']) {
-      await writeSession(projectDir, id, [
+      await writeSession(sandbox.projectDir, id, [
         {
           type: 'assistant',
           uuid: `msg-${id}`,
@@ -634,7 +609,7 @@ describe('extractProjectKnowledge', () => {
       ])
     }
 
-    const result = await Effect.runPromise(extractProjectKnowledge(projectName))
+    const result = await Effect.runPromise(extractProjectKnowledge(sandbox.projectName))
 
     expect(result.workflows.length).toBeGreaterThanOrEqual(1)
     expect(result.workflows[0].sequence).toEqual(['Read', 'Edit', 'Bash'])
@@ -642,7 +617,7 @@ describe('extractProjectKnowledge', () => {
   })
 
   it('should extract decisions from summary messages', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'summary',
         uuid: 'sum-1',
@@ -651,7 +626,7 @@ describe('extractProjectKnowledge', () => {
       },
     ])
 
-    const result = await Effect.runPromise(extractProjectKnowledge(projectName))
+    const result = await Effect.runPromise(extractProjectKnowledge(sandbox.projectName))
 
     expect(result.decisions).toHaveLength(1)
     expect(result.decisions[0].decision).toContain('Effect-TS')
@@ -659,14 +634,14 @@ describe('extractProjectKnowledge', () => {
   })
 
   it('should only analyze specified session IDs when provided', async () => {
-    await writeSession(projectDir, 'session-1', [
+    await writeSession(sandbox.projectDir, 'session-1', [
       {
         type: 'summary',
         uuid: 'sum-1',
         summary: 'Session 1 decision',
       },
     ])
-    await writeSession(projectDir, 'session-2', [
+    await writeSession(sandbox.projectDir, 'session-2', [
       {
         type: 'summary',
         uuid: 'sum-2',
@@ -674,7 +649,9 @@ describe('extractProjectKnowledge', () => {
       },
     ])
 
-    const result = await Effect.runPromise(extractProjectKnowledge(projectName, ['session-1']))
+    const result = await Effect.runPromise(
+      extractProjectKnowledge(sandbox.projectName, ['session-1'])
+    )
 
     expect(result.decisions).toHaveLength(1)
     expect(result.decisions[0].sessionId).toBe('session-1')
