@@ -6,6 +6,7 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir, getTodosDir } from './paths.js'
 import type { TodoItem, SessionTodos } from './types.js'
+import { fileExists } from './utils.js'
 
 // Find linked todo files for a session and its agents
 // Scans todos directory for files matching session pattern
@@ -14,12 +15,7 @@ export const findLinkedTodos = (sessionId: string, agentIds: string[] = []) =>
     const todosDir = getTodosDir()
 
     // Check if todos directory exists
-    const exists = yield* Effect.tryPromise(() =>
-      fs
-        .access(todosDir)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const exists = yield* Effect.tryPromise(() => fileExists(todosDir))
 
     if (!exists) {
       return {
@@ -34,12 +30,7 @@ export const findLinkedTodos = (sessionId: string, agentIds: string[] = []) =>
     const sessionTodoPath = path.join(todosDir, `${sessionId}.json`)
     let sessionTodos: TodoItem[] = []
 
-    const sessionTodoExists = yield* Effect.tryPromise(() =>
-      fs
-        .access(sessionTodoPath)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const sessionTodoExists = yield* Effect.tryPromise(() => fileExists(sessionTodoPath))
 
     if (sessionTodoExists) {
       const content = yield* Effect.tryPromise(() => fs.readFile(sessionTodoPath, 'utf-8'))
@@ -71,12 +62,7 @@ export const findLinkedTodos = (sessionId: string, agentIds: string[] = []) =>
       const shortAgentId = agentId.replace('agent-', '')
       const agentTodoPath = path.join(todosDir, `${sessionId}-agent-${shortAgentId}.json`)
 
-      const agentTodoExists = yield* Effect.tryPromise(() =>
-        fs
-          .access(agentTodoPath)
-          .then(() => true)
-          .catch(() => false)
-      )
+      const agentTodoExists = yield* Effect.tryPromise(() => fileExists(agentTodoPath))
 
       if (agentTodoExists) {
         const content = yield* Effect.tryPromise(() => fs.readFile(agentTodoPath, 'utf-8'))
@@ -108,23 +94,13 @@ export const sessionHasTodos = (sessionId: string, agentIds: string[] = []) =>
     const todosDir = getTodosDir()
 
     // Check if todos directory exists
-    const exists = yield* Effect.tryPromise(() =>
-      fs
-        .access(todosDir)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const exists = yield* Effect.tryPromise(() => fileExists(todosDir))
 
     if (!exists) return false
 
     // Check session's own todo file
     const sessionTodoPath = path.join(todosDir, `${sessionId}.json`)
-    const sessionTodoExists = yield* Effect.tryPromise(() =>
-      fs
-        .access(sessionTodoPath)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const sessionTodoExists = yield* Effect.tryPromise(() => fileExists(sessionTodoPath))
 
     if (sessionTodoExists) {
       const content = yield* Effect.tryPromise(() => fs.readFile(sessionTodoPath, 'utf-8'))
@@ -154,12 +130,7 @@ export const sessionHasTodos = (sessionId: string, agentIds: string[] = []) =>
       const shortAgentId = agentId.replace('agent-', '')
       const agentTodoPath = path.join(todosDir, `${sessionId}-agent-${shortAgentId}.json`)
 
-      const agentTodoExists = yield* Effect.tryPromise(() =>
-        fs
-          .access(agentTodoPath)
-          .then(() => true)
-          .catch(() => false)
-      )
+      const agentTodoExists = yield* Effect.tryPromise(() => fileExists(agentTodoPath))
 
       if (agentTodoExists) {
         const content = yield* Effect.tryPromise(() => fs.readFile(agentTodoPath, 'utf-8'))
@@ -181,12 +152,7 @@ export const deleteLinkedTodos = (sessionId: string, agentIds: string[]) =>
     const todosDir = getTodosDir()
 
     // Check if todos directory exists
-    const exists = yield* Effect.tryPromise(() =>
-      fs
-        .access(todosDir)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const exists = yield* Effect.tryPromise(() => fileExists(todosDir))
 
     if (!exists) return { deletedCount: 0 }
 
@@ -198,12 +164,7 @@ export const deleteLinkedTodos = (sessionId: string, agentIds: string[]) =>
 
     // Delete session's own todo file
     const sessionTodoPath = path.join(todosDir, `${sessionId}.json`)
-    const sessionTodoExists = yield* Effect.tryPromise(() =>
-      fs
-        .access(sessionTodoPath)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const sessionTodoExists = yield* Effect.tryPromise(() => fileExists(sessionTodoPath))
 
     if (sessionTodoExists) {
       const backupPath = path.join(backupDir, `${sessionId}.json`)
@@ -216,12 +177,7 @@ export const deleteLinkedTodos = (sessionId: string, agentIds: string[]) =>
       const shortAgentId = agentId.replace('agent-', '')
       const agentTodoPath = path.join(todosDir, `${sessionId}-agent-${shortAgentId}.json`)
 
-      const agentTodoExists = yield* Effect.tryPromise(() =>
-        fs
-          .access(agentTodoPath)
-          .then(() => true)
-          .catch(() => false)
-      )
+      const agentTodoExists = yield* Effect.tryPromise(() => fileExists(agentTodoPath))
 
       if (agentTodoExists) {
         const backupPath = path.join(backupDir, `${sessionId}-agent-${shortAgentId}.json`)
@@ -241,18 +197,8 @@ export const findOrphanTodos = () =>
 
     // Check if directories exist
     const [todosExists, sessionsExists] = yield* Effect.all([
-      Effect.tryPromise(() =>
-        fs
-          .access(todosDir)
-          .then(() => true)
-          .catch(() => false)
-      ),
-      Effect.tryPromise(() =>
-        fs
-          .access(sessionsDir)
-          .then(() => true)
-          .catch(() => false)
-      ),
+      Effect.tryPromise(() => fileExists(todosDir)),
+      Effect.tryPromise(() => fileExists(sessionsDir)),
     ])
 
     if (!todosExists || !sessionsExists) return []

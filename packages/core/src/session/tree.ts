@@ -12,6 +12,7 @@ import {
   getSummarySortTimestamp,
   isErrorSessionTitle,
   parseJsonlLines,
+  fileExists,
   tryParseJsonLine,
 } from '../utils.js'
 import { findLinkedAgents } from '../agents.js'
@@ -471,12 +472,7 @@ export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSo
     const projectPath = path.join(getSessionsDir(), projectName)
 
     // Check project exists (fast: single stat instead of listing ALL projects)
-    const exists = yield* Effect.tryPromise(() =>
-      fs
-        .access(projectPath)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const exists = yield* Effect.tryPromise(() => fileExists(projectPath))
     if (!exists) return null
 
     // Resolve display name for this single project (avoids processing all projects)

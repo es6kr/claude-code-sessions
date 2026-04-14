@@ -477,3 +477,10 @@ export const getSessionTooltip = (session: {
 export const canMoveSession = (sourceProject: string, targetProject: string): boolean => {
   return sourceProject !== targetProject
 }
+
+/** Check if a file or directory exists at the given path */
+export const fileExists = (filePath: string): Promise<boolean> =>
+  fs
+    .access(filePath)
+    .then(() => true)
+    .catch(() => false)

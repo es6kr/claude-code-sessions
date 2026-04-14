@@ -80,6 +80,7 @@ export {
   sessionHasSubItems,
   getSessionTooltip,
   canMoveSession,
+  fileExists,
 } from './utils.js'
 
 // Tree view constants and utilities
