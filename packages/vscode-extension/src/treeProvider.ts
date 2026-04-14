@@ -6,6 +6,7 @@ import type {
   TreeItemType,
   TitleDisplayMode,
   DateGroupKey,
+  DateGroup,
 } from '@claude-sessions/core'
 import {
   maskHomePath,
@@ -74,6 +75,9 @@ export class SessionTreeProvider
   // Project display name cache (for date-grouped mode)
   private projectDisplayNames = new Map<string, string>()
 
+  // Cache of date-grouped sessions to avoid redundant loads between root and expansion
+  private groupedSessionsCache: DateGroup<session.SessionTreeData>[] | null = null
+
   getSortOptions(): SessionSortOptions {
     return this.sortOptions
   }
@@ -89,6 +93,7 @@ export class SessionTreeProvider
 
   setGroupByDate(enabled: boolean): void {
     this.groupByDate = enabled
+    this.groupedSessionsCache = null
     this._onDidChangeTreeData.fire()
   }
 
@@ -106,6 +111,7 @@ export class SessionTreeProvider
     this.inFlightRequests.clear()
     this.projectDataCache.clear()
     this.projectDisplayNames.clear()
+    this.groupedSessionsCache = null
     this._onDidChangeTreeData.fire()
   }
 
@@ -347,7 +353,7 @@ export class SessionTreeProvider
     for (const p of projects) {
       if (!this.projectDisplayNames.has(p.name)) {
         const displayPath = maskHomePath(p.displayName, USER_HOME)
-        const lastSegment = displayPath.split('/').filter(Boolean).pop() ?? p.name
+        const lastSegment = displayPath.split(/[/\\]/).filter(Boolean).pop() ?? p.name
         this.projectDisplayNames.set(p.name, lastSegment)
       }
     }
@@ -375,6 +381,7 @@ export class SessionTreeProvider
       if (this.groupByDate && !this.filterText) {
         const allSessions = await this.loadAllSessions()
         const groups = groupSessionsByDate(allSessions, (s) => this.getGroupTimestamp(s))
+        this.groupedSessionsCache = groups
 
         return groups.map(
           (g) =>
@@ -463,10 +470,14 @@ export class SessionTreeProvider
     }
 
     if (element.type === 'date-group') {
-      // Show sessions within a date group (loaded from all projects)
-      const allSessions = await this.loadAllSessions()
-      const groups = groupSessionsByDate(allSessions, (s) => this.getGroupTimestamp(s))
-      const group = groups.find((g) => g.key === element.dateGroupKey)
+      // Show sessions within a date group (reuse cache from root render when available)
+      if (!this.groupedSessionsCache) {
+        const allSessions = await this.loadAllSessions()
+        this.groupedSessionsCache = groupSessionsByDate(allSessions, (s) =>
+          this.getGroupTimestamp(s)
+        )
+      }
+      const group = this.groupedSessionsCache.find((g) => g.key === element.dateGroupKey)
       if (!group) return []
       return this.buildSessionItems(group.sessions, false, element.dateGroupKey)
     }
