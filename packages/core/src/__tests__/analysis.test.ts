@@ -126,6 +126,7 @@ describe('compressSession', () => {
     const compressed = await Effect.runPromise(readSession(projectName, sessionId))
     const snapshots = compressed.filter((m) => m.type === 'file-history-snapshot')
     expect(snapshots).toHaveLength(2)
+    expect(snapshots.map((s) => s.uuid)).toEqual(['snap-1', 'snap-3'])
   })
 
   it('should remove all snapshots with none strategy', async () => {
@@ -151,6 +152,8 @@ describe('compressSession', () => {
     )
 
     expect(result.removedSnapshots).toBe(2)
+    const compressed = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(compressed.some((m) => m.type === 'file-history-snapshot')).toBe(false)
   })
 
   it('should keep only the last custom-title', async () => {
@@ -172,6 +175,7 @@ describe('compressSession', () => {
     const compressed = await Effect.runPromise(readSession(projectName, sessionId))
     const titles = compressed.filter((m) => m.type === 'custom-title')
     expect(titles).toHaveLength(1)
+    expect(titles[0]).toMatchObject({ uuid: 'ct2', title: 'New title' })
   })
 
   it('should truncate long tool outputs', async () => {
