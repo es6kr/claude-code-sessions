@@ -4,8 +4,11 @@
 import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import { createLogger } from './logger.js'
 import { getSessionsDir } from './paths.js'
 import { tryParseJsonLine } from './utils.js'
+
+const log = createLogger('agents')
 import type { Message } from './types.js'
 
 // Find agent files linked to a session
@@ -28,8 +31,8 @@ export const findLinkedAgents = (projectName: string, sessionId: string) =>
           if (parsed.sessionId === sessionId) {
             linkedAgents.push(agentFile.replace('.jsonl', ''))
           }
-        } catch {
-          // Skip invalid JSON
+        } catch (error) {
+          log.debug(`Skipping invalid JSON in agent file: ${agentFile}`, error)
         }
       }
     }
@@ -79,8 +82,8 @@ const findOrphanAgentsWithPaths = (projectName: string) =>
             lineCount: lines.length,
           }
         }
-      } catch {
-        // Skip invalid files
+      } catch (error) {
+        log.debug(`Skipping invalid agent file: ${path.basename(filePath)}`, error)
       }
       return null
     }

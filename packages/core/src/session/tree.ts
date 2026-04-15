@@ -150,8 +150,8 @@ const loadSessionTreeDataInternal = (
               })
             }
           }
-        } catch {
-          // Skip unreadable files
+        } catch (error) {
+          log.debug(`Skipping unreadable file: ${file}`, error)
         }
       }
     }
@@ -226,8 +226,8 @@ const loadSessionTreeDataInternal = (
           name: agentName,
           messageCount: agentUserAssistant.length,
         })
-      } catch {
-        // Agent file might not exist or be readable
+      } catch (error) {
+        log.debug(`Agent file not readable: ${agentId}`, error)
         agents.push({
           id: agentId,
           messageCount: 0,
@@ -328,8 +328,8 @@ const buildPhase1 = (projectPath: string, allJsonlFiles: string[]) =>
                 })
               }
             }
-          } catch {
-            // Skip unreadable files
+          } catch (error) {
+            log.debug(`Skipping unreadable file: ${file}`, error)
           }
         })
       ),
@@ -497,8 +497,8 @@ export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSo
           try {
             const stat = yield* Effect.tryPromise(() => fs.stat(filePath))
             fileMtimes.set(file.replace('.jsonl', ''), stat.mtimeMs)
-          } catch {
-            // Ignore stat errors
+          } catch (error) {
+            log.debug(`Failed to stat file: ${file}`, error)
           }
         })
       ),
