@@ -541,6 +541,12 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
+    vscode.commands.registerCommand('claudeSessions.toggleGroupByDate', () => {
+      const current = treeProvider.getGroupByDate()
+      treeProvider.setGroupByDate(!current)
+      vscode.window.showInformationMessage(`Date grouping ${!current ? 'enabled' : 'disabled'}`)
+    }),
+
     vscode.commands.registerCommand('claudeSessions.cleanup', async () => {
       const preview = await vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: 'Scanning sessions...' },
@@ -678,6 +684,9 @@ export function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (e.affectsConfiguration('claudeSessions.titleDisplayMode')) {
+        treeProvider.refresh()
+      }
       if (
         e.affectsConfiguration('claudeSessions.packageTag') ||
         e.affectsConfiguration('claudeSessions.useBetaVersion')

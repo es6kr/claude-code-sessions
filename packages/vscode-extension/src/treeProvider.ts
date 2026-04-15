@@ -6,6 +6,8 @@ import type {
   SessionSortOptions,
   TreeItemType,
   TitleDisplayMode,
+  DateGroupKey,
+  DateGroup,
 } from '@claude-sessions/core'
 import {
   maskHomePath,
@@ -15,6 +17,8 @@ import {
   sessionHasSubItems,
   canMoveSession,
   getSessionTooltip,
+  groupSessionsByDate,
+  sortSessions,
   TREE_ICONS,
   getTodoIcon,
   generateTreeNodeId,
@@ -66,6 +70,15 @@ export class SessionTreeProvider
   // Sort options (persisted in memory, reset on restart)
   private sortOptions: SessionSortOptions = { field: 'updated', order: 'desc' }
 
+  // Date grouping toggle
+  private groupByDate = false
+
+  // Project display name cache (for date-grouped mode)
+  private projectDisplayNames = new Map<string, string>()
+
+  // Cache of date-grouped sessions to avoid redundant loads between root and expansion
+  private groupedSessionsCache: DateGroup<session.SessionTreeData>[] | null = null
+
   getSortOptions(): SessionSortOptions {
     return this.sortOptions
   }
@@ -73,6 +86,16 @@ export class SessionTreeProvider
   setSortOptions(options: SessionSortOptions): void {
     this.sortOptions = options
     this.refresh()
+  }
+
+  getGroupByDate(): boolean {
+    return this.groupByDate
+  }
+
+  setGroupByDate(enabled: boolean): void {
+    this.groupByDate = enabled
+    this.groupedSessionsCache = null
+    this._onDidChangeTreeData.fire()
   }
 
   getFilterText(): string {
@@ -88,6 +111,8 @@ export class SessionTreeProvider
     this.currentProjectName = null
     this.inFlightRequests.clear()
     this.projectDataCache.clear()
+    this.projectDisplayNames.clear()
+    this.groupedSessionsCache = null
     this._onDidChangeTreeData.fire()
   }
 
@@ -140,9 +165,9 @@ export class SessionTreeProvider
       availableMimeTypes: types,
     })
 
-    // Need a target to drop onto
-    if (!target) {
-      debug('drop rejected: no target')
+    // Need a valid target to drop onto (date-group headers are not valid targets)
+    if (!target || target.type === 'date-group' || !target.projectName) {
+      debug('drop rejected: invalid target', { targetType: target?.type })
       return
     }
 
@@ -243,8 +268,15 @@ export class SessionTreeProvider
     return promise
   }
 
-  private filterSessions(sessions: session.SessionTreeData[]): session.SessionTreeData[] {
+  private filterSessions(
+    sessions: session.SessionTreeData[],
+    projectName?: string
+  ): session.SessionTreeData[] {
     if (!this.filterText) return sessions
+    // If the project name itself matches, show all its sessions
+    if (projectName && projectName.toLowerCase().includes(this.filterText)) {
+      return sessions
+    }
     return sessions.filter((s) => {
       // Search across all available text: title, custom title, all summaries
       const texts = [
@@ -257,9 +289,117 @@ export class SessionTreeProvider
     })
   }
 
+  /** Get the grouping timestamp for a session based on current sort field */
+  private getGroupTimestamp(s: session.SessionTreeData): number | undefined {
+    const sort = this.sortOptions
+    if (sort.field === 'updated' && s.updatedAt) return new Date(s.updatedAt).getTime()
+    if (sort.field === 'created' && s.createdAt) return new Date(s.createdAt).getTime()
+    if (sort.field === 'modified' && s.fileMtime) return s.fileMtime
+    return s.updatedAt ? new Date(s.updatedAt).getTime() : s.sortTimestamp
+  }
+
+  private buildSessionItems(
+    sessions: session.SessionTreeData[],
+    expandFirst: boolean,
+    dateGrouped?: DateGroupKey
+  ): SessionFileTreeItem[] {
+    const titleMode = vscode.workspace
+      .getConfiguration('claudeSessions')
+      .get<TitleDisplayMode>('titleDisplayMode', 'message')
+    const locale = vscode.env.language
+
+    return sessions.map((s, index) => {
+      const hasSubItems = sessionHasSubItems(s)
+      const shouldExpand = !this.filterText && expandFirst && index === 0 && hasSubItems
+
+      const descriptionText =
+        titleMode === 'datetime' && !s.customTitle && !s.currentSummary
+          ? session.getDisplayTitle(undefined, undefined, s.title)
+          : undefined
+
+      return new SessionFileTreeItem(
+        session.getDisplayTitle({
+          customTitle: s.customTitle,
+          currentSummary: s.currentSummary,
+          title: s.title,
+          createdAt: s.createdAt,
+          mode: titleMode,
+          locale,
+        }),
+        hasSubItems
+          ? shouldExpand
+            ? vscode.TreeItemCollapsibleState.Expanded
+            : vscode.TreeItemCollapsibleState.Collapsed
+          : vscode.TreeItemCollapsibleState.None,
+        s.projectName,
+        s.id,
+        s.messageCount,
+        s.sortTimestamp,
+        getSessionTooltip(s), // tooltip
+        descriptionText, // session description (first message in datetime mode)
+        dateGrouped, // pass through so session knows it's in grouped mode
+        dateGrouped ? this.projectDisplayNames.get(s.projectName) : undefined
+      )
+    })
+  }
+
+  /** Load and merge sessions from all projects (for date-grouped view) */
+  private async loadAllSessions(): Promise<session.SessionTreeData[]> {
+    const allProjects = await Effect.runPromise(session.listProjects)
+    const excludePatterns = vscode.workspace
+      .getConfiguration('claudeSessions')
+      .get<string[]>('excludeProjectPatterns', [])
+    const projects =
+      excludePatterns.length > 0
+        ? allProjects.filter((p) => !excludePatterns.some((pattern) => p.name.includes(pattern)))
+        : allProjects
+
+    // Build project display name map for short labels
+    for (const p of projects) {
+      if (!this.projectDisplayNames.has(p.name)) {
+        const displayPath = maskHomePath(p.displayName, USER_HOME)
+        const lastSegment = displayPath.split(/[/\\]/).filter(Boolean).pop() ?? p.name
+        this.projectDisplayNames.set(p.name, lastSegment)
+      }
+    }
+
+    const CONCURRENCY = 5
+    const allSessions: session.SessionTreeData[] = []
+    for (let i = 0; i < projects.length; i += CONCURRENCY) {
+      const batch = projects.slice(i, i + CONCURRENCY)
+      const results = await Promise.allSettled(batch.map((p) => this.getProjectData(p.name)))
+      for (const result of results) {
+        if (result.status !== 'fulfilled' || !result.value) {
+          continue
+        }
+        const filtered = this.filterSessions(result.value.sessions)
+        allSessions.push(...filtered)
+      }
+    }
+
+    return sortSessions(allSessions, this.sortOptions)
+  }
+
   async getChildren(element?: SessionTreeItem): Promise<SessionTreeItem[]> {
     if (!element) {
-      // Root level - show projects
+      // Date-grouped mode: root shows date groups across all projects
+      if (this.groupByDate && !this.filterText) {
+        const allSessions = await this.loadAllSessions()
+        const groups = groupSessionsByDate(allSessions, (s) => this.getGroupTimestamp(s))
+        this.groupedSessionsCache = groups
+
+        return groups.map(
+          (g) =>
+            new DateGroupTreeItem(
+              g.label,
+              vscode.TreeItemCollapsibleState.Expanded,
+              g.key,
+              g.sessions.length
+            )
+        )
+      }
+
+      // Normal mode: root shows projects
       const allProjects = await Effect.runPromise(session.listProjects)
 
       // Filter out projects matching exclude patterns
@@ -292,7 +432,7 @@ export class SessionTreeProvider
             batch.map(async (p) => {
               const data = await this.getProjectData(p.name)
               if (!data) return null
-              const matches = this.filterSessions(data.sessions)
+              const matches = this.filterSessions(data.sessions, p.name)
               if (matches.length === 0) return null
               return new ProjectTreeItem(
                 maskHomePath(p.displayName, USER_HOME),
@@ -321,57 +461,29 @@ export class SessionTreeProvider
       )
     }
 
+    if (element.type === 'date-group') {
+      // Show sessions within a date group (reuse cache from root render when available)
+      if (!this.groupedSessionsCache) {
+        const allSessions = await this.loadAllSessions()
+        this.groupedSessionsCache = groupSessionsByDate(allSessions, (s) =>
+          this.getGroupTimestamp(s)
+        )
+      }
+      const group = this.groupedSessionsCache.find((g) => g.key === element.dateGroupKey)
+      if (!group) return []
+      return this.buildSessionItems(group.sessions, false, element.dateGroupKey)
+    }
+
     if (element.type === 'project') {
       // Show sessions under project (uses in-memory cache if available)
       const projectData = await this.getProjectData(element.projectName)
       if (!projectData) return []
 
       // Apply filter if set
-      const sessions = this.filterSessions(projectData.sessions)
-
-      // Check if this is the current project (use cache from root getChildren)
+      const sessions = this.filterSessions(projectData.sessions, element.projectName)
       const isCurrentProject = element.projectName === this.currentProjectName
 
-      const titleMode = vscode.workspace
-        .getConfiguration('claudeSessions')
-        .get<TitleDisplayMode>('titleDisplayMode', 'message')
-      const locale = vscode.env.language
-
-      return sessions.map((s, index) => {
-        // Calculate if session has sub-items (summaries, agents, todos)
-        const hasSubItems = sessionHasSubItems(s)
-
-        // When filtering, show sessions collapsed (flat feel)
-        const shouldExpand = !this.filterText && isCurrentProject && index === 0 && hasSubItems
-
-        // In datetime mode, show first message as description instead of timestamp
-        const descriptionText =
-          titleMode === 'datetime' && !s.customTitle && !s.currentSummary
-            ? session.getDisplayTitle(undefined, undefined, s.title)
-            : undefined
-
-        return new SessionFileTreeItem(
-          session.getDisplayTitle({
-            customTitle: s.customTitle,
-            currentSummary: s.currentSummary,
-            title: s.title,
-            createdAt: s.createdAt,
-            mode: titleMode,
-            locale,
-          }),
-          hasSubItems
-            ? shouldExpand
-              ? vscode.TreeItemCollapsibleState.Expanded
-              : vscode.TreeItemCollapsibleState.Collapsed
-            : vscode.TreeItemCollapsibleState.None,
-          element.projectName,
-          s.id,
-          s.messageCount,
-          s.sortTimestamp,
-          getSessionTooltip(s), // tooltip
-          descriptionText // session description (first message in datetime mode)
-        )
-      })
+      return this.buildSessionItems(sessions, isCurrentProject)
     }
 
     if (element.type === 'session') {
@@ -522,6 +634,7 @@ export class SessionTreeProvider
 
 export type SessionTreeItem =
   | ProjectTreeItem
+  | DateGroupTreeItem
   | SessionFileTreeItem
   | GroupTreeItem
   | SummaryTreeItem
@@ -562,6 +675,21 @@ export class ProjectTreeItem extends BaseClaudeTreeItem {
   }
 }
 
+export class DateGroupTreeItem extends BaseClaudeTreeItem {
+  declare readonly type: 'date-group'
+  constructor(
+    label: string,
+    collapsibleState: vscode.TreeItemCollapsibleState,
+    public readonly dateGroupKey: DateGroupKey,
+    public readonly sessionCount: number
+  ) {
+    super('date-group', label, collapsibleState, '', '')
+    this.id = `date-group::${dateGroupKey}`
+    this.iconPath = new vscode.ThemeIcon(TREE_ICONS['date-group'].codicon)
+    this.description = `${sessionCount}`
+  }
+}
+
 export class SessionFileTreeItem extends BaseClaudeTreeItem {
   declare readonly type: 'session'
   constructor(
@@ -572,13 +700,19 @@ export class SessionFileTreeItem extends BaseClaudeTreeItem {
     public readonly sessionMessageCount: number,
     public readonly sortTimestamp?: number,
     public readonly sessionTooltipText?: string,
-    public readonly sessionDescription?: string
+    public readonly sessionDescription?: string,
+    public readonly dateGroupKey?: DateGroupKey,
+    public readonly shortProjectName?: string
   ) {
     super('session', label, collapsibleState, projectName, sessionId)
     this.iconPath = new vscode.ThemeIcon(TREE_ICONS.session.codicon)
 
-    // Description: count + context (message text or timestamp)
-    const parts: string[] = [`${sessionMessageCount}`]
+    // Description: [PROJECT ·] count · context
+    const parts: string[] = []
+    if (dateGroupKey && shortProjectName) {
+      parts.push(shortProjectName.toUpperCase())
+    }
+    parts.push(`${sessionMessageCount}`)
     if (sessionDescription) {
       parts.push(sessionDescription)
     } else if (sortTimestamp) {
