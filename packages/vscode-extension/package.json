@@ -139,6 +139,11 @@
         "icon": "$(close)"
       },
       {
+        "command": "claudeSessions.restartExtensionHost",
+        "title": "Restart Extension Host",
+        "icon": "$(debug-restart)"
+      },
+      {
         "command": "claudeSessions.restartWebServer",
         "title": "Restart Web Server",
         "category": "Claude Sessions"
@@ -190,7 +195,7 @@
           "group": "navigation@6"
         },
         {
-          "command": "workbench.action.restartExtensionHost",
+          "command": "claudeSessions.restartExtensionHost",
           "when": "view == claudeSessions",
           "group": "navigation@7"
         }
