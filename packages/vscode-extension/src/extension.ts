@@ -729,6 +729,69 @@ export function activate(context: vscode.ExtensionContext) {
     ),
 
     vscode.commands.registerCommand(
+      'claudeSessions.startClaudeInFolder',
+      async (item: SessionTreeItem) => {
+        if (!item || (item.type !== 'session' && item.type !== 'project')) return
+
+        const { defaultTerminalMode, cliFlags } = getConfig()
+        const cliCommand = cliFlags ? `claude ${cliFlags}` : 'claude'
+        const cwd = await resolveProjectCwd(item.projectName)
+
+        let mode: 'internal' | 'external'
+        if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
+          mode = defaultTerminalMode
+        } else {
+          const choice = await vscode.window.showQuickPick(
+            [
+              {
+                label: '$(terminal) Internal Terminal',
+                description: 'Open in VSCode integrated terminal',
+                mode: 'internal' as const,
+              },
+              {
+                label: '$(link-external) External Terminal',
+                description: 'Open in system default terminal',
+                mode: 'external' as const,
+              },
+            ],
+            {
+              placeHolder: 'Where to start Claude?',
+              title: 'Start Claude in Folder',
+            }
+          )
+
+          if (!choice) return
+          mode = choice.mode
+        }
+
+        if (mode === 'internal') {
+          const terminal = vscode.window.createTerminal({
+            name: `Claude: ${shortProjectName(item.projectName)}`,
+            cwd,
+          })
+          terminal.show()
+          terminal.sendText(cliCommand)
+        } else {
+          const args = cliFlags ? cliFlags.split(/\s+/).filter(Boolean) : []
+          const child = spawn('claude', args, {
+            cwd,
+            detached: true,
+            stdio: 'ignore',
+          })
+          child.unref()
+
+          if (child.pid) {
+            vscode.window.showInformationMessage(
+              `Claude started in external terminal (PID: ${child.pid})`
+            )
+          } else {
+            vscode.window.showErrorMessage('Failed to start Claude')
+          }
+        }
+      }
+    ),
+
+    vscode.commands.registerCommand(
       'claudeSessions.startClaudeYolo',
       async (item: SessionTreeItem) => {
         if (!item || (item.type !== 'session' && item.type !== 'project')) return

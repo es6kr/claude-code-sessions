@@ -109,6 +109,11 @@
         "icon": "$(terminal)"
       },
       {
+        "command": "claudeSessions.startClaudeInFolder",
+        "title": "Start Claude in Folder",
+        "icon": "$(play-circle)"
+      },
+      {
         "command": "claudeSessions.startClaudeYolo",
         "title": "Start Claude (YOLO)",
         "icon": "$(zap)"
@@ -282,9 +287,14 @@
           "group": "1_open"
         },
         {
+          "command": "claudeSessions.startClaudeInFolder",
+          "when": "view == claudeSessions && viewItem == project",
+          "group": "2_claude"
+        },
+        {
           "command": "claudeSessions.startClaudeYolo",
           "when": "view == claudeSessions && viewItem == project",
-          "group": "1_open"
+          "group": "2_claude"
         }
       ]
     },
