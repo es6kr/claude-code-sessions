@@ -38,7 +38,7 @@ describe('pathToFolderName', () => {
 
   describe('Windows paths', () => {
     it('converts Windows absolute path to folder name', () => {
-      // Official Claude Code keeps drive letter case as-is
+      // Drive letter is normalized to uppercase (see normalizeDriveLetter)
       expect(pathToFolderName('C:\\Users\\david\\projects')).toBe('C--Users-david-projects')
     })
 

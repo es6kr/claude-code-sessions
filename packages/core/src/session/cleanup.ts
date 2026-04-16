@@ -11,6 +11,7 @@ import { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from '../agent
 import { sessionHasTodos, findOrphanTodos, deleteOrphanTodos } from '../todos.js'
 import { listProjects } from './projects.js'
 import { listSessions, deleteSession } from './crud.js'
+import { listSessionsMeta } from './crud-streaming.js'
 import type { Message, CleanupPreview, ClearSessionsResult } from '../types.js'
 
 // Remove invalid API key messages from a session, returns remaining message count
@@ -119,7 +120,7 @@ export const previewCleanup = (projectName?: string) =>
       targetProjects.map((project) =>
         Effect.gen(function* () {
           const isStale = staleSet.has(project.name)
-          const sessions = yield* listSessions(project.name)
+          const sessions = yield* listSessionsMeta(project.name)
           const emptySessions = sessions.filter((s) => s.messageCount === 0)
           const invalidSessions = sessions.filter(
             (s) => s.title?.includes('Invalid API key') || s.title?.includes('API key')

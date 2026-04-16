@@ -53,9 +53,10 @@ export const updateSessionSummary = (projectName: string, sessionId: string, new
     return { success: true }
   })
 
-const log = { warn: (msg: string) => console.warn(msg) }
-
+import { createLogger } from '../logger.js'
 import { filterSessionFiles, buildSessionMeta, sortSessionsByDate } from './crud-helpers.js'
+
+const log = createLogger('crud')
 
 /** Read full session file and extract metadata */
 const readSessionMeta = (projectPath: string, file: string, projectName: string) =>

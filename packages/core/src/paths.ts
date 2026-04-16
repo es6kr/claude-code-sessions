@@ -164,7 +164,8 @@ export const folderNameToDisplayPath = (folderName: string): string => {
 /**
  * Convert absolute path to project folder name
  * All non-alphanumeric characters are converted to '-'
- * Matches official Claude Code: A.replace(/[^a-zA-Z0-9]/g, '-')
+ * Based on official Claude Code: A.replace(/[^a-zA-Z0-9]/g, '-')
+ * Additionally normalizes Windows drive letter to uppercase (c: → C:)
  */
 export const pathToFolderName = (absolutePath: string): string =>
   normalizeDriveLetter(absolutePath).replace(/[^a-zA-Z0-9]/g, '-')
