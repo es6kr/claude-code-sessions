@@ -68,6 +68,21 @@ const parseWindowsFolderName = (name: string): WindowsPathResult => {
 /** Check if path looks like Windows format */
 const isWindowsPath = (p: string): boolean => WINDOWS_PATTERNS.absolutePath.test(p)
 
+/** Normalize Windows drive letter to uppercase (c: → C:) */
+const normalizeDriveLetter = (p: string): string => {
+  if (/^[a-z]:/.test(p)) {
+    return p[0].toUpperCase() + p.slice(1)
+  }
+  return p
+}
+
+/** Check if folder name originated from a Windows path (starts with drive letter pattern like C-) */
+const isWindowsFolderName = (name: string): boolean => /^[A-Za-z]-/.test(name)
+
+/** Compare folder names — case-insensitive on Windows paths */
+export const folderNameEquals = (a: string, b: string): boolean =>
+  isWindowsFolderName(a) ? a.toLowerCase() === b.toLowerCase() : a === b
+
 // ============================================
 // Pure Functions (No I/O)
 // ============================================
@@ -152,7 +167,7 @@ export const folderNameToDisplayPath = (folderName: string): string => {
  * Matches official Claude Code: A.replace(/[^a-zA-Z0-9]/g, '-')
  */
 export const pathToFolderName = (absolutePath: string): string =>
-  absolutePath.replace(/[^a-zA-Z0-9]/g, '-')
+  normalizeDriveLetter(absolutePath).replace(/[^a-zA-Z0-9]/g, '-')
 
 // ============================================
 // I/O Functions (with optional DI for testing)
@@ -213,7 +228,7 @@ export const getRealPathFromSession = (
     }
 
     // Find cwd that matches folder name
-    const matched = cwdList.find((cwd) => pathToFolderName(cwd) === folderName)
+    const matched = cwdList.find((cwd) => folderNameEquals(pathToFolderName(cwd), folderName))
     if (matched) {
       return matched
     }
@@ -260,7 +275,7 @@ export const resolvePathFromClaudeConfig = async (
 
     // Check each registered project path
     for (const projectPath of Object.keys(config.projects)) {
-      if (pathToFolderName(projectPath) === folderName) {
+      if (folderNameEquals(pathToFolderName(projectPath), folderName)) {
         return projectPath
       }
     }
@@ -320,8 +335,9 @@ export const findProjectByWorkspacePath = (
 ): string | null => {
   // First, check if direct conversion matches any project
   const directMatch = pathToFolderName(workspacePath)
-  if (projectNames.includes(directMatch)) {
-    return directMatch
+  const found = projectNames.find((name) => folderNameEquals(directMatch, name))
+  if (found) {
+    return found
   }
 
   // Search through projects to find one with matching cwd
