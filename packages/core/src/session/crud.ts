@@ -18,7 +18,6 @@ import { findLinkedAgents } from '../agents.js'
 import { deleteLinkedTodos } from '../todos.js'
 import type {
   Message,
-  SessionMeta,
   DeleteSessionResult,
   RenameSessionResult,
   SplitSessionResult,
@@ -54,81 +53,76 @@ export const updateSessionSummary = (projectName: string, sessionId: string, new
     return { success: true }
   })
 
+import { createLogger } from '../logger.js'
+import { filterSessionFiles, buildSessionMeta, sortSessionsByDate } from './crud-helpers.js'
+
+const log = createLogger('crud')
+
+/** Read full session file and extract metadata */
+const readSessionMeta = (projectPath: string, file: string, projectName: string) =>
+  Effect.gen(function* () {
+    const filePath = path.join(projectPath, file)
+    const messages = yield* readJsonlFile<Message>(filePath)
+    const sessionId = file.replace('.jsonl', '')
+
+    const userAssistantMessages = messages.filter(
+      (m) => m.type === 'user' || m.type === 'assistant'
+    )
+    const hasSummary = messages.some((m) => m.type === 'summary')
+
+    const title = pipe(
+      messages,
+      A.findFirst((m) => m.type === 'user'),
+      O.map((m) => extractTitle(m.message)),
+      O.getOrUndefined
+    )
+
+    const currentSummary = pipe(
+      messages,
+      A.findFirst((m) => m.type === 'summary'),
+      O.map((m) => m.summary as string),
+      O.getOrUndefined
+    )
+
+    const customTitle = pipe(
+      messages,
+      A.findFirst((m) => m.type === 'custom-title'),
+      O.map((m) => (m as { customTitle?: string }).customTitle),
+      O.flatMap(O.fromNullable),
+      O.getOrUndefined
+    )
+
+    return buildSessionMeta(sessionId, projectName, {
+      title,
+      customTitle,
+      currentSummary,
+      userAssistantCount: userAssistantMessages.length,
+      hasSummary,
+      firstTimestamp: userAssistantMessages[0]?.timestamp,
+      lastTimestamp: userAssistantMessages.at(-1)?.timestamp,
+    })
+  })
+
 // List sessions in a project
 export const listSessions = (projectName: string) =>
   Effect.gen(function* () {
     const projectPath = path.join(getSessionsDir(), projectName)
     const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
-    // Exclude agent- files (subagent logs)
-    const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+    const sessionFiles = filterSessionFiles(files)
 
     const sessions = yield* Effect.all(
       sessionFiles.map((file) =>
-        Effect.gen(function* () {
-          const filePath = path.join(projectPath, file)
-          const messages = yield* readJsonlFile<Message>(filePath)
-
-          const sessionId = file.replace('.jsonl', '')
-
-          // Filter only user/assistant messages for counting
-          const userAssistantMessages = messages.filter(
-            (m) => m.type === 'user' || m.type === 'assistant'
-          )
-
-          // Check if session has summary (for preserved sessions without user/assistant messages)
-          const hasSummary = messages.some((m) => m.type === 'summary')
-
-          const firstMessage = userAssistantMessages[0]
-          const lastMessage = userAssistantMessages[userAssistantMessages.length - 1]
-
-          // Extract title from first user message
-          const title = pipe(
-            messages,
-            A.findFirst((m) => m.type === 'user'),
-            O.map((m) => extractTitle(m.message)),
-            O.getOrElse(() => (hasSummary ? '[Summary Only]' : `Session ${sessionId.slice(0, 8)}`))
-          )
-
-          // Extract currentSummary from first summary message
-          const currentSummary = pipe(
-            messages,
-            A.findFirst((m) => m.type === 'summary'),
-            O.map((m) => m.summary as string),
-            O.getOrUndefined
-          )
-
-          // Extract customTitle from custom-title message
-          const customTitle = pipe(
-            messages,
-            A.findFirst((m) => m.type === 'custom-title'),
-            O.map((m) => (m as { customTitle?: string }).customTitle),
-            O.flatMap(O.fromNullable),
-            O.getOrUndefined
-          )
-
-          return {
-            id: sessionId,
-            projectName,
-            title,
-            customTitle,
-            currentSummary,
-            // If session has summary but no user/assistant messages, count as 1
-            messageCount:
-              userAssistantMessages.length > 0 ? userAssistantMessages.length : hasSummary ? 1 : 0,
-            createdAt: firstMessage?.timestamp,
-            updatedAt: lastMessage?.timestamp,
-          } satisfies SessionMeta
-        })
+        readSessionMeta(projectPath, file, projectName).pipe(
+          Effect.catchAll((error) => {
+            log.warn(`listSessions: skipping ${file}: ${error}`)
+            return Effect.succeed(null)
+          })
+        )
       ),
       { concurrency: 10 }
     )
 
-    // Sort by newest first
-    return sessions.sort((a, b) => {
-      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
-      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
-      return dateB - dateA
-    })
+    return sortSessionsByDate(sessions.filter((s): s is NonNullable<typeof s> => s !== null))
   })
 
 // Read session messages

@@ -5,18 +5,22 @@ import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir } from '../paths.js'
-import { isInvalidApiKeyMessage, parseJsonlLines } from '../utils.js'
+import { isInvalidApiKeyMessage, parseJsonlLines, FileReadError, FileWriteError } from '../utils.js'
 import { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from '../agents.js'
 import { sessionHasTodos, findOrphanTodos, deleteOrphanTodos } from '../todos.js'
 import { listProjects } from './projects.js'
 import { listSessions, deleteSession } from './crud.js'
+import { listSessionsMeta } from './crud-streaming.js'
 import type { Message, CleanupPreview, ClearSessionsResult } from '../types.js'
 
 // Remove invalid API key messages from a session, returns remaining message count
 const cleanInvalidMessages = (projectName: string, sessionId: string) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const content = yield* Effect.tryPromise({
+      try: () => fs.readFile(filePath, 'utf-8'),
+      catch: (error) => new FileReadError({ filePath, cause: error }),
+    })
     const lines = content.trim().split('\n').filter(Boolean)
 
     if (lines.length === 0) return { removedCount: 0, remainingCount: 0 }
@@ -62,7 +66,10 @@ const cleanInvalidMessages = (projectName: string, sessionId: string) =>
     const newContent =
       filtered.length > 0 ? filtered.map((m) => JSON.stringify(m)).join('\n') + '\n' : ''
 
-    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+    yield* Effect.tryPromise({
+      try: () => fs.writeFile(filePath, newContent, 'utf-8'),
+      catch: (error) => new FileWriteError({ filePath, cause: error }),
+    })
 
     const remainingUserAssistant = filtered.filter(
       (m) => m.type === 'user' || m.type === 'assistant'
@@ -86,7 +93,7 @@ export const previewCleanup = (projectName?: string) =>
     const results = yield* Effect.all(
       targetProjects.map((project) =>
         Effect.gen(function* () {
-          const sessions = yield* listSessions(project.name)
+          const sessions = yield* listSessionsMeta(project.name)
           const emptySessions = sessions.filter((s) => s.messageCount === 0)
           const invalidSessions = sessions.filter(
             (s) => s.title?.includes('Invalid API key') || s.title?.includes('API key')
