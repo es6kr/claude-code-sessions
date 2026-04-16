@@ -157,7 +157,6 @@ export interface Project {
   displayName: string
   path: string
   sessionCount: number
-  lastModified?: number // newest session file mtime (epoch ms)
 }
 
 // ============================================================================
@@ -241,7 +240,6 @@ export interface ClearSessionsResult {
   removedMessageCount?: number
   deletedOrphanAgentCount?: number
   deletedOrphanTodoCount?: number
-  deletedStaleProjectCount?: number
 }
 
 /** Preview of sessions that would be cleaned up */
@@ -252,7 +250,6 @@ export interface CleanupPreview {
   emptyWithTodosCount?: number
   orphanAgentCount?: number
   orphanTodoCount?: number
-  isStale?: boolean // project directory no longer exists on disk
 }
 
 // ============================================================================
