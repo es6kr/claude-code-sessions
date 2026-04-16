@@ -1,7 +1,7 @@
 /**
  * Utility functions for message processing
  */
-import { Effect } from 'effect'
+import { Effect, Data } from 'effect'
 import * as fs from 'node:fs/promises'
 import type {
   Message,
@@ -16,6 +16,16 @@ import type {
 import { createLogger } from './logger.js'
 
 const logger = createLogger('utils')
+
+export class FileReadError extends Data.TaggedError('FileReadError')<{
+  readonly filePath: string
+  readonly cause: unknown
+}> {}
+
+export class FileWriteError extends Data.TaggedError('FileWriteError')<{
+  readonly filePath: string
+  readonly cause: unknown
+}> {}
 
 // IDE tag pattern for removal
 const IDE_TAG_PATTERN = /<ide_[^>]*>[\s\S]*?<\/ide_[^>]*>/g
@@ -367,7 +377,10 @@ export const readJsonlFile = <T = Record<string, unknown>>(
   options?: { strict?: boolean }
 ) =>
   Effect.gen(function* () {
-    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const content = yield* Effect.tryPromise({
+      try: () => fs.readFile(filePath, 'utf-8'),
+      catch: (error) => new FileReadError({ filePath, cause: error }),
+    })
     const lines = content.trim().split('\n').filter(Boolean)
     return parseJsonlLines<T>(lines, filePath, options)
   })
