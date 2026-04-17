@@ -46,8 +46,14 @@ export const PATCH: RequestHandler = async ({ url, request }) => {
     throw error(400, 'project, session, and uuid parameters required')
   }
   const body = await request.json()
-  const { customTitle } = body as { customTitle?: string }
-  if (!customTitle) {
+  const { customTitle } = body as { customTitle?: string | null }
+  if (customTitle === null || customTitle === '') {
+    const result = await Effect.runPromise(
+      session.deleteTitleMessages(projectName, sessionId, 'custom-title')
+    )
+    return json(result)
+  }
+  if (customTitle === undefined) {
     throw error(400, 'customTitle is required')
   }
   const result = await Effect.runPromise(

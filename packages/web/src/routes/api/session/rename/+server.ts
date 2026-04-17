@@ -9,10 +9,15 @@ export const POST: RequestHandler = async ({ request }) => {
     id: string
     title: string
   }
-  if (!body.project || !body.id || !body.title) {
-    throw error(400, 'project, id, and title required')
+  if (!body.project || !body.id) {
+    throw error(400, 'project and id required')
   }
-  // title is used as the new summary (currentSummary = customTitle)
+  if (!body.title) {
+    const result = await Effect.runPromise(
+      session.deleteTitleMessages(body.project, body.id, 'custom-title')
+    )
+    return json(result)
+  }
   const result = await Effect.runPromise(session.renameSession(body.project, body.id, body.title))
   return json(result)
 }

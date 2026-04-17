@@ -16,6 +16,27 @@ import {
   type Message,
 } from '@claude-sessions/core'
 
+export const deleteTitleMessages = (
+  projectName: string,
+  sessionId: string,
+  type: 'custom-title' | 'agent-name'
+) =>
+  Effect.gen(function* () {
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const lines = content.trim().split('\n').filter(Boolean)
+    const messages = lines.map((line) => JSON.parse(line) as Message)
+
+    const filtered = messages.filter((m) => m.type !== type)
+    if (filtered.length === messages.length) {
+      return { success: false, error: `No ${type} messages found` }
+    }
+
+    const newContent = filtered.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+    return { success: true, removed: messages.length - filtered.length }
+  })
+
 export const updateCustomTitle = (
   projectName: string,
   sessionId: string,

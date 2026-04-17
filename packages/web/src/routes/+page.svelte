@@ -285,12 +285,13 @@
         if (newTitle === currentTitle) return
 
         try {
-          await api.renameSession(session.projectName, session.id, newTitle)
+          const trimmed = newTitle.trim()
+          await api.renameSession(session.projectName, session.id, trimmed)
 
-          // Update local state (customTitle = currentSummary)
+          // Update local state
           if (sessionData) {
-            sessionData.customTitle = newTitle
-            sessionData.currentSummary = newTitle
+            sessionData.customTitle = trimmed || undefined
+            if (trimmed) sessionData.currentSummary = trimmed
             if (sessionData.summaries.length > 0) {
               sessionData.summaries[0] = { ...sessionData.summaries[0], summary: newTitle }
             } else {

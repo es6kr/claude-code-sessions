@@ -203,11 +203,10 @@
       async (newTitle) => {
         closeInput()
         const trimmed = newTitle.trim()
-        if (!trimmed) return
 
         try {
           await api.renameSession(session!.projectName, session!.id, trimmed)
-          customTitle = trimmed
+          customTitle = trimmed || undefined
           // Also refresh currentSummary to stay in sync
           const sessionData = await api.getSessionTreeData(session!.projectName, session!.id)
           currentSummary = sessionData.currentSummary
