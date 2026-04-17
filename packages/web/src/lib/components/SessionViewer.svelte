@@ -21,6 +21,7 @@
     messages: Message[]
     todos?: TodoItem[]
     agents?: AgentInfo[]
+    agentTitle?: string
     customTitle?: string
     currentSummary?: string
     projectDisplayName?: string
@@ -44,6 +45,7 @@
     messages,
     todos = [],
     agents = [],
+    agentTitle,
     customTitle,
     currentSummary,
     backUrl,
@@ -61,8 +63,15 @@
     fullWidth = false,
   }: Props = $props()
 
-  // Get display title: customTitle > currentSummary > session.title > 'Untitled'
-  const displayTitle = $derived(getDisplayTitle(customTitle, currentSummary, session?.title, 50))
+  const displayTitle = $derived(
+    getDisplayTitle({
+      agentTitle,
+      customTitle,
+      currentSummary,
+      title: session?.title,
+      maxLength: 50,
+    })
+  )
 
   // Validation (logging is done server-side in /api/session)
   const chainResult = $derived(validateChain(messages as Parameters<typeof validateChain>[0]))

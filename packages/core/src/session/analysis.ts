@@ -239,7 +239,7 @@ export const compressSession = (
     // Collect messages to remove
     const messagesToRemove: Record<string, unknown>[] = []
 
-    // Filter messages based on keepSnapshots option, preserve Stop hooks, and remove duplicate custom-titles
+    // Filter messages based on keepSnapshots option, preserve Stop hooks, and remove duplicate agent-titles/custom-titles
     const filteredMessages = messages.filter((msg, idx) => {
       if (msg.type === 'progress') {
         const hookEvent =

@@ -134,7 +134,7 @@
     )
   })
 
-  // Get custom title
+  // Get agent and custom titles
   const agentTitle = $derived((msg as Message & { agentTitle?: string }).agentTitle ?? '')
   const customTitle = $derived((msg as Message & { customTitle?: string }).customTitle ?? '')
 

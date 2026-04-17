@@ -267,14 +267,14 @@
   const handleRenameSession = (e: Event, session: SessionMeta) => {
     e.stopPropagation()
     const sessionData = projectSessionData.get(session.projectName)?.get(session.id)
-    // Use same priority as displayTitle: customTitle > currentSummary > title
-    const currentTitle = getDisplayTitle(
-      sessionData?.customTitle,
-      sessionData?.currentSummary,
-      session.title,
-      Infinity,
-      ''
-    )
+    const currentTitle = getDisplayTitle({
+      agentTitle: sessionData?.agentTitle,
+      customTitle: sessionData?.customTitle,
+      currentSummary: sessionData?.currentSummary,
+      title: session.title,
+      maxLength: Infinity,
+      fallback: '',
+    })
 
     showInput(
       'Rename Session',
@@ -631,6 +631,9 @@
     {messages}
     {todos}
     {agents}
+    agentTitle={selectedSession
+      ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.agentTitle
+      : undefined}
     customTitle={selectedSession
       ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.customTitle
       : undefined}

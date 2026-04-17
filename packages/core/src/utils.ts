@@ -161,7 +161,7 @@ export interface DisplayTitleOptions {
 
 /**
  * Get display title with fallback logic
- * Priority: customTitle > currentSummary (truncated) > title/datetime > fallback
+ * Priority: customTitle > agentTitle > currentSummary (truncated) > title/datetime > fallback
  * Also handles slash command format in title
  *
  * Supports two call signatures:
@@ -451,23 +451,22 @@ export const sessionHasSubItems = (data: {
 export const getSessionTooltip = (session: {
   id: string
   title?: string
+  agentTitle?: string
   customTitle?: string
   currentSummary?: string
   createdAt?: string
   updatedAt?: string
 }): string => {
-  const { id, title, customTitle, currentSummary, createdAt, updatedAt } = session
+  const { id, title, agentTitle, customTitle, currentSummary, createdAt, updatedAt } = session
   let text: string
-  // If customTitle is displayed, show currentSummary in tooltip
-  if (customTitle && currentSummary) {
+  // Show complementary info: if a title override is displayed, show the next fallback
+  if (customTitle && (agentTitle || currentSummary)) {
+    text = agentTitle || currentSummary!
+  } else if (agentTitle && currentSummary) {
     text = currentSummary
-  }
-  // If currentSummary is displayed as title, show original title in tooltip
-  else if (currentSummary && title && title !== 'Untitled') {
+  } else if (currentSummary && title && title !== 'Untitled') {
     text = title
-  }
-  // If title is displayed, show currentSummary if available
-  else if (currentSummary) {
+  } else if (currentSummary) {
     text = currentSummary
   } else {
     text = title ?? 'No title'
