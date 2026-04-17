@@ -146,6 +146,7 @@ export const isContinuationSummary = (msg: Message): boolean => {
  * Options for getDisplayTitle when using the options-based signature
  */
 export interface DisplayTitleOptions {
+  agentTitle?: string
   customTitle?: string
   currentSummary?: string
   title?: string
@@ -184,11 +185,13 @@ export function getDisplayTitle(
 ): string {
   let mode: TitleDisplayMode = 'message'
   let createdAt: string | undefined
+  let agentTitle: string | undefined
   let customTitle: string | undefined
   let locale: string | undefined
 
   if (typeof customTitleOrOptions === 'object' && customTitleOrOptions !== null) {
     const opts = customTitleOrOptions
+    agentTitle = opts.agentTitle
     customTitle = opts.customTitle
     currentSummary = opts.currentSummary
     title = opts.title
@@ -202,6 +205,7 @@ export function getDisplayTitle(
   }
 
   if (customTitle) return customTitle
+  if (agentTitle) return agentTitle
   if (currentSummary) {
     return currentSummary.length > maxLength
       ? currentSummary.slice(0, maxLength - 3) + '...'

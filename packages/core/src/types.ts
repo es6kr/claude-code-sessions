@@ -122,6 +122,8 @@ export interface Message extends TypedObject {
   message?: MessagePayload
   /** Direct content (alternative to message.content) */
   content?: ContentItem[] | string
+  /** Agent-set title for this session */
+  agentTitle?: string
   /** User-defined custom title for this message */
   customTitle?: string
   /** Summary text for summary-type messages */
@@ -142,6 +144,8 @@ export interface SessionMeta {
   projectName: string
   /** First user message title */
   title?: string
+  /** Agent-set title */
+  agentTitle?: string
   /** User-set custom title */
   customTitle?: string
   /** Current (first) summary text for display */
@@ -157,6 +161,7 @@ export interface Project {
   displayName: string
   path: string
   sessionCount: number
+  lastModified?: number // newest session file mtime (epoch ms)
 }
 
 // ============================================================================
@@ -240,6 +245,7 @@ export interface ClearSessionsResult {
   removedMessageCount?: number
   deletedOrphanAgentCount?: number
   deletedOrphanTodoCount?: number
+  deletedStaleProjectCount?: number
 }
 
 /** Preview of sessions that would be cleaned up */
@@ -250,6 +256,7 @@ export interface CleanupPreview {
   emptyWithTodosCount?: number
   orphanAgentCount?: number
   orphanTodoCount?: number
+  isStale?: boolean // project directory no longer exists on disk
 }
 
 // ============================================================================
@@ -324,6 +331,8 @@ export interface SessionTreeData {
   projectName: string
   /** First user message title */
   title: string
+  /** Agent-set title */
+  agentTitle?: string
   /** User-set custom title */
   customTitle?: string
   /** Current (first) summary text for display/tooltip */

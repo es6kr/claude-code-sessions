@@ -32,6 +32,7 @@
 
   // Type guards for different message types
   const isAssistant = $derived(msg.type === 'assistant')
+  const isAgentTitle = $derived(msg.type === 'agent-title')
   const isCustomTitle = $derived(msg.type === 'custom-title')
   const isFileSnapshot = $derived(msg.type === 'file-history-snapshot')
   const isHuman = $derived(msg.type === 'human' || msg.type === 'user')
@@ -134,6 +135,7 @@
   })
 
   // Get custom title
+  const agentTitle = $derived((msg as Message & { agentTitle?: string }).agentTitle ?? '')
   const customTitle = $derived((msg as Message & { customTitle?: string }).customTitle ?? '')
 
   // Get message ID (uuid or messageId for file-history-snapshot)
@@ -143,7 +145,8 @@
   const hasContent = $derived.by(() => {
     // Queue operations have no displayable content but are valid
     if (isQueueOperation) return false
-    if (isFileSnapshot || isLocalCommand || isCustomTitle || toolUseData) return true
+    if (isFileSnapshot || isLocalCommand || isAgentTitle || isCustomTitle || toolUseData)
+      return true
 
     // Check message.content first (primary content source)
     const content = getMessageContent(msg)
@@ -164,6 +167,7 @@
   const messageClass = $derived.by(() => {
     if (isHuman) return 'bg-gh-accent/15 border-l-3 border-l-gh-accent'
     if (isAssistant) return 'bg-gh-green/15 border-l-3 border-l-gh-green'
+    if (isAgentTitle) return 'bg-blue-500/15 border-l-3 border-l-blue-500'
     if (isCustomTitle) return 'bg-purple-500/15 border-l-3 border-l-purple-500'
     return 'bg-gh-border-subtle'
   })
@@ -429,7 +433,9 @@
     {/if}
     {#if hasContent}
       <div class="message-content text-sm">
-        {#if isCustomTitle}
+        {#if isAgentTitle}
+          <span class="font-semibold text-blue-400">{agentTitle}</span>
+        {:else if isCustomTitle}
           <span class="font-semibold text-purple-400">{customTitle}</span>
         {:else}
           {@const msgContent = getMessageContent(msg)}

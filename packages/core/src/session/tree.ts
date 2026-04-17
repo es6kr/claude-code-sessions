@@ -176,11 +176,21 @@ const loadSessionTreeDataInternal = (
     // Get first user message
     const firstUserMsg = messages.find((m) => m.type === 'user') as Message | undefined
 
-    // customTitle is stored as separate custom-title type line
-    const customTitleMsg = messages.find((m) => m.type === 'custom-title') as
+    // customTitle: use last occurrence (rename appends new one at end)
+    const customTitleMsg = [...messages]
+      .reverse()
+      .find((m: JsonlRecord) => m.type === 'custom-title') as
       | { type: 'custom-title'; customTitle?: string }
       | undefined
     const customTitle = customTitleMsg?.customTitle
+
+    // agentTitle: agent-set session title
+    const agentTitleMsg = [...messages]
+      .reverse()
+      .find((m: JsonlRecord) => m.type === 'agent-title') as
+      | { type: 'agent-title'; agentTitle?: string }
+      | undefined
+    const agentTitle = agentTitleMsg?.agentTitle
 
     // Get title from first user message
     const title = firstUserMsg
@@ -246,6 +256,7 @@ const loadSessionTreeDataInternal = (
       id: sessionId,
       projectName,
       title,
+      agentTitle,
       customTitle,
       currentSummary: summaries[0]?.summary,
       messageCount:

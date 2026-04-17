@@ -220,10 +220,14 @@ export const compressSession = (
     let removedSnapshots = 0
     let truncatedOutputs = 0
 
-    // Find snapshot indices and custom-title indices
+    // Find snapshot, custom-title, and agent-title indices
+    const agentTitleIndices: number[] = []
     const customTitleIndices: number[] = []
     const snapshotIndices: number[] = []
     messages.forEach((msg, idx) => {
+      if (msg.type === 'agent-title') {
+        agentTitleIndices.push(idx)
+      }
       if (msg.type === 'custom-title') {
         customTitleIndices.push(idx)
       }
@@ -246,6 +250,17 @@ export const compressSession = (
 
         if (hookEvent !== 'Stop') {
           removedProgress++
+          messagesToRemove.push(msg)
+          return false
+        }
+      }
+
+      // Keep only the last agent-title record
+      if (msg.type === 'agent-title') {
+        if (
+          agentTitleIndices.length > 1 &&
+          idx !== agentTitleIndices[agentTitleIndices.length - 1]
+        ) {
           messagesToRemove.push(msg)
           return false
         }

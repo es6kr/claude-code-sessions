@@ -86,6 +86,7 @@
   const getDisplayTitle = (session: SessionMeta): string => {
     const data = getSessionData(session.projectName, session.id)
     return coreGetDisplayTitle({
+      agentTitle: data?.agentTitle,
       customTitle: data?.customTitle,
       currentSummary: data?.currentSummary,
       title: session.title,

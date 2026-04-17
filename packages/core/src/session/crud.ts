@@ -86,14 +86,23 @@ const readSessionMeta = (projectPath: string, file: string, projectName: string)
 
     const customTitle = pipe(
       messages,
-      A.findFirst((m) => m.type === 'custom-title'),
+      A.findLast((m) => m.type === 'custom-title'),
       O.map((m) => (m as { customTitle?: string }).customTitle),
+      O.flatMap(O.fromNullable),
+      O.getOrUndefined
+    )
+
+    const agentTitle = pipe(
+      messages,
+      A.findLast((m) => m.type === 'agent-title'),
+      O.map((m) => (m as { agentTitle?: string }).agentTitle),
       O.flatMap(O.fromNullable),
       O.getOrUndefined
     )
 
     return buildSessionMeta(sessionId, projectName, {
       title,
+      agentTitle,
       customTitle,
       currentSummary,
       userAssistantCount: userAssistantMessages.length,
