@@ -29,7 +29,7 @@ const scanSessionMeta = async (
   let userAssistantCount = 0
   let hasSummary = false
   let title: string | undefined
-  let agentTitle: string | undefined
+  let agentName: string | undefined
   let customTitle: string | undefined
   let currentSummary: string | undefined
   let firstTimestamp: string | undefined
@@ -75,10 +75,10 @@ const scanSessionMeta = async (
       } catch {
         /* skip malformed */
       }
-    } else if (type === 'agent-title') {
+    } else if (type === 'agent-name') {
       try {
-        const msg = JSON.parse(line) as { agentTitle?: string }
-        if (msg.agentTitle) agentTitle = msg.agentTitle
+        const msg = JSON.parse(line) as { agentName?: string }
+        if (msg.agentName) agentName = msg.agentName
       } catch {
         /* skip malformed */
       }
@@ -87,7 +87,7 @@ const scanSessionMeta = async (
 
   return buildSessionMeta(sessionId, projectName, {
     title,
-    agentTitle,
+    agentName,
     customTitle,
     currentSummary,
     userAssistantCount,

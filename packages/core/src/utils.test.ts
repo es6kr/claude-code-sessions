@@ -227,11 +227,11 @@ describe('getDisplayTitle', () => {
     expect(getDisplayTitle(undefined, undefined, title)).toBe('/session repair --dry-run')
   })
 
-  it('should prioritize customTitle > agentTitle > currentSummary > title', () => {
+  it('should prioritize customTitle > agentName > currentSummary > title', () => {
     expect(
       getDisplayTitle({
         customTitle: 'Custom',
-        agentTitle: 'Agent',
+        agentName: 'Agent',
         currentSummary: 'Summary',
         title: 'Title',
       })
@@ -239,7 +239,7 @@ describe('getDisplayTitle', () => {
 
     expect(
       getDisplayTitle({
-        agentTitle: 'Agent',
+        agentName: 'Agent',
         currentSummary: 'Summary',
         title: 'Title',
       })
@@ -255,10 +255,10 @@ describe('getDisplayTitle', () => {
     expect(getDisplayTitle({ title: 'Title' })).toBe('Title')
   })
 
-  it('should ignore empty agentTitle', () => {
+  it('should ignore empty agentName', () => {
     expect(
       getDisplayTitle({
-        agentTitle: '',
+        agentName: '',
         currentSummary: 'Summary',
         title: 'Title',
       })

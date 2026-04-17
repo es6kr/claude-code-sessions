@@ -123,7 +123,7 @@ export interface Message extends TypedObject {
   /** Direct content (alternative to message.content) */
   content?: ContentItem[] | string
   /** Agent-set title for this session */
-  agentTitle?: string
+  agentName?: string
   /** User-defined custom title for this message */
   customTitle?: string
   /** Summary text for summary-type messages */
@@ -145,7 +145,7 @@ export interface SessionMeta {
   /** First user message title */
   title?: string
   /** Agent-set title */
-  agentTitle?: string
+  agentName?: string
   /** User-set custom title */
   customTitle?: string
   /** Current (first) summary text for display */
@@ -332,7 +332,7 @@ export interface SessionTreeData {
   /** First user message title */
   title: string
   /** Agent-set title */
-  agentTitle?: string
+  agentName?: string
   /** User-set custom title */
   customTitle?: string
   /** Current (first) summary text for display/tooltip */

@@ -43,7 +43,7 @@ export interface Message {
   parentUuid?: string | null
   messageId?: string // For file-history-snapshot type
   type:
-    | 'agent-title'
+    | 'agent-name'
     | 'assistant'
     | 'compact_boundary'
     | 'custom-title'
@@ -270,7 +270,7 @@ export interface SessionData {
   id: string
   projectName: string
   title: string
-  agentTitle?: string
+  agentName?: string
   customTitle?: string
   currentSummary?: string
   messageCount: number

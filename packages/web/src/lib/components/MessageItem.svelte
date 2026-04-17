@@ -32,7 +32,7 @@
 
   // Type guards for different message types
   const isAssistant = $derived(msg.type === 'assistant')
-  const isAgentTitle = $derived(msg.type === 'agent-title')
+  const isAgentTitle = $derived(msg.type === 'agent-name')
   const isCustomTitle = $derived(msg.type === 'custom-title')
   const isFileSnapshot = $derived(msg.type === 'file-history-snapshot')
   const isHuman = $derived(msg.type === 'human' || msg.type === 'user')
@@ -135,7 +135,7 @@
   })
 
   // Get agent and custom titles
-  const agentTitle = $derived((msg as Message & { agentTitle?: string }).agentTitle ?? '')
+  const agentName = $derived((msg as Message & { agentName?: string }).agentName ?? '')
   const customTitle = $derived((msg as Message & { customTitle?: string }).customTitle ?? '')
 
   // Get message ID (uuid or messageId for file-history-snapshot)
@@ -434,7 +434,7 @@
     {#if hasContent}
       <div class="message-content text-sm">
         {#if isAgentTitle}
-          <span class="font-semibold text-blue-400">{agentTitle}</span>
+          <span class="font-semibold text-blue-400">{agentName}</span>
         {:else if isCustomTitle}
           <span class="font-semibold text-purple-400">{customTitle}</span>
         {:else}

@@ -281,7 +281,7 @@ export class SessionTreeProvider
       // Search across all available text: title, custom title, all summaries
       const texts = [
         s.title,
-        s.agentTitle,
+        s.agentName,
         s.customTitle,
         s.currentSummary,
         ...s.summaries.map((sum) => sum.summary),
@@ -314,13 +314,13 @@ export class SessionTreeProvider
       const shouldExpand = !this.filterText && expandFirst && index === 0 && hasSubItems
 
       const descriptionText =
-        titleMode === 'datetime' && !s.customTitle && !s.agentTitle && !s.currentSummary
+        titleMode === 'datetime' && !s.customTitle && !s.agentName && !s.currentSummary
           ? session.getDisplayTitle(undefined, undefined, s.title)
           : undefined
 
       return new SessionFileTreeItem(
         session.getDisplayTitle({
-          agentTitle: s.agentTitle,
+          agentName: s.agentName,
           customTitle: s.customTitle,
           currentSummary: s.currentSummary,
           title: s.title,

@@ -14,7 +14,7 @@ export const buildSessionMeta = (
   projectName: string,
   fields: {
     title?: string
-    agentTitle?: string
+    agentName?: string
     customTitle?: string
     currentSummary?: string
     userAssistantCount: number
@@ -27,7 +27,7 @@ export const buildSessionMeta = (
   projectName,
   title:
     fields.title ?? (fields.hasSummary ? '[Summary Only]' : `Session ${sessionId.slice(0, 8)}`),
-  agentTitle: fields.agentTitle,
+  agentName: fields.agentName,
   customTitle: fields.customTitle,
   currentSummary: fields.currentSummary,
   messageCount:

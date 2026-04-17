@@ -422,12 +422,12 @@ describe('compressSession', () => {
     expect(titles[0].customTitle).toBe('Updated title')
   })
 
-  it('should keep only last agent-title when duplicates exist', async () => {
+  it('should keep only last agent-name when duplicates exist', async () => {
     await writeSession(sandbox.projectDir, 'session-1', [
       {
-        type: 'agent-title',
+        type: 'agent-name',
         uuid: 'at-1',
-        agentTitle: 'First agent title',
+        agentName: 'First agent title',
       },
       {
         type: 'user',
@@ -436,9 +436,9 @@ describe('compressSession', () => {
         message: { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
       },
       {
-        type: 'agent-title',
+        type: 'agent-name',
         uuid: 'at-2',
-        agentTitle: 'Updated agent title',
+        agentName: 'Updated agent title',
       },
     ])
 
@@ -449,9 +449,9 @@ describe('compressSession', () => {
     const lines = content.trim().split('\n')
     const titles = lines
       .map((l) => JSON.parse(l))
-      .filter((m: Record<string, unknown>) => m.type === 'agent-title')
+      .filter((m: Record<string, unknown>) => m.type === 'agent-name')
     expect(titles).toHaveLength(1)
-    expect(titles[0].agentTitle).toBe('Updated agent title')
+    expect(titles[0].agentName).toBe('Updated agent title')
   })
 
   it('should report compressed size smaller than original', async () => {

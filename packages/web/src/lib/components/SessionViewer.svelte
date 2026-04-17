@@ -21,7 +21,7 @@
     messages: Message[]
     todos?: TodoItem[]
     agents?: AgentInfo[]
-    agentTitle?: string
+    agentName?: string
     customTitle?: string
     currentSummary?: string
     projectDisplayName?: string
@@ -45,7 +45,7 @@
     messages,
     todos = [],
     agents = [],
-    agentTitle,
+    agentName,
     customTitle,
     currentSummary,
     backUrl,
@@ -65,7 +65,7 @@
 
   const displayTitle = $derived(
     getDisplayTitle({
-      agentTitle,
+      agentName,
       customTitle,
       currentSummary,
       title: session?.title,

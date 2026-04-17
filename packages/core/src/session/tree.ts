@@ -176,17 +176,17 @@ const loadSessionTreeDataInternal = (
     // Get first user message
     const firstUserMsg = messages.find((m) => m.type === 'user') as Message | undefined
 
-    // Scan from end for last custom-title and agent-title (single pass)
+    // Scan from end for last custom-title and agent-name (single pass)
     let customTitle: string | undefined
-    let agentTitle: string | undefined
+    let agentName: string | undefined
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i]
       if (customTitle === undefined && msg.type === 'custom-title') {
         customTitle = (msg as { type: 'custom-title'; customTitle?: string }).customTitle
-      } else if (agentTitle === undefined && msg.type === 'agent-title') {
-        agentTitle = (msg as { type: 'agent-title'; agentTitle?: string }).agentTitle
+      } else if (agentName === undefined && msg.type === 'agent-name') {
+        agentName = (msg as { type: 'agent-name'; agentName?: string }).agentName
       }
-      if (customTitle !== undefined && agentTitle !== undefined) break
+      if (customTitle !== undefined && agentName !== undefined) break
     }
 
     // Get title from first user message
@@ -253,7 +253,7 @@ const loadSessionTreeDataInternal = (
       id: sessionId,
       projectName,
       title,
-      agentTitle,
+      agentName,
       customTitle,
       currentSummary: summaries[0]?.summary,
       messageCount:

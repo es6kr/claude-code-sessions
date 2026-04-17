@@ -155,10 +155,10 @@ describe('listSessions - should include currentSummary and customTitle', () => {
     expect(sessions[0].customTitle).toBe('Latest Title')
   })
 
-  it('should extract agentTitle from agent-title message', async () => {
-    const sessionId = 'session-agent-title'
+  it('should extract agentName from agent-name message', async () => {
+    const sessionId = 'session-agent-name'
     const messages = [
-      { type: 'agent-title', agentTitle: 'Skill Sync Verification', sessionId },
+      { type: 'agent-name', agentName: 'Skill Sync Verification', sessionId },
       {
         type: 'user',
         uuid: 'msg-1',
@@ -172,7 +172,7 @@ describe('listSessions - should include currentSummary and customTitle', () => {
     )
     const sessions = await Effect.runPromise(listSessions(projectName))
     expect(sessions).toHaveLength(1)
-    expect(sessions[0].agentTitle).toBe('Skill Sync Verification')
+    expect(sessions[0].agentName).toBe('Skill Sync Verification')
     expect(sessions[0].title).toBe('continue')
   })
 
