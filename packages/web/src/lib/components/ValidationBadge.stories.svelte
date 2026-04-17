@@ -1,6 +1,10 @@
 <script module>
   import { defineMeta } from '@storybook/addon-svelte-csf'
+  import { fn } from 'storybook/test'
   import ValidationBadge from './ValidationBadge.svelte'
+
+  const onRepair = fn()
+  const onRepairProgress = fn()
 
   const { Story } = defineMeta({
     title: 'Components/ValidationBadge',
@@ -46,7 +50,7 @@
   name="With Repair Button"
   args={{
     chainErrors: [{ type: 'broken_chain', uuid: 'msg-1', line: 42, parentUuid: null }],
-    onRepair: () => alert('Repair triggered'),
+    onRepair,
   }}
 >
   {#snippet children(args)}
@@ -91,7 +95,7 @@
   name="Progress With Remove Button"
   args={{
     progressErrors: [{ type: 'unwanted_progress', line: 5, hookName: 'pre-commit' }],
-    onRepairProgress: () => alert('Remove triggered'),
+    onRepairProgress,
   }}
 >
   {#snippet children(args)}
@@ -106,8 +110,8 @@
   args={{
     chainErrors: [{ type: 'broken_chain', uuid: 'msg-1', line: 10, parentUuid: null }],
     progressErrors: [{ type: 'unwanted_progress', line: 5, hookName: 'pre-commit' }],
-    onRepair: () => alert('Chain repair'),
-    onRepairProgress: () => alert('Progress remove'),
+    onRepair,
+    onRepairProgress,
   }}
 >
   {#snippet children(args)}
