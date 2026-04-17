@@ -16,6 +16,7 @@
   let toast = $state<string | null>(null)
   let toastDuration = $state(3000)
   let projectDisplayName = $state<string>('')
+  let agentName = $state<string | undefined>(undefined)
   let customTitle = $state<string | undefined>(undefined)
   let currentSummary = $state<string | undefined>(undefined)
 
@@ -81,6 +82,7 @@
   // Display title for page title
   const displayTitle = $derived(
     customTitle ??
+      agentName ??
       (currentSummary && currentSummary.length > 50
         ? currentSummary.slice(0, 47) + '...'
         : currentSummary) ??
@@ -121,6 +123,7 @@
       const agentTodoItems = sessionData.todos?.agentTodos?.flatMap((a) => a.todos) ?? []
       todos = [...sessionTodos, ...agentTodoItems]
       agents = sessionData.agents ?? []
+      agentName = sessionData.agentName
       customTitle = sessionData.customTitle
       currentSummary = sessionData.currentSummary
     } catch (e) {
@@ -133,15 +136,34 @@
   const handleEditTitle = (msg: Message) => {
     if (!session) return
 
-    const currentTitle = (msg as Message & { customTitle?: string }).customTitle ?? ''
-    showInput('Edit Custom Title', 'Custom title:', currentTitle, async (newTitle) => {
+    const isTitleMsg = msg.type === 'custom-title' || msg.type === 'agent-name'
+    const currentTitle =
+      (msg as Message & { customTitle?: string }).customTitle ??
+      (msg as Message & { agentName?: string }).agentName ??
+      ''
+    showInput('Edit Title', 'Title:', currentTitle, async (newTitle) => {
       closeInput()
       if (newTitle === currentTitle) return
 
+      const lineIndex = messages.indexOf(msg)
+      if (lineIndex === -1) return
+
       try {
-        await api.updateCustomTitle(session!.projectName, session!.id, msg.uuid, newTitle)
-        ;(msg as Message & { customTitle?: string }).customTitle = newTitle
-        messages = [...messages]
+        if (isTitleMsg) {
+          const trimmed = newTitle.trim()
+          if (!trimmed) {
+            await api.deleteTitleMessage(session!.projectName, session!.id, lineIndex)
+            messages = messages.filter((_, i) => i !== lineIndex)
+          } else {
+            await api.updateTitleMessage(session!.projectName, session!.id, lineIndex, trimmed)
+            if (msg.type === 'custom-title') {
+              ;(msg as Message & { customTitle?: string }).customTitle = trimmed
+            } else {
+              ;(msg as Message & { agentName?: string }).agentName = trimmed
+            }
+            messages = [...messages]
+          }
+        }
       } catch (e) {
         error = String(e)
       }
@@ -172,6 +194,7 @@
             // Refresh session metadata so title/summary reflects the new first message
             try {
               const sessionData = await api.getSessionTreeData(session!.projectName, session!.id)
+              agentName = sessionData.agentName
               currentSummary = sessionData.currentSummary
               customTitle = sessionData.customTitle
               agents = sessionData.agents ?? []
@@ -206,9 +229,11 @@
 
         try {
           await api.renameSession(session!.projectName, session!.id, trimmed)
-          customTitle = trimmed || undefined
-          // Also refresh currentSummary to stay in sync
+          // Refresh messages and metadata from server
+          messages = await api.getSession(session!.projectName, session!.id)
           const sessionData = await api.getSessionTreeData(session!.projectName, session!.id)
+          agentName = sessionData.agentName
+          customTitle = sessionData.customTitle
           currentSummary = sessionData.currentSummary
         } catch (e) {
           error = String(e)
@@ -301,6 +326,7 @@
       {messages}
       {agents}
       {todos}
+      {agentName}
       {customTitle}
       {currentSummary}
       {projectDisplayName}

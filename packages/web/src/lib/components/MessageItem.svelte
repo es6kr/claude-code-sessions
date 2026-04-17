@@ -406,7 +406,7 @@
         <span class="hidden group-hover:inline font-mono text-gh-text-secondary/70">
           {messageId}
         </span>
-        {#if isCustomTitle && onEditTitle}
+        {#if (isCustomTitle || isAgentTitle) && onEditTitle}
           <TooltipButton
             class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gh-border text-xs"
             onclick={() => onEditTitle(msg)}

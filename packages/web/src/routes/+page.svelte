@@ -290,6 +290,7 @@
 
           // Update local state
           if (sessionData) {
+            sessionData.agentName = trimmed || undefined
             sessionData.customTitle = trimmed || undefined
             if (trimmed) sessionData.currentSummary = trimmed
             if (sessionData.summaries.length > 0) {
@@ -351,20 +352,43 @@
   const handleEditCustomTitle = (msg: Message) => {
     if (!selectedSession) return
 
-    const currentTitle = (msg as Message & { customTitle?: string }).customTitle ?? ''
-    showInput('Edit Custom Title', 'Custom title:', currentTitle, async (newTitle) => {
+    const isTitleMsg = msg.type === 'custom-title' || msg.type === 'agent-name'
+    const currentTitle =
+      (msg as Message & { customTitle?: string }).customTitle ??
+      (msg as Message & { agentName?: string }).agentName ??
+      ''
+    showInput('Edit Title', 'Title:', currentTitle, async (newTitle) => {
       closeInput()
       if (newTitle === currentTitle) return
 
+      const lineIndex = messages.indexOf(msg)
+      if (lineIndex === -1) return
+
       try {
-        await api.updateCustomTitle(
-          selectedSession!.projectName,
-          selectedSession!.id,
-          msg.uuid,
-          newTitle
-        )
-        ;(msg as Message & { customTitle?: string }).customTitle = newTitle
-        messages = [...messages]
+        if (isTitleMsg) {
+          const trimmed = newTitle.trim()
+          if (!trimmed) {
+            await api.deleteTitleMessage(
+              selectedSession!.projectName,
+              selectedSession!.id,
+              lineIndex
+            )
+            messages = messages.filter((_, i) => i !== lineIndex)
+          } else {
+            await api.updateTitleMessage(
+              selectedSession!.projectName,
+              selectedSession!.id,
+              lineIndex,
+              trimmed
+            )
+            if (msg.type === 'custom-title') {
+              ;(msg as Message & { customTitle?: string }).customTitle = trimmed
+            } else {
+              ;(msg as Message & { agentName?: string }).agentName = trimmed
+            }
+            messages = [...messages]
+          }
+        }
       } catch (e) {
         error = String(e)
       }

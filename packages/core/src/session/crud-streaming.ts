@@ -45,6 +45,9 @@ const scanSessionMeta = async (
 
     if (type === 'user' || type === 'assistant') {
       userAssistantCount++
+      // Reset title fields — only titles after the last message count
+      customTitle = undefined
+      agentName = undefined
       // Extract timestamp with regex (avoid full parse)
       const tsMatch = line.match(/"timestamp"\s*:\s*"([^"]+)"/)
       if (tsMatch) {

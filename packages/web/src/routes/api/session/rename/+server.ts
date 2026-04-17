@@ -12,12 +12,8 @@ export const POST: RequestHandler = async ({ request }) => {
   if (!body.project || !body.id) {
     throw error(400, 'project and id required')
   }
-  if (!body.title) {
-    const result = await Effect.runPromise(
-      session.deleteTitleMessages(body.project, body.id, 'custom-title')
-    )
-    return json(result)
-  }
-  const result = await Effect.runPromise(session.renameSession(body.project, body.id, body.title))
+  const result = await Effect.runPromise(
+    session.renameSession(body.project, body.id, body.title ?? '')
+  )
   return json(result)
 }

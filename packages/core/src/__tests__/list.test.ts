@@ -76,14 +76,14 @@ describe('listSessions - should include currentSummary and customTitle', () => {
 
     const messages = [
       {
-        type: 'custom-title',
-        customTitle: 'My Custom Session Title',
-      },
-      {
         type: 'user',
         uuid: 'msg-1',
         timestamp: '2025-12-20T01:00:00.000Z',
         message: { role: 'user', content: [{ type: 'text', text: 'Original first message' }] },
+      },
+      {
+        type: 'custom-title',
+        customTitle: 'My Custom Session Title',
       },
     ]
 
@@ -104,10 +104,6 @@ describe('listSessions - should include currentSummary and customTitle', () => {
 
     const messages = [
       {
-        type: 'custom-title',
-        customTitle: 'Custom Title Here',
-      },
-      {
         type: 'summary',
         summary: 'Summary text here',
         leafUuid: 'msg-1',
@@ -118,6 +114,10 @@ describe('listSessions - should include currentSummary and customTitle', () => {
         uuid: 'msg-1',
         timestamp: '2025-12-20T01:00:00.000Z',
         message: { role: 'user', content: [{ type: 'text', text: 'First user message' }] },
+      },
+      {
+        type: 'custom-title',
+        customTitle: 'Custom Title Here',
       },
     ]
 
@@ -158,13 +158,13 @@ describe('listSessions - should include currentSummary and customTitle', () => {
   it('should extract agentName from agent-name message', async () => {
     const sessionId = 'session-agent-name'
     const messages = [
-      { type: 'agent-name', agentName: 'Skill Sync Verification', sessionId },
       {
         type: 'user',
         uuid: 'msg-1',
         timestamp: '2025-12-20T01:00:00.000Z',
         message: { role: 'user', content: [{ type: 'text', text: 'continue' }] },
       },
+      { type: 'agent-name', agentName: 'Skill Sync Verification', sessionId },
     ]
     await fs.writeFile(
       path.join(projectDir, `${sessionId}.jsonl`),

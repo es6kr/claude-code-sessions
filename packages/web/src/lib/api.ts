@@ -143,14 +143,19 @@ export const restoreMessage = (
     { message, index }
   )
 
-export const updateCustomTitle = (
+export const deleteTitleMessage = (project: string, session: string, lineIndex: number) =>
+  del<{ success: boolean }>(
+    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&lineIndex=${lineIndex}`
+  )
+
+export const updateTitleMessage = (
   project: string,
   session: string,
-  uuid: string,
+  lineIndex: number,
   customTitle: string
 ) =>
   patch<{ success: boolean }>(
-    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&uuid=${encodeURIComponent(uuid)}`,
+    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&lineIndex=${lineIndex}`,
     { customTitle }
   )
 

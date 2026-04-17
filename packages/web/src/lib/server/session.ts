@@ -37,11 +37,10 @@ export const deleteTitleMessages = (
     return { success: true, removed: messages.length - filtered.length }
   })
 
-export const updateCustomTitle = (
+export const deleteTitleMessageByIndex = (
   projectName: string,
   sessionId: string,
-  messageUuid: string,
-  newTitle: string
+  lineIndex: number
 ) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
@@ -49,22 +48,88 @@ export const updateCustomTitle = (
     const lines = content.trim().split('\n').filter(Boolean)
     const messages = lines.map((line) => JSON.parse(line) as Message)
 
-    const targetIndex = messages.findIndex((m) => m.uuid === messageUuid)
-    if (targetIndex === -1) {
-      return { success: false, error: 'Message not found' }
+    if (lineIndex < 0 || lineIndex >= messages.length) {
+      return { success: false, error: 'Index out of bounds' }
     }
 
-    const msg = messages[targetIndex]
-    if (msg.type !== 'custom-title') {
-      return { success: false, error: 'Message is not a custom-title type' }
+    const msg = messages[lineIndex]
+    if (msg.type !== 'custom-title' && msg.type !== 'agent-name') {
+      return {
+        success: false,
+        error: `Message at index ${lineIndex} is type ${msg.type}, not custom-title or agent-name`,
+      }
     }
 
-    // Update customTitle field
-    ;(msg as Message & { customTitle?: string }).customTitle = newTitle
+    const deleted = messages.splice(lineIndex, 1)[0]
+    const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+    return { success: true, deletedMessage: deleted }
+  })
+
+export const updateTitleMessageByIndex = (
+  projectName: string,
+  sessionId: string,
+  lineIndex: number,
+  newTitle: string
+) =>
+  Effect.gen(function* () {
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const lines = content.trim().split('\n').filter(Boolean)
+    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+
+    if (lineIndex < 0 || lineIndex >= messages.length) {
+      return { success: false, error: 'Index out of bounds' }
+    }
+
+    const msg = messages[lineIndex]
+    if (msg.type === 'custom-title') {
+      msg.customTitle = newTitle
+    } else if (msg.type === 'agent-name') {
+      msg.agentName = newTitle
+    } else {
+      return { success: false, error: `Message at index ${lineIndex} is type ${msg.type}` }
+    }
 
     const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
     yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+    return { success: true }
+  })
 
+export const updateAllTitleMessages = (projectName: string, sessionId: string, newTitle: string) =>
+  Effect.gen(function* () {
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const lines = content.trim().split('\n').filter(Boolean)
+    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+
+    let updated = 0
+    for (const msg of messages) {
+      if (msg.type === 'custom-title') {
+        msg.customTitle = newTitle
+        updated++
+      } else if (msg.type === 'agent-name') {
+        msg.agentName = newTitle
+        updated++
+      }
+    }
+
+    if (updated === 0) {
+      return { success: true, updated: 0 }
+    }
+
+    const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+    return { success: true, updated }
+  })
+
+export const addCustomTitle = (projectName: string, sessionId: string, title: string) =>
+  Effect.gen(function* () {
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const record = JSON.stringify({ type: 'custom-title', customTitle: title, sessionId })
+    const newContent = content.trimEnd() + '\n' + record + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
     return { success: true }
   })
 
