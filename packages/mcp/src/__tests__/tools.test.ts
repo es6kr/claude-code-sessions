@@ -164,12 +164,15 @@ describe('MCP Tools - Integration Tests', () => {
       // renameSession returns { success: true } or { success: false, error: string }
       expect(result.success).toBe(true)
 
-      // Read the file and verify custom-title record was appended at the end
+      // Read the file and verify both custom-title and agent-name records appended
       const content = await fs.readFile(sessionPath, 'utf-8')
       const lines = content.trim().split('\n')
-      const lastMessage = JSON.parse(lines[lines.length - 1])
-      expect(lastMessage.type).toBe('custom-title')
-      expect(lastMessage.customTitle).toBe(newTitle)
+      const secondLast = JSON.parse(lines[lines.length - 2])
+      const last = JSON.parse(lines[lines.length - 1])
+      expect(secondLast.type).toBe('custom-title')
+      expect(secondLast.customTitle).toBe(newTitle)
+      expect(last.type).toBe('agent-name')
+      expect(last.agentName).toBe(newTitle)
     })
   })
 

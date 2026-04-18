@@ -422,6 +422,38 @@ describe('compressSession', () => {
     expect(titles[0].customTitle).toBe('Updated title')
   })
 
+  it('should keep only last agent-name when duplicates exist', async () => {
+    await writeSession(sandbox.projectDir, 'session-1', [
+      {
+        type: 'agent-name',
+        uuid: 'at-1',
+        agentName: 'First agent title',
+      },
+      {
+        type: 'user',
+        uuid: 'msg-1',
+        timestamp: '2025-01-01T10:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+      },
+      {
+        type: 'agent-name',
+        uuid: 'at-2',
+        agentName: 'Updated agent title',
+      },
+    ])
+
+    await Effect.runPromise(compressSession(sandbox.projectName, 'session-1'))
+
+    const filePath = path.join(sandbox.projectDir, 'session-1.jsonl')
+    const content = await fs.readFile(filePath, 'utf-8')
+    const lines = content.trim().split('\n')
+    const titles = lines
+      .map((l) => JSON.parse(l))
+      .filter((m: Record<string, unknown>) => m.type === 'agent-name')
+    expect(titles).toHaveLength(1)
+    expect(titles[0].agentName).toBe('Updated agent title')
+  })
+
   it('should report compressed size smaller than original', async () => {
     await writeSession(sandbox.projectDir, 'session-1', [
       {

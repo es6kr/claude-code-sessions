@@ -21,6 +21,7 @@
     messages: Message[]
     todos?: TodoItem[]
     agents?: AgentInfo[]
+    agentName?: string
     customTitle?: string
     currentSummary?: string
     projectDisplayName?: string
@@ -44,6 +45,7 @@
     messages,
     todos = [],
     agents = [],
+    agentName,
     customTitle,
     currentSummary,
     backUrl,
@@ -61,8 +63,15 @@
     fullWidth = false,
   }: Props = $props()
 
-  // Get display title: customTitle > currentSummary > session.title > 'Untitled'
-  const displayTitle = $derived(getDisplayTitle(customTitle, currentSummary, session?.title, 50))
+  const displayTitle = $derived(
+    getDisplayTitle({
+      agentName,
+      customTitle,
+      currentSummary,
+      title: session?.title,
+      maxLength: 50,
+    })
+  )
 
   // Validation (logging is done server-side in /api/session)
   const chainResult = $derived(validateChain(messages as Parameters<typeof validateChain>[0]))
@@ -223,8 +232,10 @@
   // Deletes immediately via API, stores in undo stack for potential restore
   const handleMessageDeleteWithUndo = async (msg: Message, isAgent: boolean) => {
     if (!session) return
+
+    const isTitleMessage = msg.type === 'custom-title' || msg.type === 'agent-name'
     const msgId = msg.uuid || msg.messageId || msg.leafUuid
-    if (!msgId) return
+    if (!msgId && !isTitleMessage) return
 
     // Determine targetType for disambiguation when uuid/messageId collision exists
     const targetType =
@@ -238,22 +249,36 @@
     let index: number
 
     if (isAgent) {
-      index = agentMessages.findIndex((m) => (m.uuid || m.messageId || m.leafUuid) === msgId)
+      index = isTitleMessage
+        ? agentMessages.indexOf(msg)
+        : agentMessages.findIndex((m) => (m.uuid || m.messageId || m.leafUuid) === msgId)
       if (index === -1) return
     } else {
-      index = messages.findIndex((m) => (m.uuid || m.messageId || m.leafUuid) === msgId)
+      index = isTitleMessage
+        ? messages.indexOf(msg)
+        : messages.findIndex((m) => (m.uuid || m.messageId || m.leafUuid) === msgId)
       if (index === -1) return
     }
 
-    // 1. Remove from UI immediately with chain repair (optimistic update)
-    if (isAgent) {
-      const copy = [...agentMessages] as unknown as Record<string, unknown>[]
-      deleteMessageWithChainRepair(copy, msgId, targetType)
-      agentMessages = copy as unknown as Message[]
+    // 1. Remove from UI immediately
+    if (isTitleMessage) {
+      if (isAgent) {
+        agentMessages = agentMessages.filter((_, i) => i !== index)
+      } else {
+        const copy = [...messages]
+        copy.splice(index, 1)
+        onMessagesChange?.(copy)
+      }
     } else {
-      const copy = [...messages] as unknown as Record<string, unknown>[]
-      deleteMessageWithChainRepair(copy, msgId, targetType)
-      onMessagesChange?.(copy as unknown as Message[])
+      if (isAgent) {
+        const copy = [...agentMessages] as unknown as Record<string, unknown>[]
+        deleteMessageWithChainRepair(copy, msgId!, targetType)
+        agentMessages = copy as unknown as Message[]
+      } else {
+        const copy = [...messages] as unknown as Record<string, unknown>[]
+        deleteMessageWithChainRepair(copy, msgId!, targetType)
+        onMessagesChange?.(copy as unknown as Message[])
+      }
     }
 
     // 2. Add to undo stack
@@ -271,7 +296,11 @@
     // 4. Delete via API - queued to prevent race conditions
     deleteQueue = deleteQueue.then(async () => {
       try {
-        await api.deleteMessage(session.projectName, targetSessionId, msgId, targetType)
+        if (isTitleMessage) {
+          await api.deleteTitleMessage(session.projectName, targetSessionId, index)
+        } else {
+          await api.deleteMessage(session.projectName, targetSessionId, msgId!, targetType)
+        }
       } catch (e) {
         console.error('Failed to delete message:', e)
       }

@@ -84,16 +84,22 @@ const readSessionMeta = (projectPath: string, file: string, projectName: string)
       O.getOrUndefined
     )
 
-    const customTitle = pipe(
-      messages,
-      A.findFirst((m) => m.type === 'custom-title'),
-      O.map((m) => (m as { customTitle?: string }).customTitle),
-      O.flatMap(O.fromNullable),
-      O.getOrUndefined
-    )
+    // Only titles after the last user/assistant message count as current
+    let customTitle: string | undefined
+    let agentName: string | undefined
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.type === 'user' || m.type === 'assistant') break
+      if (customTitle === undefined && m.type === 'custom-title') {
+        customTitle = (m as { customTitle?: string }).customTitle ?? undefined
+      } else if (agentName === undefined && m.type === 'agent-name') {
+        agentName = (m as { agentName?: string }).agentName ?? undefined
+      }
+    }
 
     return buildSessionMeta(sessionId, projectName, {
       title,
+      agentName,
       customTitle,
       currentSummary,
       userAssistantCount: userAssistantMessages.length,
@@ -267,18 +273,18 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
 
     const messages = parseJsonlLines<Record<string, unknown>>(lines, filePath, { strict: true })
 
-    // Remove existing custom-title (may be at wrong position) and append to end
-    const customTitleIdx = messages.findIndex((m) => m.type === 'custom-title')
-    if (customTitleIdx >= 0) {
-      messages.splice(customTitleIdx, 1)
-    }
-    messages.push({
-      type: 'custom-title',
-      customTitle: newTitle,
-      sessionId,
-    })
+    // Remove all existing custom-title and agent-name records
+    const filtered = messages.filter((m) => m.type !== 'custom-title' && m.type !== 'agent-name')
 
-    const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    // If new title is non-empty, append both record types at end
+    if (newTitle) {
+      filtered.push(
+        { type: 'custom-title', customTitle: newTitle, sessionId },
+        { type: 'agent-name', agentName: newTitle, sessionId }
+      )
+    }
+
+    const newContent = filtered.map((m) => JSON.stringify(m)).join('\n') + '\n'
     yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
 
     return { success: true } satisfies RenameSessionResult
