@@ -43,6 +43,7 @@ export interface Message {
   parentUuid?: string | null
   messageId?: string // For file-history-snapshot type
   type:
+    | 'agent-name'
     | 'assistant'
     | 'compact_boundary'
     | 'custom-title'
@@ -142,14 +143,19 @@ export const restoreMessage = (
     { message, index }
   )
 
-export const updateCustomTitle = (
+export const deleteTitleMessage = (project: string, session: string, lineIndex: number) =>
+  del<{ success: boolean }>(
+    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&lineIndex=${lineIndex}`
+  )
+
+export const updateTitleMessage = (
   project: string,
   session: string,
-  uuid: string,
+  lineIndex: number,
   customTitle: string
 ) =>
   patch<{ success: boolean }>(
-    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&uuid=${encodeURIComponent(uuid)}`,
+    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&lineIndex=${lineIndex}`,
     { customTitle }
   )
 
@@ -269,6 +275,7 @@ export interface SessionData {
   id: string
   projectName: string
   title: string
+  agentName?: string
   customTitle?: string
   currentSummary?: string
   messageCount: number

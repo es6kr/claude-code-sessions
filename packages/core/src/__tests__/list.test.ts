@@ -76,14 +76,14 @@ describe('listSessions - should include currentSummary and customTitle', () => {
 
     const messages = [
       {
-        type: 'custom-title',
-        customTitle: 'My Custom Session Title',
-      },
-      {
         type: 'user',
         uuid: 'msg-1',
         timestamp: '2025-12-20T01:00:00.000Z',
         message: { role: 'user', content: [{ type: 'text', text: 'Original first message' }] },
+      },
+      {
+        type: 'custom-title',
+        customTitle: 'My Custom Session Title',
       },
     ]
 
@@ -104,10 +104,6 @@ describe('listSessions - should include currentSummary and customTitle', () => {
 
     const messages = [
       {
-        type: 'custom-title',
-        customTitle: 'Custom Title Here',
-      },
-      {
         type: 'summary',
         summary: 'Summary text here',
         leafUuid: 'msg-1',
@@ -118,6 +114,10 @@ describe('listSessions - should include currentSummary and customTitle', () => {
         uuid: 'msg-1',
         timestamp: '2025-12-20T01:00:00.000Z',
         message: { role: 'user', content: [{ type: 'text', text: 'First user message' }] },
+      },
+      {
+        type: 'custom-title',
+        customTitle: 'Custom Title Here',
       },
     ]
 
@@ -132,6 +132,48 @@ describe('listSessions - should include currentSummary and customTitle', () => {
     expect(sessions[0].customTitle).toBe('Custom Title Here')
     expect(sessions[0].currentSummary).toBe('Summary text here')
     expect(sessions[0].title).toBe('First user message')
+  })
+
+  it('should use last custom-title when multiple exist', async () => {
+    const sessionId = 'session-multiple-titles'
+    const messages = [
+      { type: 'custom-title', customTitle: 'First Title' },
+      {
+        type: 'user',
+        uuid: 'msg-1',
+        timestamp: '2025-12-20T01:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+      },
+      { type: 'custom-title', customTitle: 'Latest Title' },
+    ]
+    await fs.writeFile(
+      path.join(projectDir, `${sessionId}.jsonl`),
+      messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    )
+    const sessions = await Effect.runPromise(listSessions(projectName))
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0].customTitle).toBe('Latest Title')
+  })
+
+  it('should extract agentName from agent-name message', async () => {
+    const sessionId = 'session-agent-name'
+    const messages = [
+      {
+        type: 'user',
+        uuid: 'msg-1',
+        timestamp: '2025-12-20T01:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'continue' }] },
+      },
+      { type: 'agent-name', agentName: 'Skill Sync Verification', sessionId },
+    ]
+    await fs.writeFile(
+      path.join(projectDir, `${sessionId}.jsonl`),
+      messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    )
+    const sessions = await Effect.runPromise(listSessions(projectName))
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0].agentName).toBe('Skill Sync Verification')
+    expect(sessions[0].title).toBe('continue')
   })
 
   it('should sort sessions by updatedAt descending (newest first)', async () => {

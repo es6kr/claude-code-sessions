@@ -29,6 +29,7 @@ const scanSessionMeta = async (
   let userAssistantCount = 0
   let hasSummary = false
   let title: string | undefined
+  let agentName: string | undefined
   let customTitle: string | undefined
   let currentSummary: string | undefined
   let firstTimestamp: string | undefined
@@ -44,6 +45,9 @@ const scanSessionMeta = async (
 
     if (type === 'user' || type === 'assistant') {
       userAssistantCount++
+      // Reset title fields — only titles after the last message count
+      customTitle = undefined
+      agentName = undefined
       // Extract timestamp with regex (avoid full parse)
       const tsMatch = line.match(/"timestamp"\s*:\s*"([^"]+)"/)
       if (tsMatch) {
@@ -67,10 +71,17 @@ const scanSessionMeta = async (
       } catch {
         /* skip malformed */
       }
-    } else if (type === 'custom-title' && !customTitle) {
+    } else if (type === 'custom-title') {
       try {
         const msg = JSON.parse(line) as { customTitle?: string }
-        customTitle = msg.customTitle
+        if (msg.customTitle) customTitle = msg.customTitle
+      } catch {
+        /* skip malformed */
+      }
+    } else if (type === 'agent-name') {
+      try {
+        const msg = JSON.parse(line) as { agentName?: string }
+        if (msg.agentName) agentName = msg.agentName
       } catch {
         /* skip malformed */
       }
@@ -79,6 +90,7 @@ const scanSessionMeta = async (
 
   return buildSessionMeta(sessionId, projectName, {
     title,
+    agentName,
     customTitle,
     currentSummary,
     userAssistantCount,

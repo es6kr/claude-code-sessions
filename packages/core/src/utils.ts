@@ -146,6 +146,7 @@ export const isContinuationSummary = (msg: Message): boolean => {
  * Options for getDisplayTitle when using the options-based signature
  */
 export interface DisplayTitleOptions {
+  agentName?: string
   customTitle?: string
   currentSummary?: string
   title?: string
@@ -160,7 +161,7 @@ export interface DisplayTitleOptions {
 
 /**
  * Get display title with fallback logic
- * Priority: customTitle > currentSummary (truncated) > title/datetime > fallback
+ * Priority: customTitle > agentName > currentSummary (truncated) > title/datetime > fallback
  * Also handles slash command format in title
  *
  * Supports two call signatures:
@@ -184,11 +185,13 @@ export function getDisplayTitle(
 ): string {
   let mode: TitleDisplayMode = 'message'
   let createdAt: string | undefined
+  let agentName: string | undefined
   let customTitle: string | undefined
   let locale: string | undefined
 
   if (typeof customTitleOrOptions === 'object' && customTitleOrOptions !== null) {
     const opts = customTitleOrOptions
+    agentName = opts.agentName
     customTitle = opts.customTitle
     currentSummary = opts.currentSummary
     title = opts.title
@@ -202,6 +205,7 @@ export function getDisplayTitle(
   }
 
   if (customTitle) return customTitle
+  if (agentName) return agentName
   if (currentSummary) {
     return currentSummary.length > maxLength
       ? currentSummary.slice(0, maxLength - 3) + '...'
@@ -447,23 +451,22 @@ export const sessionHasSubItems = (data: {
 export const getSessionTooltip = (session: {
   id: string
   title?: string
+  agentName?: string
   customTitle?: string
   currentSummary?: string
   createdAt?: string
   updatedAt?: string
 }): string => {
-  const { id, title, customTitle, currentSummary, createdAt, updatedAt } = session
+  const { id, title, agentName, customTitle, currentSummary, createdAt, updatedAt } = session
   let text: string
-  // If customTitle is displayed, show currentSummary in tooltip
-  if (customTitle && currentSummary) {
+  // Show complementary info: if a title override is displayed, show the next fallback
+  if (customTitle && (agentName || currentSummary)) {
+    text = agentName || currentSummary!
+  } else if (agentName && currentSummary) {
     text = currentSummary
-  }
-  // If currentSummary is displayed as title, show original title in tooltip
-  else if (currentSummary && title && title !== 'Untitled') {
+  } else if (currentSummary && title && title !== 'Untitled') {
     text = title
-  }
-  // If title is displayed, show currentSummary if available
-  else if (currentSummary) {
+  } else if (currentSummary) {
     text = currentSummary
   } else {
     text = title ?? 'No title'
