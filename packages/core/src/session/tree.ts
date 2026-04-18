@@ -125,35 +125,40 @@ const loadSessionTreeDataInternal = (
       // Search all session files in the project for summaries with leafUuid pointing to this session
       const projectFiles = yield* Effect.tryPromise(() => fs.readdir(projectPath))
       const allJsonlFiles = projectFiles.filter((f) => f.endsWith('.jsonl'))
-      for (const file of allJsonlFiles) {
-        try {
-          const otherFilePath = path.join(projectPath, file)
-          const otherContent = yield* Effect.tryPromise(() => fs.readFile(otherFilePath, 'utf-8'))
-          const otherLines = otherContent.trim().split('\n').filter(Boolean)
-          for (let i = 0; i < otherLines.length; i++) {
-            const msg = tryParseJsonLine<JsonlRecord>(otherLines[i], i + 1, otherFilePath)
-            if (!msg) continue
-            if (
-              msg.type === 'summary' &&
-              typeof msg.summary === 'string' &&
-              typeof msg.leafUuid === 'string' &&
-              sessionUuids.has(msg.leafUuid)
-            ) {
-              // This summary's leafUuid points to a message in THIS session
-              const targetMsg = messages.find((m) => m.uuid === msg.leafUuid)
-              summaries.push({
-                summary: msg.summary as string,
-                leafUuid: msg.leafUuid,
-                timestamp:
-                  (targetMsg?.timestamp as string) ?? (msg.timestamp as string | undefined),
-                sourceFile: file,
-              })
+      yield* Effect.forEach(
+        allJsonlFiles,
+        (file) =>
+          Effect.gen(function* () {
+            const otherFilePath = path.join(projectPath, file)
+            const otherContent = yield* Effect.tryPromise(() => fs.readFile(otherFilePath, 'utf-8'))
+            const otherLines = otherContent.trim().split('\n').filter(Boolean)
+            for (let i = 0; i < otherLines.length; i++) {
+              const msg = tryParseJsonLine<JsonlRecord>(otherLines[i], i + 1, otherFilePath)
+              if (!msg) continue
+              if (
+                msg.type === 'summary' &&
+                typeof msg.summary === 'string' &&
+                typeof msg.leafUuid === 'string' &&
+                sessionUuids.has(msg.leafUuid)
+              ) {
+                const targetMsg = messages.find((m) => m.uuid === msg.leafUuid)
+                summaries.push({
+                  summary: msg.summary as string,
+                  leafUuid: msg.leafUuid,
+                  timestamp:
+                    (targetMsg?.timestamp as string) ?? (msg.timestamp as string | undefined),
+                  sourceFile: file,
+                })
+              }
             }
-          }
-        } catch (error) {
-          log.debug(`Skipping unreadable file: ${file}`, error)
-        }
-      }
+          }).pipe(
+            Effect.catchAll((error) => {
+              log.debug(`Skipping unreadable file: ${file}`, error)
+              return Effect.void
+            })
+          ),
+        { concurrency: 'unbounded' }
+      )
     }
     // Sort by timestamp ascending (oldest first), then sourceFile descending
     // Official extension shows the OLDEST summary as currentSummary
@@ -201,39 +206,42 @@ const loadSessionTreeDataInternal = (
 
     // Load agent info (message counts)
     const agents: AgentInfo[] = []
-    for (const agentId of linkedAgentIds) {
-      const agentPath = path.join(projectPath, `${agentId}.jsonl`)
-      try {
-        const agentContent = yield* Effect.tryPromise(() => fs.readFile(agentPath, 'utf-8'))
-        const agentLines = agentContent.trim().split('\n').filter(Boolean)
-        const agentMsgs = agentLines.map((l) => JSON.parse(l) as JsonlRecord)
-        const agentUserAssistant = agentMsgs.filter(
-          (m) => m.type === 'user' || m.type === 'assistant'
-        )
+    yield* Effect.forEach(
+      linkedAgentIds,
+      (agentId) => {
+        const agentPath = path.join(projectPath, `${agentId}.jsonl`)
+        return Effect.gen(function* () {
+          const agentContent = yield* Effect.tryPromise(() => fs.readFile(agentPath, 'utf-8'))
+          const agentLines = agentContent.trim().split('\n').filter(Boolean)
+          const agentMsgs = agentLines.map((l) => JSON.parse(l) as JsonlRecord)
+          const agentUserAssistant = agentMsgs.filter(
+            (m) => m.type === 'user' || m.type === 'assistant'
+          )
 
-        // Try to extract agent name from first message
-        let agentName: string | undefined
-        const firstAgentMsg = agentMsgs.find((m) => m.type === 'user')
-        if (firstAgentMsg) {
-          const text = extractTextContent(firstAgentMsg.message as Message['message'])
-          if (text) {
-            agentName = extractTitle(text)
+          let agentName: string | undefined
+          const firstAgentMsg = agentMsgs.find((m) => m.type === 'user')
+          if (firstAgentMsg) {
+            const text = extractTextContent(firstAgentMsg.message as Message['message'])
+            if (text) {
+              agentName = extractTitle(text)
+            }
           }
-        }
 
-        agents.push({
-          id: agentId,
-          name: agentName,
-          messageCount: agentUserAssistant.length,
-        })
-      } catch (error) {
-        log.debug(`Agent file not readable: ${agentId}`, error)
-        agents.push({
-          id: agentId,
-          messageCount: 0,
-        })
-      }
-    }
+          agents.push({
+            id: agentId,
+            name: agentName,
+            messageCount: agentUserAssistant.length,
+          })
+        }).pipe(
+          Effect.catchAll((error) => {
+            log.debug(`Agent file not readable: ${agentId}`, error)
+            agents.push({ id: agentId, messageCount: 0 })
+            return Effect.void
+          })
+        )
+      },
+      { concurrency: 'unbounded' }
+    )
 
     // Load todos
     const todos = yield* findLinkedTodos(sessionId, linkedAgentIds)
@@ -293,46 +301,45 @@ const buildPhase1 = (projectPath: string, allJsonlFiles: string[]) =>
     const allSummaries: Phase1Result['allSummaries'] = []
 
     yield* Effect.all(
-      allJsonlFiles.map((file) =>
-        Effect.gen(function* () {
-          const filePath = path.join(projectPath, file)
-          const fileSessionId = file.replace('.jsonl', '')
-          try {
-            const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-            const lines = content.trim().split('\n').filter(Boolean)
-            for (let i = 0; i < lines.length; i++) {
-              const msg = tryParseJsonLine<JsonlRecord>(lines[i], i + 1, filePath)
-              if (!msg) continue
-              if (msg.uuid && typeof msg.uuid === 'string') {
-                globalUuidMap.set(msg.uuid, {
-                  sessionId: fileSessionId,
-                  timestamp: msg.timestamp as string | undefined,
-                })
-              }
-              // Also check messageId for file-history-snapshot type
-              if (msg.messageId && typeof msg.messageId === 'string') {
-                globalUuidMap.set(msg.messageId, {
-                  sessionId: fileSessionId,
-                  timestamp: (msg.snapshot as Record<string, unknown> | undefined)?.timestamp as
-                    | string
-                    | undefined,
-                })
-              }
-              // Collect summaries with source file for sorting
-              if (msg.type === 'summary' && typeof msg.summary === 'string') {
-                allSummaries.push({
-                  summary: msg.summary as string,
-                  leafUuid: msg.leafUuid as string | undefined,
-                  timestamp: msg.timestamp as string | undefined,
-                  sourceFile: file,
-                })
-              }
+      allJsonlFiles.map((file) => {
+        const filePath = path.join(projectPath, file)
+        const fileSessionId = file.replace('.jsonl', '')
+        return Effect.gen(function* () {
+          const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+          const lines = content.trim().split('\n').filter(Boolean)
+          for (let i = 0; i < lines.length; i++) {
+            const msg = tryParseJsonLine<JsonlRecord>(lines[i], i + 1, filePath)
+            if (!msg) continue
+            if (msg.uuid && typeof msg.uuid === 'string') {
+              globalUuidMap.set(msg.uuid, {
+                sessionId: fileSessionId,
+                timestamp: msg.timestamp as string | undefined,
+              })
             }
-          } catch (error) {
-            log.debug(`Skipping unreadable file: ${file}`, error)
+            if (msg.messageId && typeof msg.messageId === 'string') {
+              globalUuidMap.set(msg.messageId, {
+                sessionId: fileSessionId,
+                timestamp: (msg.snapshot as Record<string, unknown> | undefined)?.timestamp as
+                  | string
+                  | undefined,
+              })
+            }
+            if (msg.type === 'summary' && typeof msg.summary === 'string') {
+              allSummaries.push({
+                summary: msg.summary as string,
+                leafUuid: msg.leafUuid as string | undefined,
+                timestamp: msg.timestamp as string | undefined,
+                sourceFile: file,
+              })
+            }
           }
-        })
-      ),
+        }).pipe(
+          Effect.catchAll((error) => {
+            log.debug(`Skipping unreadable file: ${file}`, error)
+            return Effect.void
+          })
+        )
+      }),
       { concurrency: 20 }
     )
 
@@ -491,17 +498,18 @@ export const loadProjectTreeData = (projectName: string, sortOptions?: SessionSo
     // Step 1: Collect file modification times (cheap ~50ms for 57 files)
     const fileMtimes = new Map<string, number>()
     yield* Effect.all(
-      sessionFiles.map((file) =>
-        Effect.gen(function* () {
-          const filePath = path.join(projectPath, file)
-          try {
-            const stat = yield* Effect.tryPromise(() => fs.stat(filePath))
-            fileMtimes.set(file.replace('.jsonl', ''), stat.mtimeMs)
-          } catch (error) {
+      sessionFiles.map((file) => {
+        const filePath = path.join(projectPath, file)
+        return Effect.tryPromise(() => fs.stat(filePath)).pipe(
+          Effect.tap((stat) =>
+            Effect.sync(() => fileMtimes.set(file.replace('.jsonl', ''), stat.mtimeMs))
+          ),
+          Effect.catchAll((error) => {
             log.debug(`Failed to stat file: ${file}`, error)
-          }
-        })
-      ),
+            return Effect.void
+          })
+        )
+      }),
       { concurrency: 20 }
     )
 
