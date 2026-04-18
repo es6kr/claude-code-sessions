@@ -80,6 +80,7 @@ export {
   sessionHasSubItems,
   getSessionTooltip,
   canMoveSession,
+  fileExists,
   groupSessionsByDate,
   type DateGroupKey,
   type DateGroup,

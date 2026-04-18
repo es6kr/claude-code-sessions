@@ -8,6 +8,7 @@ import * as crypto from 'node:crypto'
 import { getSessionsDir } from '../paths.js'
 import {
   extractTitle,
+  fileExists,
   isContinuationSummary,
   cleanupSplitFirstMessage,
   parseJsonlLines,
@@ -305,24 +306,14 @@ export const moveSession = (
     const targetFile = path.join(targetPath, `${sessionId}.jsonl`)
 
     // Check source file exists
-    const sourceExists = yield* Effect.tryPromise(() =>
-      fs
-        .access(sourceFile)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const sourceExists = yield* Effect.tryPromise(() => fileExists(sourceFile))
 
     if (!sourceExists) {
       return { success: false, error: 'Source session not found' }
     }
 
     // Check target file does not exist
-    const targetExists = yield* Effect.tryPromise(() =>
-      fs
-        .access(targetFile)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const targetExists = yield* Effect.tryPromise(() => fileExists(targetFile))
 
     if (targetExists) {
       return { success: false, error: 'Session already exists in target project' }
@@ -342,12 +333,7 @@ export const moveSession = (
       const sourceAgentFile = path.join(sourcePath, `${agentId}.jsonl`)
       const targetAgentFile = path.join(targetPath, `${agentId}.jsonl`)
 
-      const agentExists = yield* Effect.tryPromise(() =>
-        fs
-          .access(sourceAgentFile)
-          .then(() => true)
-          .catch(() => false)
-      )
+      const agentExists = yield* Effect.tryPromise(() => fileExists(sourceAgentFile))
 
       if (agentExists) {
         yield* Effect.tryPromise(() => fs.rename(sourceAgentFile, targetAgentFile))

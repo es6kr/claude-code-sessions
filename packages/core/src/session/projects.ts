@@ -6,17 +6,13 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir, folderNameToPath } from '../paths.js'
 import type { Project } from '../types.js'
+import { fileExists } from '../utils.js'
 
 // List all project directories
 export const listProjects = Effect.gen(function* () {
   const sessionsDir = getSessionsDir()
 
-  const exists = yield* Effect.tryPromise(() =>
-    fs
-      .access(sessionsDir)
-      .then(() => true)
-      .catch(() => false)
-  )
+  const exists = yield* Effect.tryPromise(() => fileExists(sessionsDir))
 
   if (!exists) {
     return [] as Project[]
