@@ -391,6 +391,13 @@ export interface SessionSortOptions {
 // ============================================================================
 
 /** Options for resuming a session */
+export interface StartClaudeOptions {
+  /** Full CLI command to execute (e.g. "claude --resume abc123") */
+  command: string
+  /** Working directory */
+  cwd?: string
+}
+
 export interface ResumeSessionOptions {
   /** Session ID to resume */
   sessionId: string

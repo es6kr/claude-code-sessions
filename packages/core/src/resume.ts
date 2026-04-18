@@ -1,33 +1,22 @@
 /**
- * Resume session functionality - Server-side only
+ * Resume/start session functionality - Server-side only
  * This module uses child_process and should NOT be imported in browser environments
  */
 import { spawn } from 'node:child_process'
-import type { ResumeSessionOptions, ResumeSessionResult } from './types.js'
+import type { ResumeSessionOptions, ResumeSessionResult, StartClaudeOptions } from './types.js'
 
 /**
- * Resume a session using claude CLI
- * On macOS: opens Terminal.app with claude --resume command
- * On other platforms: spawns a detached process with appropriate terminal
+ * Start claude CLI in an external terminal window.
+ * OS-specific: Terminal.app (macOS), cmd (Windows), gnome-terminal/konsole/xterm (Linux)
  */
-export const resumeSession = (options: ResumeSessionOptions): ResumeSessionResult => {
-  const { sessionId, cwd, fork = false, args = [] } = options
+export const startClaude = (options: StartClaudeOptions): ResumeSessionResult => {
+  const { command, cwd } = options
+  const workingDir = cwd ?? process.cwd()
 
   try {
-    const claudeArgs = ['--resume', sessionId]
-    if (fork) {
-      claudeArgs.push('--fork-session')
-    }
-    claudeArgs.push(...args)
-
-    const claudeCommand = `claude ${claudeArgs.join(' ')}`
-    const workingDir = cwd ?? process.cwd()
-
-    // macOS: use osascript to open Terminal.app and run command
     if (process.platform === 'darwin') {
-      // AppleScript to open new Terminal window, cd to directory, and run command
       const escapedDir = workingDir.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-      const escapedCmd = claudeCommand.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      const escapedCmd = command.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
       const script = `
 tell application "Terminal"
   activate
@@ -47,9 +36,8 @@ end tell
       return { success: true, pid: child.pid }
     }
 
-    // Windows: use start cmd
     if (process.platform === 'win32') {
-      const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', claudeCommand], {
+      const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', command], {
         cwd: workingDir,
         detached: true,
         stdio: 'ignore',
@@ -63,7 +51,7 @@ end tell
     const terminals = ['gnome-terminal', 'konsole', 'xterm']
     for (const term of terminals) {
       try {
-        const child = spawn(term, ['--', 'bash', '-c', `cd "${workingDir}" && ${claudeCommand}`], {
+        const child = spawn(term, ['--', 'bash', '-c', `cd "${workingDir}" && ${command}`], {
           detached: true,
           stdio: 'ignore',
         })
@@ -81,4 +69,22 @@ end tell
       error: error instanceof Error ? error.message : String(error),
     }
   }
+}
+
+/**
+ * Resume a session using claude CLI in an external terminal
+ */
+export const resumeSession = (options: ResumeSessionOptions): ResumeSessionResult => {
+  const { sessionId, cwd, fork = false, args = [] } = options
+
+  const claudeArgs = ['--resume', sessionId]
+  if (fork) {
+    claudeArgs.push('--fork-session')
+  }
+  claudeArgs.push(...args)
+
+  return startClaude({
+    command: `claude ${claudeArgs.join(' ')}`,
+    cwd,
+  })
 }

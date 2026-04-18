@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import { SessionTreeProvider, type SessionTreeItem } from './treeProvider'
 import * as session from '@claude-sessions/core'
-import { resumeSession } from '@claude-sessions/core/server'
+import { resumeSession, startClaude } from '@claude-sessions/core/server'
 import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { outputChannel } from './output'
@@ -747,20 +747,14 @@ export function activate(context: vscode.ExtensionContext) {
           terminal.show()
           terminal.sendText(cliCommand)
         } else {
-          const args = cliFlags ? cliFlags.split(/\s+/).filter(Boolean) : []
-          const child = spawn('claude', args, {
-            cwd,
-            detached: true,
-            stdio: 'ignore',
-          })
-          child.unref()
+          const result = startClaude({ command: cliCommand, cwd })
 
-          if (child.pid) {
+          if (result.success) {
             vscode.window.showInformationMessage(
-              `Claude started in external terminal (PID: ${child.pid})`
+              `Claude started in external terminal (PID: ${result.pid})`
             )
           } else {
-            vscode.window.showErrorMessage('Failed to start Claude')
+            vscode.window.showErrorMessage(`Failed to start Claude: ${result.error}`)
           }
         }
       }
