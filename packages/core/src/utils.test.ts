@@ -227,6 +227,44 @@ describe('getDisplayTitle', () => {
       '<command-message>session</command-message>\n<command-name>/session</command-name>\n<command-args>  repair --dry-run</command-args>'
     expect(getDisplayTitle(undefined, undefined, title)).toBe('/session repair --dry-run')
   })
+
+  it('should prioritize customTitle > agentName > currentSummary > title', () => {
+    expect(
+      getDisplayTitle({
+        customTitle: 'Custom',
+        agentName: 'Agent',
+        currentSummary: 'Summary',
+        title: 'Title',
+      })
+    ).toBe('Custom')
+
+    expect(
+      getDisplayTitle({
+        agentName: 'Agent',
+        currentSummary: 'Summary',
+        title: 'Title',
+      })
+    ).toBe('Agent')
+
+    expect(
+      getDisplayTitle({
+        currentSummary: 'Summary',
+        title: 'Title',
+      })
+    ).toBe('Summary')
+
+    expect(getDisplayTitle({ title: 'Title' })).toBe('Title')
+  })
+
+  it('should ignore empty agentName', () => {
+    expect(
+      getDisplayTitle({
+        agentName: '',
+        currentSummary: 'Summary',
+        title: 'Title',
+      })
+    ).toBe('Summary')
+  })
 })
 
 describe('maskHomePath', () => {

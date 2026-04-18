@@ -4,7 +4,7 @@ export type ThemePreference = 'light' | 'dark' | 'system'
 export type EffectiveTheme = 'light' | 'dark'
 
 const getStoredPreference = (): ThemePreference => {
-  if (typeof localStorage === 'undefined') return 'system'
+  if (typeof window === 'undefined') return 'system'
   const stored = localStorage.getItem('theme')
   if (stored === 'light' || stored === 'dark' || stored === 'system') return stored
   return 'system'

@@ -124,6 +124,11 @@
         "icon": "$(sort-precedence)"
       },
       {
+        "command": "claudeSessions.toggleGroupByDate",
+        "title": "Toggle Group by Date",
+        "icon": "$(calendar)"
+      },
+      {
         "command": "claudeSessions.filterSessions",
         "title": "Filter Sessions",
         "icon": "$(search)"
@@ -132,6 +137,11 @@
         "command": "claudeSessions.clearFilter",
         "title": "Clear Filter",
         "icon": "$(close)"
+      },
+      {
+        "command": "claudeSessions.restartExtensionHost",
+        "title": "Restart Extension Host",
+        "icon": "$(debug-restart)"
       },
       {
         "command": "claudeSessions.restartWebServer",
@@ -165,24 +175,29 @@
           "group": "navigation@2"
         },
         {
-          "command": "claudeSessions.cleanup",
+          "command": "claudeSessions.toggleGroupByDate",
           "when": "view == claudeSessions",
           "group": "navigation@3"
         },
         {
-          "command": "claudeSessions.openWebUI",
+          "command": "claudeSessions.cleanup",
           "when": "view == claudeSessions",
           "group": "navigation@4"
         },
         {
-          "command": "claudeSessions.refresh",
+          "command": "claudeSessions.openWebUI",
           "when": "view == claudeSessions",
           "group": "navigation@5"
         },
         {
-          "command": "workbench.action.restartExtensionHost",
+          "command": "claudeSessions.refresh",
           "when": "view == claudeSessions",
           "group": "navigation@6"
+        },
+        {
+          "command": "claudeSessions.restartExtensionHost",
+          "when": "view == claudeSessions",
+          "group": "navigation@7"
         }
       ],
       "view/item/context": [
@@ -371,10 +386,10 @@
   "devDependencies": {
     "@types/glob": "^9.0.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.5.0",
+    "@types/node": "^25.6.0",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.0.0",
+    "@vscode/vsce": "^3.9.1",
     "glob": "^13.0.6",
     "mocha": "^11.7.5",
     "tsup": "^8.3.0",
