@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import { SessionTreeProvider, type SessionTreeItem } from './treeProvider'
 import * as session from '@claude-sessions/core'
-import { resumeSession } from '@claude-sessions/core/server'
+import { resumeSession, startClaude } from '@claude-sessions/core/server'
 import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { outputChannel } from './output'
@@ -696,6 +696,63 @@ export function activate(context: vscode.ExtensionContext) {
           cwd,
         })
         terminal.show()
+      }
+    ),
+
+    vscode.commands.registerCommand(
+      'claudeSessions.startClaudeInFolder',
+      async (item: SessionTreeItem) => {
+        if (!item || (item.type !== 'session' && item.type !== 'project')) return
+
+        const { defaultTerminalMode, cliFlags } = getConfig()
+        const cliCommand = cliFlags ? `claude ${cliFlags}` : 'claude'
+        const cwd = await resolveProjectCwd(item.projectName)
+
+        let mode: 'internal' | 'external'
+        if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
+          mode = defaultTerminalMode
+        } else {
+          const choice = await vscode.window.showQuickPick(
+            [
+              {
+                label: '$(terminal) Internal Terminal',
+                description: 'Open in VSCode integrated terminal',
+                mode: 'internal' as const,
+              },
+              {
+                label: '$(link-external) External Terminal',
+                description: 'Open in system default terminal',
+                mode: 'external' as const,
+              },
+            ],
+            {
+              placeHolder: 'Where to start Claude?',
+              title: 'Start Claude in Folder',
+            }
+          )
+
+          if (!choice) return
+          mode = choice.mode
+        }
+
+        if (mode === 'internal') {
+          const terminal = vscode.window.createTerminal({
+            name: `Claude: ${shortProjectName(item.projectName)}`,
+            cwd,
+          })
+          terminal.show()
+          terminal.sendText(cliCommand)
+        } else {
+          const result = startClaude({ command: cliCommand, cwd })
+
+          if (result.success) {
+            vscode.window.showInformationMessage(
+              `Claude started in external terminal (PID: ${result.pid})`
+            )
+          } else {
+            vscode.window.showErrorMessage(`Failed to start Claude: ${result.error}`)
+          }
+        }
       }
     ),
 

@@ -3,6 +3,7 @@ import {
   cleanupSplitFirstMessage,
   extractTextContent,
   extractTitle,
+  fileExists,
   getDisplayTitle,
   maskHomePath,
   parseJsonlLines,
@@ -405,5 +406,38 @@ describe('readJsonlFile', () => {
 
     // Effect.tryPromise wraps the error, so we check that it rejects
     await expect(Effect.runPromise(readJsonlFile('/nonexistent.jsonl'))).rejects.toThrow()
+  })
+})
+
+describe('fileExists', () => {
+  const mockedFs = vi.mocked(fs)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('should return true when file is accessible', async () => {
+    mockedFs.access.mockResolvedValue(undefined)
+
+    const result = await fileExists('/tmp/existing-file.txt')
+
+    expect(result).toBe(true)
+    expect(mockedFs.access).toHaveBeenCalledWith('/tmp/existing-file.txt')
+  })
+
+  it('should return false when file does not exist', async () => {
+    mockedFs.access.mockRejectedValue(new Error('ENOENT: no such file or directory'))
+
+    const result = await fileExists('/tmp/nonexistent-file.txt')
+
+    expect(result).toBe(false)
+  })
+
+  it('should return false when permission is denied', async () => {
+    mockedFs.access.mockRejectedValue(new Error('EACCES: permission denied'))
+
+    const result = await fileExists('/tmp/restricted-file.txt')
+
+    expect(result).toBe(false)
   })
 })
