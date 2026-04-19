@@ -73,6 +73,20 @@ Session B (contains target message):
 
 When matching official extension's session list order and relative time display, use `leafUuid` resolution to get the correct timestamp.
 
+## Title Message Architecture
+
+`custom-title` and `agent-name` JSONL records have **no `uuid` field**:
+
+```
+{"type":"custom-title","customTitle":"My Title","sessionId":"abc123"}
+{"type":"agent-name","agentName":"Agent Task","sessionId":"abc123"}
+```
+
+- Standard uuid-based APIs (`deleteMessage`, `updateCustomTitle`) **cannot target these messages**
+- Use **line-index-based** operations: `deleteTitleMessageByIndex`, `updateTitleMessageByIndex`
+- The web API accepts `lineIndex` query parameter for `DELETE` and `PATCH /api/message`
+- **Rename Session** modifies both `custom-title` and `agent-name` records simultaneously
+
 ## Tech Stack
 
 - **Core**: TypeScript, Effect-TS

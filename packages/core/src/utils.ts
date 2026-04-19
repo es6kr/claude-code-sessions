@@ -1,7 +1,7 @@
 /**
  * Utility functions for message processing
  */
-import { Effect } from 'effect'
+import { Effect, Data } from 'effect'
 import * as fs from 'node:fs/promises'
 import type {
   Message,
@@ -16,6 +16,16 @@ import type {
 import { createLogger } from './logger.js'
 
 const logger = createLogger('utils')
+
+export class FileReadError extends Data.TaggedError('FileReadError')<{
+  readonly filePath: string
+  readonly cause: unknown
+}> {}
+
+export class FileWriteError extends Data.TaggedError('FileWriteError')<{
+  readonly filePath: string
+  readonly cause: unknown
+}> {}
 
 // IDE tag pattern for removal
 const IDE_TAG_PATTERN = /<ide_[^>]*>[\s\S]*?<\/ide_[^>]*>/g
@@ -136,6 +146,7 @@ export const isContinuationSummary = (msg: Message): boolean => {
  * Options for getDisplayTitle when using the options-based signature
  */
 export interface DisplayTitleOptions {
+  agentName?: string
   customTitle?: string
   currentSummary?: string
   title?: string
@@ -150,7 +161,7 @@ export interface DisplayTitleOptions {
 
 /**
  * Get display title with fallback logic
- * Priority: customTitle > currentSummary (truncated) > title/datetime > fallback
+ * Priority: customTitle > agentName > currentSummary (truncated) > title/datetime > fallback
  * Also handles slash command format in title
  *
  * Supports two call signatures:
@@ -174,11 +185,13 @@ export function getDisplayTitle(
 ): string {
   let mode: TitleDisplayMode = 'message'
   let createdAt: string | undefined
+  let agentName: string | undefined
   let customTitle: string | undefined
   let locale: string | undefined
 
   if (typeof customTitleOrOptions === 'object' && customTitleOrOptions !== null) {
     const opts = customTitleOrOptions
+    agentName = opts.agentName
     customTitle = opts.customTitle
     currentSummary = opts.currentSummary
     title = opts.title
@@ -192,6 +205,7 @@ export function getDisplayTitle(
   }
 
   if (customTitle) return customTitle
+  if (agentName) return agentName
   if (currentSummary) {
     return currentSummary.length > maxLength
       ? currentSummary.slice(0, maxLength - 3) + '...'
@@ -367,7 +381,10 @@ export const readJsonlFile = <T = Record<string, unknown>>(
   options?: { strict?: boolean }
 ) =>
   Effect.gen(function* () {
-    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const content = yield* Effect.tryPromise({
+      try: () => fs.readFile(filePath, 'utf-8'),
+      catch: (error) => new FileReadError({ filePath, cause: error }),
+    })
     const lines = content.trim().split('\n').filter(Boolean)
     return parseJsonlLines<T>(lines, filePath, options)
   })
@@ -434,23 +451,22 @@ export const sessionHasSubItems = (data: {
 export const getSessionTooltip = (session: {
   id: string
   title?: string
+  agentName?: string
   customTitle?: string
   currentSummary?: string
   createdAt?: string
   updatedAt?: string
 }): string => {
-  const { id, title, customTitle, currentSummary, createdAt, updatedAt } = session
+  const { id, title, agentName, customTitle, currentSummary, createdAt, updatedAt } = session
   let text: string
-  // If customTitle is displayed, show currentSummary in tooltip
-  if (customTitle && currentSummary) {
+  // Show complementary info: if a title override is displayed, show the next fallback
+  if (customTitle && (agentName || currentSummary)) {
+    text = agentName || currentSummary!
+  } else if (agentName && currentSummary) {
     text = currentSummary
-  }
-  // If currentSummary is displayed as title, show original title in tooltip
-  else if (currentSummary && title && title !== 'Untitled') {
+  } else if (currentSummary && title && title !== 'Untitled') {
     text = title
-  }
-  // If title is displayed, show currentSummary if available
-  else if (currentSummary) {
+  } else if (currentSummary) {
     text = currentSummary
   } else {
     text = title ?? 'No title'
@@ -476,4 +492,69 @@ export const getSessionTooltip = (session: {
  */
 export const canMoveSession = (sourceProject: string, targetProject: string): boolean => {
   return sourceProject !== targetProject
+}
+
+/** Check if a file or directory is accessible at the given path (returns false for both missing and permission-denied paths) */
+export const fileExists = (filePath: string): Promise<boolean> =>
+  fs
+    .access(filePath)
+    .then(() => true)
+    .catch(() => false)
+
+// ============================================================================
+// Date Grouping
+// ============================================================================
+
+export type DateGroupKey = 'today' | 'thisWeek' | 'older'
+
+export interface DateGroup<T> {
+  key: DateGroupKey
+  label: string
+  sessions: T[]
+}
+
+/**
+ * Group sessions by date: Today, This Week, Older.
+ * Sessions must already be sorted; grouping preserves their order within each group.
+ *
+ * @param sessions - Pre-sorted sessions
+ * @param getTimestamp - Extract a timestamp (ms) from each session for grouping
+ * @returns Array of DateGroup (only non-empty groups)
+ */
+export const groupSessionsByDate = <T>(
+  sessions: T[],
+  getTimestamp: (s: T) => number | undefined
+): DateGroup<T>[] => {
+  const now = new Date()
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+
+  // Start of this week (Monday)
+  const dayOfWeek = now.getDay()
+  const daysSinceMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+  const weekStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - daysSinceMonday
+  ).getTime()
+
+  const today: T[] = []
+  const thisWeek: T[] = []
+  const older: T[] = []
+
+  for (const s of sessions) {
+    const ts = getTimestamp(s)
+    if (!ts || ts < weekStart) {
+      older.push(s)
+    } else if (ts >= todayStart) {
+      today.push(s)
+    } else {
+      thisWeek.push(s)
+    }
+  }
+
+  const groups: DateGroup<T>[] = []
+  if (today.length > 0) groups.push({ key: 'today', label: 'Today', sessions: today })
+  if (thisWeek.length > 0) groups.push({ key: 'thisWeek', label: 'This Week', sessions: thisWeek })
+  if (older.length > 0) groups.push({ key: 'older', label: 'Older', sessions: older })
+  return groups
 }

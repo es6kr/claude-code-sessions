@@ -267,14 +267,14 @@
   const handleRenameSession = (e: Event, session: SessionMeta) => {
     e.stopPropagation()
     const sessionData = projectSessionData.get(session.projectName)?.get(session.id)
-    // Use same priority as displayTitle: customTitle > currentSummary > title
-    const currentTitle = getDisplayTitle(
-      sessionData?.customTitle,
-      sessionData?.currentSummary,
-      session.title,
-      Infinity,
-      ''
-    )
+    const currentTitle = getDisplayTitle({
+      agentName: sessionData?.agentName,
+      customTitle: sessionData?.customTitle,
+      currentSummary: sessionData?.currentSummary,
+      title: session.title,
+      maxLength: Infinity,
+      fallback: '',
+    })
 
     showInput(
       'Rename Session',
@@ -285,12 +285,14 @@
         if (newTitle === currentTitle) return
 
         try {
-          await api.renameSession(session.projectName, session.id, newTitle)
+          const trimmed = newTitle.trim()
+          await api.renameSession(session.projectName, session.id, trimmed)
 
-          // Update local state (customTitle = currentSummary)
+          // Update local state
           if (sessionData) {
-            sessionData.customTitle = newTitle
-            sessionData.currentSummary = newTitle
+            sessionData.agentName = trimmed || undefined
+            sessionData.customTitle = trimmed || undefined
+            if (trimmed) sessionData.currentSummary = trimmed
             if (sessionData.summaries.length > 0) {
               sessionData.summaries[0] = { ...sessionData.summaries[0], summary: newTitle }
             } else {
@@ -350,20 +352,43 @@
   const handleEditCustomTitle = (msg: Message) => {
     if (!selectedSession) return
 
-    const currentTitle = (msg as Message & { customTitle?: string }).customTitle ?? ''
-    showInput('Edit Custom Title', 'Custom title:', currentTitle, async (newTitle) => {
+    const isTitleMsg = msg.type === 'custom-title' || msg.type === 'agent-name'
+    const currentTitle =
+      (msg as Message & { customTitle?: string }).customTitle ??
+      (msg as Message & { agentName?: string }).agentName ??
+      ''
+    showInput('Edit Title', 'Title:', currentTitle, async (newTitle) => {
       closeInput()
       if (newTitle === currentTitle) return
 
+      const lineIndex = messages.indexOf(msg)
+      if (lineIndex === -1) return
+
       try {
-        await api.updateCustomTitle(
-          selectedSession!.projectName,
-          selectedSession!.id,
-          msg.uuid,
-          newTitle
-        )
-        ;(msg as Message & { customTitle?: string }).customTitle = newTitle
-        messages = [...messages]
+        if (isTitleMsg) {
+          const trimmed = newTitle.trim()
+          if (!trimmed) {
+            await api.deleteTitleMessage(
+              selectedSession!.projectName,
+              selectedSession!.id,
+              lineIndex
+            )
+            messages = messages.filter((_, i) => i !== lineIndex)
+          } else {
+            await api.updateTitleMessage(
+              selectedSession!.projectName,
+              selectedSession!.id,
+              lineIndex,
+              trimmed
+            )
+            if (msg.type === 'custom-title') {
+              ;(msg as Message & { customTitle?: string }).customTitle = trimmed
+            } else {
+              ;(msg as Message & { agentName?: string }).agentName = trimmed
+            }
+            messages = [...messages]
+          }
+        }
       } catch (e) {
         error = String(e)
       }
@@ -631,6 +656,9 @@
     {messages}
     {todos}
     {agents}
+    agentName={selectedSession
+      ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.agentName
+      : undefined}
     customTitle={selectedSession
       ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.customTitle
       : undefined}

@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   pathToFolderName,
   folderNameToDisplayPath,
+  folderNameEquals,
   toRelativePath,
   expandHomePath,
   folderNameToPath,
@@ -37,7 +38,7 @@ describe('pathToFolderName', () => {
 
   describe('Windows paths', () => {
     it('converts Windows absolute path to folder name', () => {
-      // Official Claude Code keeps drive letter case as-is
+      // Drive letter is normalized to uppercase (see normalizeDriveLetter)
       expect(pathToFolderName('C:\\Users\\david\\projects')).toBe('C--Users-david-projects')
     })
 
@@ -51,6 +52,14 @@ describe('pathToFolderName', () => {
 
     it('handles Windows path with domain (example.com)', () => {
       expect(pathToFolderName('C:\\Users\\david\\example.com')).toBe('C--Users-david-example-com')
+    })
+
+    it('normalizes lowercase drive letter to uppercase', () => {
+      expect(pathToFolderName('c:\\Users\\alex')).toBe('C--Users-alex')
+    })
+
+    it('keeps already uppercase drive letter unchanged', () => {
+      expect(pathToFolderName('C:\\Users\\alex')).toBe('C--Users-alex')
     })
   })
 
@@ -71,6 +80,20 @@ describe('pathToFolderName', () => {
       // Emoji is a surrogate pair (2 code units) -> 2 dashes
       expect(pathToFolderName('/home/user/📁project')).toBe('-home-user---project')
     })
+  })
+})
+
+describe('folderNameEquals', () => {
+  it('matches Windows folder names case-insensitively', () => {
+    expect(folderNameEquals('c--Users-alex', 'C--Users-alex')).toBe(true)
+  })
+
+  it('matches identical Linux folder names', () => {
+    expect(folderNameEquals('-home-user', '-home-user')).toBe(true)
+  })
+
+  it('does not match different-case Linux folder names', () => {
+    expect(folderNameEquals('-home-user', '-Home-User')).toBe(false)
   })
 })
 

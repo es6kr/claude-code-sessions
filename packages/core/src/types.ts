@@ -122,6 +122,8 @@ export interface Message extends TypedObject {
   message?: MessagePayload
   /** Direct content (alternative to message.content) */
   content?: ContentItem[] | string
+  /** Agent-set title for this session */
+  agentName?: string
   /** User-defined custom title for this message */
   customTitle?: string
   /** Summary text for summary-type messages */
@@ -142,6 +144,8 @@ export interface SessionMeta {
   projectName: string
   /** First user message title */
   title?: string
+  /** Agent-set title */
+  agentName?: string
   /** User-set custom title */
   customTitle?: string
   /** Current (first) summary text for display */
@@ -327,6 +331,8 @@ export interface SessionTreeData {
   projectName: string
   /** First user message title */
   title: string
+  /** Agent-set title */
+  agentName?: string
   /** User-set custom title */
   customTitle?: string
   /** Current (first) summary text for display/tooltip */
@@ -385,6 +391,13 @@ export interface SessionSortOptions {
 // ============================================================================
 
 /** Options for resuming a session */
+export interface StartClaudeOptions {
+  /** Full CLI command to execute (e.g. "claude --resume abc123") */
+  command: string
+  /** Working directory */
+  cwd?: string
+}
+
 export interface ResumeSessionOptions {
   /** Session ID to resume */
   sessionId: string

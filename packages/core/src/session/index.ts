@@ -33,6 +33,9 @@ export {
   summarizeSession,
 } from './analysis.js'
 
+// Streaming session metadata
+export { listSessionsMeta } from './crud-streaming.js'
+
 // Cleanup operations
 export { previewCleanup, clearSessions } from './cleanup.js'
 

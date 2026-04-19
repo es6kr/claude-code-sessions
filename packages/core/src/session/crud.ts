@@ -8,6 +8,7 @@ import * as crypto from 'node:crypto'
 import { getSessionsDir } from '../paths.js'
 import {
   extractTitle,
+  fileExists,
   isContinuationSummary,
   cleanupSplitFirstMessage,
   parseJsonlLines,
@@ -18,7 +19,6 @@ import { findLinkedAgents } from '../agents.js'
 import { deleteLinkedTodos } from '../todos.js'
 import type {
   Message,
-  SessionMeta,
   DeleteSessionResult,
   RenameSessionResult,
   SplitSessionResult,
@@ -54,81 +54,82 @@ export const updateSessionSummary = (projectName: string, sessionId: string, new
     return { success: true }
   })
 
+import { createLogger } from '../logger.js'
+import { filterSessionFiles, buildSessionMeta, sortSessionsByDate } from './crud-helpers.js'
+
+const log = createLogger('crud')
+
+/** Read full session file and extract metadata */
+const readSessionMeta = (projectPath: string, file: string, projectName: string) =>
+  Effect.gen(function* () {
+    const filePath = path.join(projectPath, file)
+    const messages = yield* readJsonlFile<Message>(filePath)
+    const sessionId = file.replace('.jsonl', '')
+
+    const userAssistantMessages = messages.filter(
+      (m) => m.type === 'user' || m.type === 'assistant'
+    )
+    const hasSummary = messages.some((m) => m.type === 'summary')
+
+    const title = pipe(
+      messages,
+      A.findFirst((m) => m.type === 'user'),
+      O.map((m) => extractTitle(m.message)),
+      O.getOrUndefined
+    )
+
+    const currentSummary = pipe(
+      messages,
+      A.findFirst((m) => m.type === 'summary'),
+      O.map((m) => m.summary as string),
+      O.getOrUndefined
+    )
+
+    // Only titles after the last user/assistant message count as current
+    let customTitle: string | undefined
+    let agentName: string | undefined
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.type === 'user' || m.type === 'assistant') break
+      if (customTitle === undefined && m.type === 'custom-title') {
+        customTitle = (m as { customTitle?: string }).customTitle ?? undefined
+      } else if (agentName === undefined && m.type === 'agent-name') {
+        agentName = (m as { agentName?: string }).agentName ?? undefined
+      }
+    }
+
+    return buildSessionMeta(sessionId, projectName, {
+      title,
+      agentName,
+      customTitle,
+      currentSummary,
+      userAssistantCount: userAssistantMessages.length,
+      hasSummary,
+      firstTimestamp: userAssistantMessages[0]?.timestamp,
+      lastTimestamp: userAssistantMessages.at(-1)?.timestamp,
+    })
+  })
+
 // List sessions in a project
 export const listSessions = (projectName: string) =>
   Effect.gen(function* () {
     const projectPath = path.join(getSessionsDir(), projectName)
     const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
-    // Exclude agent- files (subagent logs)
-    const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+    const sessionFiles = filterSessionFiles(files)
 
     const sessions = yield* Effect.all(
       sessionFiles.map((file) =>
-        Effect.gen(function* () {
-          const filePath = path.join(projectPath, file)
-          const messages = yield* readJsonlFile<Message>(filePath)
-
-          const sessionId = file.replace('.jsonl', '')
-
-          // Filter only user/assistant messages for counting
-          const userAssistantMessages = messages.filter(
-            (m) => m.type === 'user' || m.type === 'assistant'
-          )
-
-          // Check if session has summary (for preserved sessions without user/assistant messages)
-          const hasSummary = messages.some((m) => m.type === 'summary')
-
-          const firstMessage = userAssistantMessages[0]
-          const lastMessage = userAssistantMessages[userAssistantMessages.length - 1]
-
-          // Extract title from first user message
-          const title = pipe(
-            messages,
-            A.findFirst((m) => m.type === 'user'),
-            O.map((m) => extractTitle(m.message)),
-            O.getOrElse(() => (hasSummary ? '[Summary Only]' : `Session ${sessionId.slice(0, 8)}`))
-          )
-
-          // Extract currentSummary from first summary message
-          const currentSummary = pipe(
-            messages,
-            A.findFirst((m) => m.type === 'summary'),
-            O.map((m) => m.summary as string),
-            O.getOrUndefined
-          )
-
-          // Extract customTitle from custom-title message
-          const customTitle = pipe(
-            messages,
-            A.findFirst((m) => m.type === 'custom-title'),
-            O.map((m) => (m as { customTitle?: string }).customTitle),
-            O.flatMap(O.fromNullable),
-            O.getOrUndefined
-          )
-
-          return {
-            id: sessionId,
-            projectName,
-            title,
-            customTitle,
-            currentSummary,
-            // If session has summary but no user/assistant messages, count as 1
-            messageCount:
-              userAssistantMessages.length > 0 ? userAssistantMessages.length : hasSummary ? 1 : 0,
-            createdAt: firstMessage?.timestamp,
-            updatedAt: lastMessage?.timestamp,
-          } satisfies SessionMeta
-        })
+        readSessionMeta(projectPath, file, projectName).pipe(
+          Effect.catchAll((error) => {
+            log.warn(`listSessions: skipping ${file}: ${error}`)
+            return Effect.succeed(null)
+          })
+        )
       ),
       { concurrency: 10 }
     )
 
-    // Sort by newest first
-    return sessions.sort((a, b) => {
-      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0
-      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0
-      return dateB - dateA
-    })
+    return sortSessionsByDate(sessions.filter((s): s is NonNullable<typeof s> => s !== null))
   })
 
 // Read session messages
@@ -273,18 +274,18 @@ export const renameSession = (projectName: string, sessionId: string, newTitle: 
 
     const messages = parseJsonlLines<Record<string, unknown>>(lines, filePath, { strict: true })
 
-    // Remove existing custom-title (may be at wrong position) and append to end
-    const customTitleIdx = messages.findIndex((m) => m.type === 'custom-title')
-    if (customTitleIdx >= 0) {
-      messages.splice(customTitleIdx, 1)
-    }
-    messages.push({
-      type: 'custom-title',
-      customTitle: newTitle,
-      sessionId,
-    })
+    // Remove all existing custom-title and agent-name records
+    const filtered = messages.filter((m) => m.type !== 'custom-title' && m.type !== 'agent-name')
 
-    const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    // If new title is non-empty, append both record types at end
+    if (newTitle) {
+      filtered.push(
+        { type: 'custom-title', customTitle: newTitle, sessionId },
+        { type: 'agent-name', agentName: newTitle, sessionId }
+      )
+    }
+
+    const newContent = filtered.map((m) => JSON.stringify(m)).join('\n') + '\n'
     yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
 
     return { success: true } satisfies RenameSessionResult
@@ -305,24 +306,14 @@ export const moveSession = (
     const targetFile = path.join(targetPath, `${sessionId}.jsonl`)
 
     // Check source file exists
-    const sourceExists = yield* Effect.tryPromise(() =>
-      fs
-        .access(sourceFile)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const sourceExists = yield* Effect.tryPromise(() => fileExists(sourceFile))
 
     if (!sourceExists) {
       return { success: false, error: 'Source session not found' }
     }
 
     // Check target file does not exist
-    const targetExists = yield* Effect.tryPromise(() =>
-      fs
-        .access(targetFile)
-        .then(() => true)
-        .catch(() => false)
-    )
+    const targetExists = yield* Effect.tryPromise(() => fileExists(targetFile))
 
     if (targetExists) {
       return { success: false, error: 'Session already exists in target project' }
@@ -342,12 +333,7 @@ export const moveSession = (
       const sourceAgentFile = path.join(sourcePath, `${agentId}.jsonl`)
       const targetAgentFile = path.join(targetPath, `${agentId}.jsonl`)
 
-      const agentExists = yield* Effect.tryPromise(() =>
-        fs
-          .access(sourceAgentFile)
-          .then(() => true)
-          .catch(() => false)
-      )
+      const agentExists = yield* Effect.tryPromise(() => fileExists(sourceAgentFile))
 
       if (agentExists) {
         yield* Effect.tryPromise(() => fs.rename(sourceAgentFile, targetAgentFile))

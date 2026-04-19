@@ -4,20 +4,23 @@
 import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { getSessionsDir, folderNameToPath, expandHomePath } from '../paths.js'
-import * as os from 'node:os'
-import { isInvalidApiKeyMessage, parseJsonlLines } from '../utils.js'
+import { getSessionsDir } from '../paths.js'
+import { isInvalidApiKeyMessage, parseJsonlLines, FileReadError, FileWriteError } from '../utils.js'
 import { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from '../agents.js'
 import { sessionHasTodos, findOrphanTodos, deleteOrphanTodos } from '../todos.js'
 import { listProjects } from './projects.js'
 import { listSessions, deleteSession } from './crud.js'
+import { listSessionsMeta } from './crud-streaming.js'
 import type { Message, CleanupPreview, ClearSessionsResult } from '../types.js'
 
 // Remove invalid API key messages from a session, returns remaining message count
 const cleanInvalidMessages = (projectName: string, sessionId: string) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const content = yield* Effect.tryPromise({
+      try: () => fs.readFile(filePath, 'utf-8'),
+      catch: (error) => new FileReadError({ filePath, cause: error }),
+    })
     const lines = content.trim().split('\n').filter(Boolean)
 
     if (lines.length === 0) return { removedCount: 0, remainingCount: 0 }
@@ -63,7 +66,10 @@ const cleanInvalidMessages = (projectName: string, sessionId: string) =>
     const newContent =
       filtered.length > 0 ? filtered.map((m) => JSON.stringify(m)).join('\n') + '\n' : ''
 
-    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+    yield* Effect.tryPromise({
+      try: () => fs.writeFile(filePath, newContent, 'utf-8'),
+      catch: (error) => new FileWriteError({ filePath, cause: error }),
+    })
 
     const remainingUserAssistant = filtered.filter(
       (m) => m.type === 'user' || m.type === 'assistant'
@@ -84,36 +90,10 @@ export const previewCleanup = (projectName?: string) =>
     const orphanTodos = yield* findOrphanTodos()
     const orphanTodoCount = orphanTodos.length
 
-    // Check which projects point to non-existent directories
-    const homeDir = os.homedir()
-    const staleSet = new Set<string>()
-    yield* Effect.all(
-      targetProjects.map((project) =>
-        Effect.tryPromise(async () => {
-          const displayPath = await folderNameToPath(project.name)
-          const absPath = expandHomePath(displayPath, homeDir)
-          try {
-            const stats = await fs.stat(absPath)
-            if (!stats.isDirectory()) {
-              staleSet.add(project.name)
-            }
-          } catch (error) {
-            const err = error as NodeJS.ErrnoException
-            if (err.code === 'ENOENT') {
-              staleSet.add(project.name)
-            }
-            // Other errors (permissions, IO) should not mark as stale
-          }
-        })
-      ),
-      { concurrency: 10 }
-    )
-
     const results = yield* Effect.all(
       targetProjects.map((project) =>
         Effect.gen(function* () {
-          const isStale = staleSet.has(project.name)
-          const sessions = yield* listSessions(project.name)
+          const sessions = yield* listSessionsMeta(project.name)
           const emptySessions = sessions.filter((s) => s.messageCount === 0)
           const invalidSessions = sessions.filter(
             (s) => s.title?.includes('Invalid API key') || s.title?.includes('API key')
@@ -139,7 +119,6 @@ export const previewCleanup = (projectName?: string) =>
             emptyWithTodosCount,
             orphanAgentCount: orphanAgents.length,
             orphanTodoCount: 0, // Will set for first project only
-            isStale,
           } satisfies CleanupPreview
         })
       ),
@@ -162,8 +141,6 @@ export const clearSessions = (options: {
   skipWithTodos?: boolean
   clearOrphanAgents?: boolean
   clearOrphanTodos?: boolean
-  clearStale?: boolean
-  staleProjects?: string[]
 }) =>
   Effect.gen(function* () {
     const {
@@ -173,8 +150,6 @@ export const clearSessions = (options: {
       skipWithTodos = true,
       clearOrphanAgents = true,
       clearOrphanTodos = false,
-      clearStale = false,
-      staleProjects = [],
     } = options
     const projects = yield* listProjects
     const targetProjects = projectName ? projects.filter((p) => p.name === projectName) : projects
@@ -248,25 +223,11 @@ export const clearSessions = (options: {
       deletedOrphanTodoCount = result.deletedCount
     }
 
-    // Step 6: Delete stale project directories (project dir no longer exists on disk)
-    let deletedStaleProjectCount = 0
-    if (clearStale && staleProjects.length > 0) {
-      const sessionsDir = getSessionsDir()
-      for (const staleProjectName of staleProjects) {
-        const projectSessionsPath = path.join(sessionsDir, staleProjectName)
-        const deleted = yield* Effect.tryPromise(() =>
-          fs.rm(projectSessionsPath, { recursive: true, force: true }).then(() => true)
-        ).pipe(Effect.orElse(() => Effect.succeed(false)))
-        if (deleted) deletedStaleProjectCount++
-      }
-    }
-
     return {
       success: true,
       deletedCount: deletedSessionCount,
       removedMessageCount,
       deletedOrphanAgentCount,
       deletedOrphanTodoCount,
-      deletedStaleProjectCount,
     } satisfies ClearSessionsResult
   })

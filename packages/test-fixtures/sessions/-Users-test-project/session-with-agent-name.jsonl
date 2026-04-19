@@ -1,0 +1,4 @@
+{"type":"agent-name","agentName":"Skill Sync Agent","sessionId":"session-with-agent-name"}
+{"type":"custom-title","customTitle":"Skill Sync Session","sessionId":"session-with-agent-name"}
+{"type":"user","uuid":"agent-msg-1","timestamp":"2025-12-22T04:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Sync all skills"}]}}
+{"type":"assistant","uuid":"agent-msg-2","parentUuid":"agent-msg-1","timestamp":"2025-12-22T04:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Starting skill sync."}]}}

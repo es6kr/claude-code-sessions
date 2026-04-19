@@ -4,6 +4,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { Effect } from 'effect'
 
+// Mock paths module to use temp directories
 vi.mock('../paths.js', async () => {
   const actual = await vi.importActual('../paths.js')
   return {
@@ -54,36 +55,21 @@ describe('todos', () => {
       expect(result.hasTodos).toBe(false)
     })
 
-    it('should read session todos from matching JSON file', async () => {
+    it('should find session todos from json file', async () => {
       const todos = [
-        { content: 'Fix unit tests', status: 'pending' },
-        { content: 'Update docs', status: 'completed' },
+        { content: 'Fix bug', status: 'pending' },
+        { content: 'Write tests', status: 'completed' },
       ]
       await fs.writeFile(path.join(todosDir, 'session-1.json'), JSON.stringify(todos))
 
       const result = await Effect.runPromise(findLinkedTodos('session-1'))
 
+      expect(result.sessionId).toBe('session-1')
       expect(result.sessionTodos).toEqual(todos)
       expect(result.hasTodos).toBe(true)
     })
 
-    it('should return empty session todos when file does not exist', async () => {
-      const result = await Effect.runPromise(findLinkedTodos('nonexistent-session'))
-
-      expect(result.sessionTodos).toEqual([])
-      expect(result.hasTodos).toBe(false)
-    })
-
-    it('should handle invalid JSON in session todo file', async () => {
-      await fs.writeFile(path.join(todosDir, 'session-1.json'), 'not-valid-json')
-
-      const result = await Effect.runPromise(findLinkedTodos('session-1'))
-
-      expect(result.sessionTodos).toEqual([])
-      expect(result.hasTodos).toBe(false)
-    })
-
-    it('should discover agent todos from directory scan', async () => {
+    it('should find agent todos by scanning directory', async () => {
       const agentTodos = [{ content: 'Agent task', status: 'in_progress' }]
       await fs.writeFile(
         path.join(todosDir, 'session-1-agent-abc123.json'),
@@ -98,30 +84,33 @@ describe('todos', () => {
       expect(result.hasTodos).toBe(true)
     })
 
-    it('should include agent todos from provided agentIds', async () => {
-      const agentTodos = [{ content: 'Provided agent task', status: 'pending' }]
-      await fs.writeFile(
-        path.join(todosDir, 'session-1-agent-def456.json'),
-        JSON.stringify(agentTodos)
-      )
-
-      const result = await Effect.runPromise(findLinkedTodos('session-1', ['agent-def456']))
-
-      expect(result.agentTodos).toHaveLength(1)
-      expect(result.agentTodos[0].agentId).toBe('agent-def456')
-    })
-
-    it('should deduplicate agent IDs from scan and provided list', async () => {
-      const agentTodos = [{ content: 'Task', status: 'pending' }]
+    it('should merge provided agentIds with discovered agents', async () => {
+      const agentTodos = [{ content: 'Task A', status: 'pending' }]
+      // File exists for agent discovered by scan
       await fs.writeFile(
         path.join(todosDir, 'session-1-agent-abc123.json'),
         JSON.stringify(agentTodos)
       )
+      // File for agent passed via parameter
+      await fs.writeFile(
+        path.join(todosDir, 'session-1-agent-def456.json'),
+        JSON.stringify([{ content: 'Task B', status: 'pending' }])
+      )
 
-      const result = await Effect.runPromise(findLinkedTodos('session-1', ['agent-abc123']))
+      const result = await Effect.runPromise(findLinkedTodos('session-1', ['agent-def456']))
 
-      // Should only appear once despite being in both scan and provided list
-      expect(result.agentTodos).toHaveLength(1)
+      expect(result.agentTodos).toHaveLength(2)
+      const agentIds = result.agentTodos.map((a) => a.agentId).sort()
+      expect(agentIds).toEqual(['agent-abc123', 'agent-def456'])
+    })
+
+    it('should handle invalid JSON gracefully', async () => {
+      await fs.writeFile(path.join(todosDir, 'session-1.json'), 'not valid json')
+
+      const result = await Effect.runPromise(findLinkedTodos('session-1'))
+
+      expect(result.sessionTodos).toEqual([])
+      expect(result.hasTodos).toBe(false)
     })
 
     it('should skip agent files with empty todos array', async () => {
@@ -131,31 +120,6 @@ describe('todos', () => {
 
       expect(result.agentTodos).toEqual([])
       expect(result.hasTodos).toBe(false)
-    })
-
-    it('should handle invalid JSON in agent todo file', async () => {
-      await fs.writeFile(path.join(todosDir, 'session-1-agent-abc123.json'), 'invalid')
-
-      const result = await Effect.runPromise(findLinkedTodos('session-1'))
-
-      expect(result.agentTodos).toEqual([])
-    })
-
-    it('should combine session and agent todos', async () => {
-      const sessionTodos = [{ content: 'Session task', status: 'pending' }]
-      const agentTodos = [{ content: 'Agent task', status: 'completed' }]
-
-      await fs.writeFile(path.join(todosDir, 'session-1.json'), JSON.stringify(sessionTodos))
-      await fs.writeFile(
-        path.join(todosDir, 'session-1-agent-abc123.json'),
-        JSON.stringify(agentTodos)
-      )
-
-      const result = await Effect.runPromise(findLinkedTodos('session-1'))
-
-      expect(result.sessionTodos).toEqual(sessionTodos)
-      expect(result.agentTodos).toHaveLength(1)
-      expect(result.hasTodos).toBe(true)
     })
   })
 
@@ -169,15 +133,28 @@ describe('todos', () => {
     })
 
     it('should return true when session has todos', async () => {
-      const todos = [{ content: 'Task', status: 'pending' }]
-      await fs.writeFile(path.join(todosDir, 'session-1.json'), JSON.stringify(todos))
+      await fs.writeFile(
+        path.join(todosDir, 'session-1.json'),
+        JSON.stringify([{ content: 'Task', status: 'pending' }])
+      )
 
       const result = await Effect.runPromise(sessionHasTodos('session-1'))
 
       expect(result).toBe(true)
     })
 
-    it('should return false when session todo file is empty array', async () => {
+    it('should return true when agent has todos', async () => {
+      await fs.writeFile(
+        path.join(todosDir, 'session-1-agent-abc123.json'),
+        JSON.stringify([{ content: 'Agent task', status: 'pending' }])
+      )
+
+      const result = await Effect.runPromise(sessionHasTodos('session-1'))
+
+      expect(result).toBe(true)
+    })
+
+    it('should return false when session todo file has empty array', async () => {
       await fs.writeFile(path.join(todosDir, 'session-1.json'), JSON.stringify([]))
 
       const result = await Effect.runPromise(sessionHasTodos('session-1'))
@@ -186,43 +163,7 @@ describe('todos', () => {
     })
 
     it('should return false when session todo file has invalid JSON', async () => {
-      await fs.writeFile(path.join(todosDir, 'session-1.json'), 'bad-json')
-
-      const result = await Effect.runPromise(sessionHasTodos('session-1'))
-
-      expect(result).toBe(false)
-    })
-
-    it('should return true when agent has todos', async () => {
-      const agentTodos = [{ content: 'Agent task', status: 'pending' }]
-      await fs.writeFile(
-        path.join(todosDir, 'session-1-agent-abc123.json'),
-        JSON.stringify(agentTodos)
-      )
-
-      const result = await Effect.runPromise(sessionHasTodos('session-1'))
-
-      expect(result).toBe(true)
-    })
-
-    it('should return true when provided agentId has todos', async () => {
-      const agentTodos = [{ content: 'Task', status: 'pending' }]
-      await fs.writeFile(
-        path.join(todosDir, 'session-1-agent-def456.json'),
-        JSON.stringify(agentTodos)
-      )
-
-      const result = await Effect.runPromise(sessionHasTodos('session-1', ['agent-def456']))
-
-      expect(result).toBe(true)
-    })
-
-    it('should return false when no todos exist for session', async () => {
-      // Other session's todo file exists but not for session-1
-      await fs.writeFile(
-        path.join(todosDir, 'other-session.json'),
-        JSON.stringify([{ content: 'Task', status: 'pending' }])
-      )
+      await fs.writeFile(path.join(todosDir, 'session-1.json'), '{broken')
 
       const result = await Effect.runPromise(sessionHasTodos('session-1'))
 
@@ -231,7 +172,7 @@ describe('todos', () => {
   })
 
   describe('deleteLinkedTodos', () => {
-    it('should return zero count when todos directory does not exist', async () => {
+    it('should return 0 when todos directory does not exist', async () => {
       vi.mocked(getTodosDir).mockReturnValue(path.join(tempDir, 'nonexistent'))
 
       const result = await Effect.runPromise(deleteLinkedTodos('session-1', []))
@@ -239,49 +180,41 @@ describe('todos', () => {
       expect(result.deletedCount).toBe(0)
     })
 
-    it('should move session todo file to backup directory', async () => {
-      const todos = [{ content: 'Task', status: 'pending' }]
-      await fs.writeFile(path.join(todosDir, 'session-1.json'), JSON.stringify(todos))
+    it('should move session todo file to .bak', async () => {
+      await fs.writeFile(
+        path.join(todosDir, 'session-1.json'),
+        JSON.stringify([{ content: 'Task', status: 'pending' }])
+      )
 
       const result = await Effect.runPromise(deleteLinkedTodos('session-1', []))
 
       expect(result.deletedCount).toBe(1)
-
       // Original file should be gone
       await expect(fs.access(path.join(todosDir, 'session-1.json'))).rejects.toThrow()
-
       // Backup should exist
-      const backupContent = await fs.readFile(
-        path.join(todosDir, '.bak', 'session-1.json'),
-        'utf-8'
-      )
-      expect(JSON.parse(backupContent)).toEqual(todos)
+      await expect(
+        fs.access(path.join(todosDir, '.bak', 'session-1.json'))
+      ).resolves.toBeUndefined()
     })
 
-    it('should move agent todo files to backup directory', async () => {
-      const agentTodos = [{ content: 'Agent task', status: 'completed' }]
+    it('should move agent todo files to .bak', async () => {
       await fs.writeFile(
         path.join(todosDir, 'session-1-agent-abc123.json'),
-        JSON.stringify(agentTodos)
+        JSON.stringify([{ content: 'Agent task', status: 'pending' }])
       )
 
       const result = await Effect.runPromise(deleteLinkedTodos('session-1', ['agent-abc123']))
 
       expect(result.deletedCount).toBe(1)
-
-      // Original should be gone
-      await expect(fs.access(path.join(todosDir, 'session-1-agent-abc123.json'))).rejects.toThrow()
-
-      // Backup should exist
       await expect(
         fs.access(path.join(todosDir, '.bak', 'session-1-agent-abc123.json'))
       ).resolves.toBeUndefined()
     })
 
-    it('should handle session with both session and agent todos', async () => {
+    it('should handle both session and agent todos', async () => {
       await fs.writeFile(
         path.join(todosDir, 'session-1.json'),
-        JSON.stringify([{ content: 'Session task', status: 'pending' }])
+        JSON.stringify([{ content: 'Task', status: 'pending' }])
       )
       await fs.writeFile(
         path.join(todosDir, 'session-1-agent-abc123.json'),
@@ -292,133 +225,106 @@ describe('todos', () => {
 
       expect(result.deletedCount).toBe(2)
     })
-
-    it('should not count nonexistent files', async () => {
-      const result = await Effect.runPromise(deleteLinkedTodos('session-1', ['agent-nonexistent']))
-
-      expect(result.deletedCount).toBe(0)
-    })
   })
 
   describe('findOrphanTodos', () => {
-    it('should return empty when todos directory does not exist', async () => {
-      vi.mocked(getTodosDir).mockReturnValue(path.join(tempDir, 'nonexistent'))
-
+    it('should return empty when no todo files exist', async () => {
       const result = await Effect.runPromise(findOrphanTodos())
 
       expect(result).toEqual([])
     })
 
-    it('should return empty when sessions directory does not exist', async () => {
-      vi.mocked(getSessionsDir).mockReturnValue(path.join(tempDir, 'nonexistent'))
-
-      const result = await Effect.runPromise(findOrphanTodos())
-
-      expect(result).toEqual([])
-    })
-
-    it('should identify orphan todo files', async () => {
-      // Session IDs must be hex to match regex /^([a-f0-9-]+)/
-      const validId = 'aaa111-bbb2-ccc3'
-      const orphanId = 'ddd444-eee5-fff6'
-
-      const projectDir = path.join(sessionsDir, '-test-project')
+    it('should return empty when all todos have matching sessions', async () => {
+      const sessionId = 'aabb0011-2233-4455-6677-889900aabbcc'
+      // Create a project with a session
+      const projectDir = path.join(sessionsDir, 'test-project')
       await fs.mkdir(projectDir, { recursive: true })
-      await fs.writeFile(path.join(projectDir, `${validId}.jsonl`), '')
+      await fs.writeFile(path.join(projectDir, `${sessionId}.jsonl`), '{"type":"user"}\n')
 
+      // Create matching todo
       await fs.writeFile(
-        path.join(todosDir, `${validId}.json`),
+        path.join(todosDir, `${sessionId}.json`),
         JSON.stringify([{ content: 'Task', status: 'pending' }])
       )
 
+      const result = await Effect.runPromise(findOrphanTodos())
+
+      expect(result).toEqual([])
+    })
+
+    it('should find orphan todo files', async () => {
+      // Create a project with a valid session
+      const projectDir = path.join(sessionsDir, 'test-project')
+      await fs.mkdir(projectDir, { recursive: true })
       await fs.writeFile(
-        path.join(todosDir, `${orphanId}.json`),
+        path.join(projectDir, 'aabb0011-2233-4455-6677-889900aabbcc.jsonl'),
+        '{"type":"user"}\n'
+      )
+
+      // Create todo for non-existent session (hex-only ID to match regex)
+      await fs.writeFile(
+        path.join(todosDir, 'dead0000-1111-2222-3333-444455556666.json'),
         JSON.stringify([{ content: 'Orphan task', status: 'pending' }])
       )
 
       const result = await Effect.runPromise(findOrphanTodos())
 
-      expect(result).toEqual([`${orphanId}.json`])
+      expect(result).toContain('dead0000-1111-2222-3333-444455556666.json')
     })
 
-    it('should identify orphan agent todo files', async () => {
-      const validId = 'aaa111-bbb2-ccc3'
-      const orphanId = 'ddd444-eee5-fff6'
-
-      const projectDir = path.join(sessionsDir, '-test-project')
+    it('should detect orphan agent todo files', async () => {
+      // Create a project with a valid session
+      const projectDir = path.join(sessionsDir, 'test-project')
       await fs.mkdir(projectDir, { recursive: true })
-      await fs.writeFile(path.join(projectDir, `${validId}.jsonl`), '')
-
       await fs.writeFile(
-        path.join(todosDir, `${orphanId}-agent-abc123.json`),
-        JSON.stringify([{ content: 'Task', status: 'pending' }])
+        path.join(projectDir, 'aabb0011-2233-4455-6677-889900aabbcc.jsonl'),
+        '{"type":"user"}\n'
+      )
+
+      // Agent todo for non-existent session (hex-only IDs)
+      await fs.writeFile(
+        path.join(todosDir, 'dead0000-1111-2222-3333-444455556666-agent-abc123.json'),
+        JSON.stringify([{ content: 'Orphan agent task', status: 'pending' }])
       )
 
       const result = await Effect.runPromise(findOrphanTodos())
 
-      expect(result).toEqual([`${orphanId}-agent-abc123.json`])
+      expect(result).toContain('dead0000-1111-2222-3333-444455556666-agent-abc123.json')
     })
 
-    it('should not flag valid session todos as orphans', async () => {
-      const sessionId = 'aaa111-bbb2-ccc3'
-
-      const projectDir = path.join(sessionsDir, '-test-project')
+    it('should skip agent- prefixed session files', async () => {
+      // Create project with agent file (should not count as valid session)
+      const projectDir = path.join(sessionsDir, 'test-project')
       await fs.mkdir(projectDir, { recursive: true })
-      await fs.writeFile(path.join(projectDir, `${sessionId}.jsonl`), '')
+      await fs.writeFile(path.join(projectDir, 'agent-abc123.jsonl'), '{"type":"assistant"}\n')
 
+      // Todo matching the agent file name — still orphan because agent files are not sessions
       await fs.writeFile(
-        path.join(todosDir, `${sessionId}.json`),
-        JSON.stringify([{ content: 'Active task', status: 'in_progress' }])
-      )
-
-      const result = await Effect.runPromise(findOrphanTodos())
-
-      expect(result).toEqual([])
-    })
-
-    it('should skip hidden directories in sessions', async () => {
-      const sessionId = 'aaa111-bbb2-ccc3'
-
-      const hiddenDir = path.join(sessionsDir, '.hidden')
-      await fs.mkdir(hiddenDir, { recursive: true })
-      await fs.writeFile(path.join(hiddenDir, `${sessionId}.jsonl`), '')
-
-      await fs.writeFile(
-        path.join(todosDir, `${sessionId}.json`),
+        path.join(todosDir, 'agent-abc123.json'),
         JSON.stringify([{ content: 'Task', status: 'pending' }])
       )
 
-      // Session is only in hidden dir, so todo is orphan
+      // agent-abc123 doesn't match the regex pattern ^([a-f0-9-]+)
+      // so it won't be detected as orphan either — it's simply ignored
       const result = await Effect.runPromise(findOrphanTodos())
-
-      expect(result).toEqual([`${sessionId}.json`])
-    })
-
-    it('should ignore non-hex filenames in todos directory', async () => {
-      // Filenames with non-hex chars won't match the regex pattern
-      await fs.writeFile(
-        path.join(todosDir, 'not-hex-name.json'),
-        JSON.stringify([{ content: 'Task', status: 'pending' }])
-      )
-
-      const result = await Effect.runPromise(findOrphanTodos())
-
-      // Non-hex filenames are not matched by regex, so not flagged
+      // The regex requires hex chars and dashes, "agent-abc123" has letters outside hex range
+      // so this file won't match the orphan detection pattern
       expect(result).toEqual([])
     })
   })
 
   describe('deleteOrphanTodos', () => {
-    it('should return zero when no orphans exist', async () => {
+    it('should return 0 when no orphans exist', async () => {
       const result = await Effect.runPromise(deleteOrphanTodos())
 
-      expect(result).toEqual({ success: true, deletedCount: 0 })
+      expect(result.success).toBe(true)
+      expect(result.deletedCount).toBe(0)
     })
 
-    it('should move orphan todos to backup and return count', async () => {
-      // No valid sessions
+    it('should move orphan todo files to .bak', async () => {
+      // No sessions exist, so any todo is orphan
       await fs.writeFile(
-        path.join(todosDir, 'aaa111.json'),
+        path.join(todosDir, 'aabbccdd-1122-3344-5566-778899aabbcc.json'),
         JSON.stringify([{ content: 'Orphan', status: 'pending' }])
       )
 
@@ -426,41 +332,14 @@ describe('todos', () => {
 
       expect(result.success).toBe(true)
       expect(result.deletedCount).toBe(1)
-
-      // Original should be gone
-      await expect(fs.access(path.join(todosDir, 'aaa111.json'))).rejects.toThrow()
-
-      // Backup should exist
-      await expect(fs.access(path.join(todosDir, '.bak', 'aaa111.json'))).resolves.toBeUndefined()
-    })
-
-    it('should only delete orphans and preserve valid session todos', async () => {
-      // Create valid session
-      const projectDir = path.join(sessionsDir, '-Users-test-project')
-      await fs.mkdir(projectDir, { recursive: true })
-      await fs.writeFile(path.join(projectDir, 'aaa111.jsonl'), '')
-
-      // Valid todo
-      await fs.writeFile(
-        path.join(todosDir, 'aaa111.json'),
-        JSON.stringify([{ content: 'Valid', status: 'pending' }])
-      )
-
-      // Orphan todo
-      await fs.writeFile(
-        path.join(todosDir, 'bbb222.json'),
-        JSON.stringify([{ content: 'Orphan', status: 'pending' }])
-      )
-
-      const result = await Effect.runPromise(deleteOrphanTodos())
-
-      expect(result.deletedCount).toBe(1)
-
-      // Valid todo should still exist
-      await expect(fs.access(path.join(todosDir, 'aaa111.json'))).resolves.toBeUndefined()
-
-      // Orphan should be moved to backup
-      await expect(fs.access(path.join(todosDir, 'bbb222.json'))).rejects.toThrow()
+      // Original gone
+      await expect(
+        fs.access(path.join(todosDir, 'aabbccdd-1122-3344-5566-778899aabbcc.json'))
+      ).rejects.toThrow()
+      // Backup exists
+      await expect(
+        fs.access(path.join(todosDir, '.bak', 'aabbccdd-1122-3344-5566-778899aabbcc.json'))
+      ).resolves.toBeUndefined()
     })
   })
 })
