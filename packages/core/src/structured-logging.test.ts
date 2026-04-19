@@ -41,7 +41,7 @@ describe('structured logging in catch blocks', () => {
 
   afterEach(async () => {
     setLogger(originalLogger)
-    await fs.rm(tempDir, { recursive: true, force: true })
+    await fs.rm(tempDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
   })
 
   it('emits debug log when session file is unreadable', async () => {
