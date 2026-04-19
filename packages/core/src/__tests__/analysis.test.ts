@@ -159,9 +159,9 @@ describe('compressSession', () => {
   it('should keep only the last custom-title', async () => {
     const sessionId = 'test-session'
     const messages = [
-      { type: 'custom-title', uuid: 'ct1', parentUuid: null, title: 'Old title' },
+      { type: 'custom-title', uuid: 'ct1', parentUuid: null, customTitle: 'Old title' },
       { type: 'user', uuid: 'u1', parentUuid: 'ct1', message: { role: 'user', content: 'Work' } },
-      { type: 'custom-title', uuid: 'ct2', parentUuid: 'u1', title: 'New title' },
+      { type: 'custom-title', uuid: 'ct2', parentUuid: 'u1', customTitle: 'New title' },
     ]
 
     await fs.writeFile(
@@ -175,7 +175,7 @@ describe('compressSession', () => {
     const compressed = await Effect.runPromise(readSession(projectName, sessionId))
     const titles = compressed.filter((m) => m.type === 'custom-title')
     expect(titles).toHaveLength(1)
-    expect(titles[0]).toMatchObject({ uuid: 'ct2', title: 'New title' })
+    expect(titles[0]).toMatchObject({ uuid: 'ct2', customTitle: 'New title' })
   })
 
   it('should truncate long tool outputs', async () => {

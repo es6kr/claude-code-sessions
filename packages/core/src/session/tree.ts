@@ -157,7 +157,7 @@ const loadSessionTreeDataInternal = (
               return Effect.void
             })
           ),
-        { concurrency: 'unbounded' }
+        { concurrency: 20 }
       )
     }
     // Sort by timestamp ascending (oldest first), then sourceFile descending
@@ -205,8 +205,7 @@ const loadSessionTreeDataInternal = (
     const linkedAgentIds = yield* findLinkedAgents(projectName, sessionId)
 
     // Load agent info (message counts)
-    const agents: AgentInfo[] = []
-    yield* Effect.forEach(
+    const agents = yield* Effect.forEach(
       linkedAgentIds,
       (agentId) => {
         const agentPath = path.join(projectPath, `${agentId}.jsonl`)
@@ -227,20 +226,19 @@ const loadSessionTreeDataInternal = (
             }
           }
 
-          agents.push({
+          return {
             id: agentId,
             name: agentName,
             messageCount: agentUserAssistant.length,
-          })
+          } satisfies AgentInfo
         }).pipe(
           Effect.catchAll((error) => {
             log.debug(`Agent file not readable: ${agentId}`, error)
-            agents.push({ id: agentId, messageCount: 0 })
-            return Effect.void
+            return Effect.succeed({ id: agentId, messageCount: 0 } satisfies AgentInfo)
           })
         )
       },
-      { concurrency: 'unbounded' }
+      { concurrency: 20 }
     )
 
     // Load todos

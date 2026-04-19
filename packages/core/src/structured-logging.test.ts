@@ -87,7 +87,7 @@ describe('structured logging in catch blocks', () => {
       '{"type":"human","message":{"content":"test"},"uuid":"abc-123"}\n'
     )
 
-    const agentFile = path.join(projectDir, 'agent_abc.jsonl')
+    const agentFile = path.join(projectDir, 'agent-abc.jsonl')
     await fs.writeFile(agentFile, 'NOT VALID JSON\n')
 
     try {
@@ -96,9 +96,12 @@ describe('structured logging in catch blocks', () => {
       // May fail
     }
 
-    const hasAgentLog = debugMessages.some(
-      (msg) => msg.includes('Agent file not readable') || msg.includes('Skipping invalid')
+    const hasAgentLog = debugMessages.some((msg) =>
+      msg.includes('Skipping invalid JSON in agent file: agent-abc.jsonl')
     )
-    expect(hasAgentLog || debugMessages.length > 0).toBe(true)
+    expect(
+      hasAgentLog,
+      `Expected invalid agent JSON debug log, got: ${JSON.stringify(debugMessages)}`
+    ).toBe(true)
   })
 })

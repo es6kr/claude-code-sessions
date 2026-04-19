@@ -6,10 +6,10 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { createLogger } from './logger.js'
 import { getSessionsDir } from './paths.js'
+import type { Message } from './types.js'
 import { tryParseJsonLine } from './utils.js'
 
 const log = createLogger('agents')
-import type { Message } from './types.js'
 
 // Find agent files linked to a session
 export const findLinkedAgents = (projectName: string, sessionId: string) =>
