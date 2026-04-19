@@ -64,7 +64,7 @@
   name="Repairing"
   args={{
     chainErrors: [{ type: 'broken_chain', uuid: 'msg-1', line: 42, parentUuid: null }],
-    onRepair: () => {},
+    onRepair,
     isRepairing: true,
   }}
 >

@@ -48,7 +48,7 @@
   {#snippet children(args)}
     <div class="p-8 bg-gh-bg space-y-2">
       {#each ['Project Alpha', 'Project Beta', 'Project Gamma'] as name}
-        <FloatingTooltip content={`${name}: ${args.content}`}>
+        <FloatingTooltip {...args} content={`${name}: ${args.content}`}>
           <div
             class="px-3 py-2 border border-gh-border rounded text-gh-text-primary text-sm hover:bg-gh-btn transition-colors cursor-default"
           >
