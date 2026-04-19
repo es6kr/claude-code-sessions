@@ -140,7 +140,7 @@ export class SessionTreeProvider
 
     // Enable drag-to-editor: drop onto editor area opens the file
     const uris = source
-      .filter((s): s is SessionFileTreeItem => 'resourceUri' in s && !!s.resourceUri)
+      .filter((s): s is SessionTreeItem => 'resourceUri' in s && !!s.resourceUri)
       .map((s) => s.resourceUri!.toString())
     if (uris.length > 0) {
       dataTransfer.set('text/uri-list', new vscode.DataTransferItem(uris.join('\r\n')))
@@ -303,7 +303,7 @@ export class SessionTreeProvider
     sessions: session.SessionTreeData[],
     expandFirst: boolean,
     dateGrouped?: DateGroupKey
-  ): SessionFileTreeItem[] {
+  ): SessionTreeItem[] {
     const titleMode = vscode.workspace
       .getConfiguration('claudeSessions')
       .get<TitleDisplayMode>('titleDisplayMode', 'message')
@@ -318,7 +318,7 @@ export class SessionTreeProvider
           ? session.getDisplayTitle(undefined, undefined, s.title)
           : undefined
 
-      return new SessionFileTreeItem(
+      return new SessionTreeItem(
         session.getDisplayTitle({
           agentName: s.agentName,
           customTitle: s.customTitle,
@@ -333,10 +333,14 @@ export class SessionTreeProvider
             ? vscode.TreeItemCollapsibleState.Expanded
             : vscode.TreeItemCollapsibleState.Collapsed
           : vscode.TreeItemCollapsibleState.None,
+        'session',
         s.projectName,
         s.id,
         s.messageCount,
         s.sortTimestamp,
+        undefined, // todo
+        undefined, // agentId
+        undefined, // itemIndex
         getSessionTooltip(s), // tooltip
         descriptionText, // session description (first message in datetime mode)
         dateGrouped, // pass through so session knows it's in grouped mode
@@ -392,11 +396,20 @@ export class SessionTreeProvider
 
         return groups.map(
           (g) =>
-            new DateGroupTreeItem(
+            new SessionTreeItem(
               g.label,
               vscode.TreeItemCollapsibleState.Expanded,
-              g.key,
-              g.sessions.length
+              'date-group',
+              '', // no single project
+              '',
+              g.sessions.length,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              g.key
             )
         )
       }
@@ -436,10 +449,12 @@ export class SessionTreeProvider
               if (!data) return null
               const matches = this.filterSessions(data.sessions, p.name)
               if (matches.length === 0) return null
-              return new ProjectTreeItem(
+              return new SessionTreeItem(
                 maskHomePath(p.displayName, USER_HOME),
                 vscode.TreeItemCollapsibleState.Expanded, // auto-expand filtered projects
+                'project',
                 p.name,
+                '',
                 data.sessionCount // show total count, filtered children convey match info
               )
             })
@@ -451,13 +466,15 @@ export class SessionTreeProvider
 
       return sorted.map(
         (p) =>
-          new ProjectTreeItem(
+          new SessionTreeItem(
             maskHomePath(p.displayName, USER_HOME), // displayName already computed by listProjects
             // Expand current project by default
             p.name === currentProjectName
               ? vscode.TreeItemCollapsibleState.Expanded
               : vscode.TreeItemCollapsibleState.Collapsed,
+            'project',
             p.name,
+            '',
             p.sessionCount || 0
           )
       )
@@ -499,7 +516,7 @@ export class SessionTreeProvider
       // Summaries group (if any)
       if (sessionData.summaries.length > 0) {
         items.push(
-          new GroupTreeItem(
+          new SessionTreeItem(
             'Summaries',
             vscode.TreeItemCollapsibleState.Collapsed,
             'summaries-group',
@@ -514,7 +531,7 @@ export class SessionTreeProvider
       const totalTodos = getTotalTodoCount(sessionData.todos)
       if (totalTodos > 0) {
         items.push(
-          new GroupTreeItem(
+          new SessionTreeItem(
             'Todos',
             vscode.TreeItemCollapsibleState.Collapsed,
             'todos-group',
@@ -528,7 +545,7 @@ export class SessionTreeProvider
       // Agents group
       if (sessionData.agents.length > 0) {
         items.push(
-          new GroupTreeItem(
+          new SessionTreeItem(
             'Agents',
             vscode.TreeItemCollapsibleState.Collapsed,
             'agents-group',
@@ -557,13 +574,17 @@ export class SessionTreeProvider
             ? new Date(summary.timestamp).getTime()
             : summary.timestamp
 
-        return new SummaryTreeItem(
+        return new SessionTreeItem(
           displayText,
           vscode.TreeItemCollapsibleState.None,
+          'summary',
           element.projectName,
           element.sessionId,
-          idx, // itemIndex for unique ID
-          timestampMs
+          idx === 0 ? undefined : idx, // Show index for older summaries
+          timestampMs,
+          undefined, // todo
+          undefined, // agentId
+          idx // itemIndex for unique ID
         )
       })
     }
@@ -580,12 +601,16 @@ export class SessionTreeProvider
       // Session todos
       for (const todo of sessionData.todos.sessionTodos) {
         items.push(
-          new TodoTreeItem(
+          new SessionTreeItem(
             todo.content,
             vscode.TreeItemCollapsibleState.None,
+            'todo',
             element.projectName,
             element.sessionId,
+            undefined,
+            undefined,
             todo,
+            undefined, // agentId
             todoIndex++ // itemIndex for unique ID
           )
         )
@@ -595,14 +620,17 @@ export class SessionTreeProvider
       for (const agentTodo of sessionData.todos.agentTodos) {
         for (const todo of agentTodo.todos) {
           items.push(
-            new TodoTreeItem(
+            new SessionTreeItem(
               todo.content,
               vscode.TreeItemCollapsibleState.None,
+              'todo',
               element.projectName,
               element.sessionId,
+              undefined,
+              undefined,
               todo,
-              todoIndex++, // itemIndex for unique ID
-              agentTodo.agentId
+              agentTodo.agentId,
+              todoIndex++ // itemIndex for unique ID
             )
           )
         }
@@ -619,13 +647,17 @@ export class SessionTreeProvider
 
       return sessionData.agents.map(
         (agent, idx) =>
-          new AgentTreeItem(
+          new SessionTreeItem(
             agent.name ?? agent.id.slice(0, 8),
             vscode.TreeItemCollapsibleState.None,
+            'agent',
             element.projectName,
             element.sessionId,
-            idx, // itemIndex for unique ID
-            agent.id
+            agent.messageCount,
+            undefined,
+            undefined,
+            agent.id,
+            idx // itemIndex for unique ID
           )
       )
     }
@@ -634,182 +666,100 @@ export class SessionTreeProvider
   }
 }
 
-export type SessionTreeItem =
-  | ProjectTreeItem
-  | DateGroupTreeItem
-  | SessionFileTreeItem
-  | GroupTreeItem
-  | SummaryTreeItem
-  | TodoTreeItem
-  | AgentTreeItem
-
-export abstract class BaseClaudeTreeItem extends vscode.TreeItem {
+export class SessionTreeItem extends vscode.TreeItem {
   constructor(
-    public readonly type: TreeItemType,
-    public readonly label: string,
+    label: string,
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+    public readonly type: TreeItemType,
     public readonly projectName: string,
     public readonly sessionId: string,
-    public readonly agentId?: string,
-    public readonly itemIndex?: number
-  ) {
-    super(label, collapsibleState)
-    this.id = generateTreeNodeId(type, projectName, sessionId, agentId, itemIndex)
-    this.contextValue = type
-  }
-}
-
-export class ProjectTreeItem extends BaseClaudeTreeItem {
-  declare readonly type: 'project'
-  constructor(
-    label: string,
-    collapsibleState: vscode.TreeItemCollapsibleState,
-    projectName: string,
-    public readonly projectSessionCount: number
-  ) {
-    super('project', label, collapsibleState, projectName, '')
-    this.iconPath = new vscode.ThemeIcon(TREE_ICONS.project.codicon)
-    this.description = `${projectSessionCount} sessions`
-
-    // Bind the item natively to the sessions folder for this project
-    const sessionsDir = session.getSessionsDir()
-    this.resourceUri = vscode.Uri.file(path.join(sessionsDir, projectName))
-  }
-}
-
-export class DateGroupTreeItem extends BaseClaudeTreeItem {
-  declare readonly type: 'date-group'
-  constructor(
-    label: string,
-    collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly dateGroupKey: DateGroupKey,
-    public readonly sessionCount: number
-  ) {
-    super('date-group', label, collapsibleState, '', '')
-    this.id = `date-group::${dateGroupKey}`
-    this.iconPath = new vscode.ThemeIcon(TREE_ICONS['date-group'].codicon)
-    this.description = `${sessionCount}`
-  }
-}
-
-export class SessionFileTreeItem extends BaseClaudeTreeItem {
-  declare readonly type: 'session'
-  constructor(
-    label: string,
-    collapsibleState: vscode.TreeItemCollapsibleState,
-    projectName: string,
-    sessionId: string,
-    public readonly sessionMessageCount: number,
+    public readonly count?: number,
     public readonly sortTimestamp?: number,
+    public readonly todo?: TodoItem,
+    public readonly agentId?: string,
+    public readonly itemIndex?: number,
     public readonly sessionTooltipText?: string,
     public readonly sessionDescription?: string,
     public readonly dateGroupKey?: DateGroupKey,
     public readonly shortProjectName?: string
   ) {
-    super('session', label, collapsibleState, projectName, sessionId)
-    this.iconPath = new vscode.ThemeIcon(TREE_ICONS.session.codicon)
+    super(label, collapsibleState)
 
-    // Description: [PROJECT ·] count · context
-    const parts: string[] = []
-    if (dateGroupKey && shortProjectName) {
-      parts.push(shortProjectName.toUpperCase())
-    }
-    parts.push(`${sessionMessageCount}`)
-    if (sessionDescription) {
-      parts.push(sessionDescription)
-    } else if (sortTimestamp) {
-      parts.push(formatRelativeTime(sortTimestamp))
-    }
-    this.description = parts.join(' · ')
-
-    // Set tooltip with session info and ID
-    if (sessionTooltipText) {
-      this.tooltip = sessionTooltipText
-    }
-
-    // Bind the item natively to the session file
-    const sessionsDir = session.getSessionsDir()
-    this.resourceUri = vscode.Uri.file(path.join(sessionsDir, projectName, `${sessionId}.jsonl`))
-
-    // Open the session file on click
-    this.command = {
-      command: 'vscode.open',
-      title: 'Open Session',
-      arguments: [this.resourceUri],
-    }
-  }
-}
-
-export class GroupTreeItem extends BaseClaudeTreeItem {
-  declare readonly type: 'summaries-group' | 'todos-group' | 'agents-group'
-  constructor(
-    label: string,
-    collapsibleState: vscode.TreeItemCollapsibleState,
-    type: 'summaries-group' | 'todos-group' | 'agents-group',
-    projectName: string,
-    sessionId: string,
-    public readonly groupCount: number
-  ) {
-    super(type, label, collapsibleState, projectName, sessionId)
-    this.iconPath = new vscode.ThemeIcon(TREE_ICONS[type].codicon)
-    this.description = `${groupCount}`
-  }
-}
-
-export class SummaryTreeItem extends BaseClaudeTreeItem {
-  declare readonly type: 'summary'
-  constructor(
-    label: string,
-    collapsibleState: vscode.TreeItemCollapsibleState,
-    projectName: string,
-    sessionId: string,
-    itemIndex: number,
-    public readonly sortTimestamp?: number
-  ) {
-    super('summary', label, collapsibleState, projectName, sessionId, undefined, itemIndex)
-    this.iconPath = new vscode.ThemeIcon(TREE_ICONS.summary.codicon)
-    this.description = sortTimestamp ? formatRelativeTime(sortTimestamp) : undefined
-  }
-}
-
-export class TodoTreeItem extends BaseClaudeTreeItem {
-  declare readonly type: 'todo'
-  constructor(
-    label: string,
-    collapsibleState: vscode.TreeItemCollapsibleState,
-    projectName: string,
-    sessionId: string,
-    public readonly todoData: TodoItem,
-    itemIndex: number,
-    agentId?: string
-  ) {
-    super('todo', label, collapsibleState, projectName, sessionId, agentId, itemIndex)
-    const status = todoData.status ?? 'pending'
-    const todoIcon = getTodoIcon(status)
-    if (todoIcon.color) {
-      this.iconPath = new vscode.ThemeIcon(
-        todoIcon.codicon,
-        new vscode.ThemeColor(`charts.${todoIcon.color}`)
-      )
+    // Set unique ID for drag and drop to work (required by VSCode)
+    if (type === 'date-group') {
+      this.id = `date-group:${projectName}:${dateGroupKey}`
     } else {
-      this.iconPath = new vscode.ThemeIcon(todoIcon.codicon)
+      this.id = generateTreeNodeId(type, projectName, sessionId, agentId, itemIndex)
     }
-    this.description = agentId ? `${TREE_ICONS.agent.emoji} ${agentId.slice(0, 8)}` : undefined
-  }
-}
+    this.contextValue = type
 
-export class AgentTreeItem extends BaseClaudeTreeItem {
-  declare readonly type: 'agent'
-  constructor(
-    label: string,
-    collapsibleState: vscode.TreeItemCollapsibleState,
-    projectName: string,
-    sessionId: string,
-    itemIndex: number,
-    agentId: string
-  ) {
-    super('agent', label, collapsibleState, projectName, sessionId, agentId, itemIndex)
-    this.iconPath = new vscode.ThemeIcon(TREE_ICONS.agent.codicon)
-    this.tooltip = agentId
+    if (type === 'project') {
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS.project.codicon)
+      this.description = `${count ?? 0} sessions`
+
+      // Bind the item natively to the sessions folder for this project
+      const sessionsDir = session.getSessionsDir()
+      this.resourceUri = vscode.Uri.file(path.join(sessionsDir, projectName))
+    } else if (type === 'date-group') {
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS['date-group'].codicon)
+      this.description = `${count ?? 0}`
+    } else if (type === 'session') {
+      // No icon for sessions - saves horizontal space
+      // Description: [PROJECT ·] count · context
+      const parts: string[] = []
+      if (dateGroupKey && shortProjectName) {
+        parts.push(shortProjectName.toUpperCase())
+      }
+      parts.push(`${count ?? 0}`)
+      if (sessionDescription) {
+        parts.push(sessionDescription)
+      } else if (sortTimestamp) {
+        parts.push(formatRelativeTime(sortTimestamp))
+      }
+      this.description = parts.join(' · ')
+
+      // Set tooltip with session info and ID
+      if (sessionTooltipText) {
+        this.tooltip = sessionTooltipText
+      }
+
+      // Bind the item natively to the session file
+      const sessionsDir = session.getSessionsDir()
+      this.resourceUri = vscode.Uri.file(path.join(sessionsDir, projectName, `${sessionId}.jsonl`))
+
+      // Open the session file on click
+      this.command = {
+        command: 'vscode.open',
+        title: 'Open Session',
+        arguments: [this.resourceUri],
+      }
+    } else if (type === 'summaries-group') {
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS['summaries-group'].codicon)
+      this.description = `${count ?? 0}`
+    } else if (type === 'todos-group') {
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS['todos-group'].codicon)
+      this.description = `${count ?? 0}`
+    } else if (type === 'agents-group') {
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS['agents-group'].codicon)
+      this.description = `${count ?? 0}`
+    } else if (type === 'summary') {
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS.summary.codicon)
+      this.description = sortTimestamp ? formatRelativeTime(sortTimestamp) : undefined
+    } else if (type === 'todo') {
+      const status = todo?.status ?? 'pending'
+      const todoIcon = getTodoIcon(status)
+      if (todoIcon.color) {
+        this.iconPath = new vscode.ThemeIcon(
+          todoIcon.codicon,
+          new vscode.ThemeColor(`charts.${todoIcon.color}`)
+        )
+      } else {
+        this.iconPath = new vscode.ThemeIcon(todoIcon.codicon)
+      }
+      this.description = agentId ? `${TREE_ICONS.agent.emoji} ${agentId.slice(0, 8)}` : undefined
+    } else if (type === 'agent') {
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS.agent.codicon)
+      this.tooltip = agentId
+    }
   }
 }
