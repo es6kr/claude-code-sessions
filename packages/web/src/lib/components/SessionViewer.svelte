@@ -84,13 +84,27 @@
 
   // Message type filter with localStorage persistence
   const FILTER_STORAGE_KEY = 'claudeSessionsMessageTypeFilter'
-  const storedFilter =
-    typeof window !== 'undefined' ? localStorage.getItem(FILTER_STORAGE_KEY) : null
-  let visibleCategories = $state<Set<MessageCategory>>(
-    storedFilter ? new Set(JSON.parse(storedFilter)) : new Set(DEFAULT_VISIBLE_CATEGORIES)
-  )
+  const getInitialVisibleCategories = (): Set<MessageCategory> => {
+    if (typeof window === 'undefined') return new Set(DEFAULT_VISIBLE_CATEGORIES)
+    const stored = localStorage.getItem(FILTER_STORAGE_KEY)
+    if (!stored) return new Set(DEFAULT_VISIBLE_CATEGORIES)
+    try {
+      const parsed = JSON.parse(stored)
+      if (!Array.isArray(parsed)) return new Set(DEFAULT_VISIBLE_CATEGORIES)
+      const valid = parsed.filter(
+        (c): c is MessageCategory =>
+          typeof c === 'string' && DEFAULT_VISIBLE_CATEGORIES.includes(c as MessageCategory)
+      )
+      return valid.length > 0 ? new Set(valid) : new Set(DEFAULT_VISIBLE_CATEGORIES)
+    } catch {
+      return new Set(DEFAULT_VISIBLE_CATEGORIES)
+    }
+  }
+  let visibleCategories = $state<Set<MessageCategory>>(getInitialVisibleCategories())
   $effect(() => {
-    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify([...visibleCategories]))
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify([...visibleCategories]))
+    }
   })
 
   const filteredMessages = $derived(
