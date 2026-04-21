@@ -65,7 +65,12 @@ export const MESSAGE_CATEGORY_LABELS: Record<MessageCategory, string> = {
   user: 'User',
 }
 
-export const DEFAULT_VISIBLE_CATEGORIES: MessageCategory[] = ['assistant', 'summary', 'user']
+export const DEFAULT_VISIBLE_CATEGORIES: MessageCategory[] = [
+  'assistant',
+  'metadata',
+  'summary',
+  'user',
+]
 
 /**
  * Replace home directory paths with ~ in text content
