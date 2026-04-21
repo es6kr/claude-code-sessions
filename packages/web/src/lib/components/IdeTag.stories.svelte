@@ -90,6 +90,7 @@
 
 <Story
   name="Unknown Tag"
+  argTypes={{ tag: { control: 'text' } }}
   args={{ tag: 'ide_custom_tag', content: 'unexpected IDE tag content here' }}
 >
   {#snippet children(args)}
