@@ -5,6 +5,68 @@
 import type { Content, Message } from '$lib/api'
 import { maskHomePath } from '$lib/stores/config'
 
+export type MessageCategory =
+  | 'assistant'
+  | 'metadata'
+  | 'progress'
+  | 'summary'
+  | 'system'
+  | 'thinking'
+  | 'tool_result'
+  | 'tool_use'
+  | 'user'
+
+const METADATA_TYPES = new Set([
+  'agent-name',
+  'compact_boundary',
+  'custom-title',
+  'file-history-snapshot',
+  'queue-operation',
+])
+
+export const getMessageCategory = (msg: Message): MessageCategory => {
+  if (METADATA_TYPES.has(msg.type)) return 'metadata'
+  if (msg.type === 'progress') return 'progress'
+  if (msg.type === 'summary') return 'summary'
+  if (msg.type === 'system') return 'system'
+  if (msg.type === 'human') return 'user'
+
+  if (msg.type === 'user') {
+    const m = msg.message as { content?: unknown[] } | undefined
+    if (Array.isArray(m?.content)) {
+      const first = m.content[0] as { type?: string } | undefined
+      if (first?.type === 'tool_result') return 'tool_result'
+    }
+    return 'user'
+  }
+
+  if (msg.type === 'assistant') {
+    const m = msg.message as { content?: Array<Record<string, unknown>> } | undefined
+    if (Array.isArray(m?.content)) {
+      if (m.content.some((c) => c?.type === 'tool_use')) return 'tool_use'
+      const hasText = m.content.some((c) => c?.type === 'text' && (c?.text as string)?.trim())
+      if (!hasText && m.content.some((c) => c?.type === 'thinking')) return 'thinking'
+    }
+    return 'assistant'
+  }
+
+  return 'metadata'
+}
+
+export const MESSAGE_CATEGORY_LABELS: Record<MessageCategory, string> = {
+  assistant: 'Assistant',
+  metadata: 'Metadata',
+  progress: 'Progress',
+  summary: 'Summary',
+  system: 'System',
+  thinking: 'Thinking',
+  tool_result: 'Tool Result',
+  tool_use: 'Tool Use',
+  user: 'User',
+}
+
+export const DEFAULT_VISIBLE_CATEGORIES: MessageCategory[] = ['assistant', 'summary', 'user']
+
 /**
  * Replace home directory paths with ~ in text content
  * Uses current user's home directory from appConfig store
