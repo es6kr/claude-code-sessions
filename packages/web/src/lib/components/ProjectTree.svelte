@@ -377,6 +377,7 @@
                       </TooltipButton>
                       {#if onCompressSession}
                         <TooltipButton
+                          aria-label="Compress session"
                           class="p-1 rounded hover:bg-gh-accent/20 text-xs"
                           onclick={(e) => onCompressSession(e, session)}
                           title="Compress session"

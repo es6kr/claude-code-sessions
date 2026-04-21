@@ -548,6 +548,7 @@
       async () => {
         closeConfirm()
         try {
+          loading = true
           const result = await api.compressSession(session.projectName, session.id)
           if (result.success) {
             const saved =
@@ -558,9 +559,13 @@
             if (selectedSession?.id === session.id) {
               messages = await api.getSession(session.projectName, session.id)
             }
+          } else {
+            error = result.error ?? 'Failed to compress session'
           }
         } catch (e) {
           error = String(e)
+        } finally {
+          loading = false
         }
       }
     )
