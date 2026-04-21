@@ -30,9 +30,10 @@
     titleDisplayMode: TitleDisplayMode
     onToggleProject: (name: string) => void
     onSelectSession: (session: SessionMeta) => void
-    onRenameSession: (e: Event, session: SessionMeta) => void
+    onCompressSession?: (e: Event, session: SessionMeta) => void
     onDeleteSession: (e: Event, session: SessionMeta) => void
     onMoveSession?: (session: SessionMeta, targetProject: string) => void
+    onRenameSession: (e: Event, session: SessionMeta) => void
     onResumeSession?: (e: Event, session: SessionMeta) => void
     onSortChange?: (field: SessionSortField, order: SessionSortOrder) => void
     onTitleModeChange?: (mode: TitleDisplayMode) => void
@@ -50,9 +51,10 @@
     titleDisplayMode,
     onToggleProject,
     onSelectSession,
-    onRenameSession,
+    onCompressSession,
     onDeleteSession,
     onMoveSession,
+    onRenameSession,
     onResumeSession,
     onSortChange,
     onTitleModeChange,
@@ -373,6 +375,15 @@
                       >
                         ✏️
                       </TooltipButton>
+                      {#if onCompressSession}
+                        <TooltipButton
+                          class="p-1 rounded hover:bg-gh-accent/20 text-xs"
+                          onclick={(e) => onCompressSession(e, session)}
+                          title="Compress session"
+                        >
+                          🗜️
+                        </TooltipButton>
+                      {/if}
                       <TooltipButton
                         class="p-1 rounded hover:bg-gh-red/20 text-xs"
                         onclick={(e) => onDeleteSession(e, session)}

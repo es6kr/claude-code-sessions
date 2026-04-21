@@ -540,6 +540,32 @@
     }
   }
 
+  const handleCompressSession = (e: Event, session: SessionMeta) => {
+    e.stopPropagation()
+    showConfirm(
+      'Compress Session',
+      `Compress session "${session.title}"?\n\nThis will remove redundant data (progress messages and intermediate snapshots) to reduce file size. This action cannot be undone.`,
+      async () => {
+        closeConfirm()
+        try {
+          const result = await api.compressSession(session.projectName, session.id)
+          if (result.success) {
+            const saved =
+              result.originalSize > 0
+                ? Math.round((1 - result.compressedSize / result.originalSize) * 100)
+                : 0
+            toast = `Session compressed! Saved ~${saved}% (removed ${result.removedProgress} progress, ${result.removedSnapshots} snapshots)`
+            if (selectedSession?.id === session.id) {
+              messages = await api.getSession(session.projectName, session.id)
+            }
+          }
+        } catch (e) {
+          error = String(e)
+        }
+      }
+    )
+  }
+
   // Track if we've auto-expanded the current project
   let hasAutoExpanded = $state(false)
 
@@ -643,9 +669,10 @@
     {titleDisplayMode}
     onToggleProject={toggleProject}
     onSelectSession={selectSession}
-    onRenameSession={handleRenameSession}
+    onCompressSession={handleCompressSession}
     onDeleteSession={handleDeleteSession}
     onMoveSession={handleMoveSession}
+    onRenameSession={handleRenameSession}
     onResumeSession={handleResumeSession}
     onSortChange={handleSortChange}
     onTitleModeChange={handleTitleModeChange}
