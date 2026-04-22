@@ -65,6 +65,8 @@ export const MESSAGE_CATEGORY_LABELS: Record<MessageCategory, string> = {
   user: 'User',
 }
 
+export const ALL_MESSAGE_CATEGORIES = Object.keys(MESSAGE_CATEGORY_LABELS) as MessageCategory[]
+
 export const DEFAULT_VISIBLE_CATEGORIES: MessageCategory[] = [
   'assistant',
   'metadata',

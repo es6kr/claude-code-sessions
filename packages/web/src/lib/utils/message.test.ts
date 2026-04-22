@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { maskHomePath } from '$lib/stores/config'
 import {
+  ALL_MESSAGE_CATEGORIES,
   getMessageCategory,
   DEFAULT_VISIBLE_CATEGORIES,
+  MESSAGE_CATEGORY_LABELS,
   parseCommandMessage,
   parseProgress,
   parseStopHookSummary,
@@ -114,11 +116,24 @@ describe('getMessageCategory', () => {
   })
 })
 
+describe('ALL_MESSAGE_CATEGORIES', () => {
+  it('should contain all keys from MESSAGE_CATEGORY_LABELS', () => {
+    expect(ALL_MESSAGE_CATEGORIES).toEqual(Object.keys(MESSAGE_CATEGORY_LABELS))
+  })
+
+  it('should include every DEFAULT_VISIBLE_CATEGORIES entry', () => {
+    for (const cat of DEFAULT_VISIBLE_CATEGORIES) {
+      expect(ALL_MESSAGE_CATEGORIES).toContain(cat)
+    }
+  })
+})
+
 describe('DEFAULT_VISIBLE_CATEGORIES', () => {
-  it('should include user, assistant, and summary by default', () => {
+  it('should include user, assistant, summary, and metadata by default', () => {
     expect(DEFAULT_VISIBLE_CATEGORIES).toContain('user')
     expect(DEFAULT_VISIBLE_CATEGORIES).toContain('assistant')
     expect(DEFAULT_VISIBLE_CATEGORIES).toContain('summary')
+    expect(DEFAULT_VISIBLE_CATEGORIES).toContain('metadata')
   })
 
   it('should not include thinking or tool types by default', () => {

@@ -13,7 +13,12 @@
   import ValidationBadge from './ValidationBadge.svelte'
   import CommandTitle from './CommandTitle.svelte'
   import SessionActions from './SessionActions.svelte'
-  import { getMessageCategory, DEFAULT_VISIBLE_CATEGORIES, type MessageCategory } from '$lib/utils'
+  import {
+    ALL_MESSAGE_CATEGORIES,
+    getMessageCategory,
+    DEFAULT_VISIBLE_CATEGORIES,
+    type MessageCategory,
+  } from '$lib/utils'
 
   // Tab type - messages, todos, or agent:<agentId>
   type TabType = 'messages' | 'todos' | `agent:${string}`
@@ -93,7 +98,7 @@
       if (!Array.isArray(parsed)) return new Set(DEFAULT_VISIBLE_CATEGORIES)
       const valid = parsed.filter(
         (c): c is MessageCategory =>
-          typeof c === 'string' && DEFAULT_VISIBLE_CATEGORIES.includes(c as MessageCategory)
+          typeof c === 'string' && ALL_MESSAGE_CATEGORIES.includes(c as MessageCategory)
       )
       return valid.length > 0 ? new Set(valid) : new Set(DEFAULT_VISIBLE_CATEGORIES)
     } catch {
@@ -170,10 +175,7 @@
   )
 
   const handleFilterShowAll = () => {
-    const allCategories = new Set<MessageCategory>()
-    for (const msg of messages) allCategories.add(getMessageCategory(msg))
-    for (const msg of agentMessages) allCategories.add(getMessageCategory(msg))
-    visibleCategories = allCategories
+    visibleCategories = new Set(ALL_MESSAGE_CATEGORIES)
   }
 
   // Undo stack - stores already-deleted messages that can be restored
