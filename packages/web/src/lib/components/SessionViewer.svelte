@@ -92,7 +92,7 @@
   const getInitialVisibleCategories = (): Set<MessageCategory> => {
     if (typeof window === 'undefined') return new Set(DEFAULT_VISIBLE_CATEGORIES)
     const stored = localStorage.getItem(FILTER_STORAGE_KEY)
-    if (!stored) return new Set(DEFAULT_VISIBLE_CATEGORIES)
+    if (stored === null) return new Set(DEFAULT_VISIBLE_CATEGORIES)
     try {
       const parsed = JSON.parse(stored)
       if (!Array.isArray(parsed)) return new Set(DEFAULT_VISIBLE_CATEGORIES)
@@ -100,7 +100,7 @@
         (c): c is MessageCategory =>
           typeof c === 'string' && ALL_MESSAGE_CATEGORIES.includes(c as MessageCategory)
       )
-      return valid.length > 0 ? new Set(valid) : new Set(DEFAULT_VISIBLE_CATEGORIES)
+      return new Set(valid)
     } catch {
       return new Set(DEFAULT_VISIBLE_CATEGORIES)
     }
