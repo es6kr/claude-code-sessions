@@ -56,6 +56,11 @@
     },
   ]
 
+  const NAV_MODE_KEY = 'claude-sessions-nav-mode'
+  const clearNavMode = () => {
+    localStorage.removeItem(NAV_MODE_KEY)
+  }
+
   const { Story } = defineMeta({
     title: 'Components/ScrollButtons',
     component: ScrollButtons,
@@ -69,6 +74,7 @@
 
 <Story name="Default (User Mode)">
   {#snippet children(args)}
+    {@const _ = clearNavMode()}
     <div class="p-4 bg-gh-canvas text-gh-text">
       <p class="text-sm text-gh-text-secondary mb-4">
         Click the middle button to open navigation mode dropdown with 5 options

@@ -68,15 +68,18 @@
   // Dropdown state
   let dropdownOpen = $state(false)
   let dropdownRef: HTMLDivElement | undefined = $state()
+  let focusedIndex = $state(-1)
 
   const toggleDropdown = () => {
     dropdownOpen = !dropdownOpen
+    if (dropdownOpen) {
+      focusedIndex = NAV_MODES.indexOf(navMode)
+    }
   }
 
   const selectMode = (mode: NavMode) => {
     navMode = mode
     dropdownOpen = false
-    localStorage.setItem('claude-sessions-nav-mode', mode)
   }
 
   const handleClickOutside = (event: MouseEvent) => {
@@ -85,12 +88,63 @@
     }
   }
 
+  const handleDropdownKeydown = (event: KeyboardEvent) => {
+    if (!dropdownOpen) return
+    switch (event.key) {
+      case 'Escape':
+        dropdownOpen = false
+        ;(dropdownRef?.querySelector('.mode-btn') as HTMLElement)?.focus()
+        event.preventDefault()
+        break
+      case 'ArrowDown':
+        focusedIndex = (focusedIndex + 1) % NAV_MODES.length
+        event.preventDefault()
+        break
+      case 'ArrowUp':
+        focusedIndex = (focusedIndex - 1 + NAV_MODES.length) % NAV_MODES.length
+        event.preventDefault()
+        break
+      case 'Enter':
+      case ' ':
+        if (focusedIndex >= 0) selectMode(NAV_MODES[focusedIndex])
+        event.preventDefault()
+        break
+    }
+  }
+
+  $effect(() => {
+    if (dropdownOpen && focusedIndex >= 0) {
+      const items = dropdownRef?.querySelectorAll('[role="menuitemradio"]')
+      ;(items?.[focusedIndex] as HTMLElement)?.focus()
+    }
+  })
+
   $effect(() => {
     if (dropdownOpen) {
       document.addEventListener('click', handleClickOutside, true)
       return () => document.removeEventListener('click', handleClickOutside, true)
     }
   })
+
+  // Recursively check if content contains text (handles string, array, and single ContentItem)
+  const contentHasText = (content: unknown): boolean => {
+    if (!content) return false
+    if (typeof content === 'string') return content.trim().length > 0
+    if (Array.isArray(content)) {
+      for (const item of content) {
+        if (contentHasText(item)) return true
+      }
+      return false
+    }
+    if (typeof content === 'object') {
+      const item = content as { type?: string; text?: string; content?: unknown }
+      if (item.type === 'text' && typeof item.text === 'string' && item.text.trim().length > 0) {
+        return true
+      }
+      if ('content' in item) return contentHasText(item.content)
+    }
+    return false
+  }
 
   // Check if message has user text content (not just tool_result without user input)
   const hasUserTextContent = (m: Message): boolean => {
@@ -116,32 +170,14 @@
       return false
     }
 
-    // Check message.content array for text type
     const content = (m.message as { content?: unknown } | undefined)?.content ?? m.content
-    if (!content) return false
-    if (typeof content === 'string') return content.trim().length > 0
-    if (!Array.isArray(content)) return false
-
-    for (const item of content as Array<{ type?: string; text?: string }>) {
-      if (item.type === 'text' && item.text?.trim()) {
-        return true
-      }
-    }
-    return false
+    return contentHasText(content)
   }
 
   const hasAssistantTextContent = (m: Message): boolean => {
     if (m.type !== 'assistant') return false
     const content = (m.message as { content?: unknown } | undefined)?.content ?? m.content
-    if (!content) return false
-    if (typeof content === 'string') return content.trim().length > 0
-    if (!Array.isArray(content)) return false
-    for (const item of content as Array<{ type?: string; text?: string }>) {
-      if (item.type === 'text' && item.text?.trim()) {
-        return true
-      }
-    }
-    return false
+    return contentHasText(content)
   }
 
   // Check if message matches current navigation mode
@@ -275,17 +311,32 @@
       </svg>
       <span class="tooltip">{NAV_MODE_CONFIG[navMode].prevLabel}</span>
     </button>
-    <div class="dropdown-wrapper" bind:this={dropdownRef}>
-      <button class="nav-btn mode-btn {buttonClass}" onclick={toggleDropdown}>
+    <div
+      class="dropdown-wrapper"
+      role="group"
+      bind:this={dropdownRef}
+      onkeydown={handleDropdownKeydown}
+    >
+      <button
+        class="nav-btn mode-btn {buttonClass}"
+        onclick={toggleDropdown}
+        aria-haspopup="true"
+        aria-expanded={dropdownOpen}
+        aria-label="Navigation mode: {NAV_MODE_CONFIG[navMode].label}"
+      >
         <span class="mode-icon">{NAV_MODE_CONFIG[navMode].icon}</span>
         <span class="tooltip">Navigate: {NAV_MODE_CONFIG[navMode].label}</span>
       </button>
       {#if dropdownOpen}
-        <div class="dropdown-menu">
-          {#each NAV_MODES as mode}
+        <div class="dropdown-menu" role="menu" aria-label="Navigation modes">
+          {#each NAV_MODES as mode, i}
             <button
               class="dropdown-item"
               class:active={mode === navMode}
+              class:focused={i === focusedIndex}
+              role="menuitemradio"
+              aria-checked={mode === navMode}
+              tabindex={i === focusedIndex ? 0 : -1}
               onclick={() => selectMode(mode)}
             >
               <span class="dropdown-icon">{NAV_MODE_CONFIG[mode].icon}</span>
@@ -357,7 +408,12 @@
     text-align: left;
     white-space: nowrap;
   }
-  .dropdown-item:hover {
+  .dropdown-item:hover,
+  .dropdown-item.focused {
+    background-color: #30363d;
+  }
+  .dropdown-item:focus {
+    outline: none;
     background-color: #30363d;
   }
   .dropdown-item.active {
