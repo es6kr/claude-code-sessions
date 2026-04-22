@@ -1,27 +1,44 @@
 <script lang="ts">
   import type { Message } from '$lib/api'
 
-  const NAV_MODES = ['hook_stop', 'compact', 'user'] as const
+  const NAV_MODES = ['user', 'assistant', 'all', 'compact', 'hook_stop'] as const
   type NavMode = (typeof NAV_MODES)[number]
 
-  const NAV_MODE_CONFIG: Record<NavMode, { label: string; prevLabel: string; nextLabel: string }> =
-    {
-      user: {
-        label: 'User messages',
-        prevLabel: 'Previous user message',
-        nextLabel: 'Next user message',
-      },
-      compact: {
-        label: 'Compact summaries',
-        prevLabel: 'Previous compact summary',
-        nextLabel: 'Next compact summary',
-      },
-      hook_stop: {
-        label: 'Stop hooks',
-        prevLabel: 'Previous stop hook',
-        nextLabel: 'Next stop hook',
-      },
-    }
+  const NAV_MODE_CONFIG: Record<
+    NavMode,
+    { label: string; icon: string; prevLabel: string; nextLabel: string }
+  > = {
+    user: {
+      label: 'User messages',
+      icon: '👤',
+      prevLabel: 'Previous user message',
+      nextLabel: 'Next user message',
+    },
+    assistant: {
+      label: 'Assistant messages',
+      icon: '✨',
+      prevLabel: 'Previous assistant message',
+      nextLabel: 'Next assistant message',
+    },
+    all: {
+      label: 'All messages',
+      icon: '💬',
+      prevLabel: 'Previous message',
+      nextLabel: 'Next message',
+    },
+    compact: {
+      label: 'Compact summaries',
+      icon: '📍',
+      prevLabel: 'Previous compact summary',
+      nextLabel: 'Next compact summary',
+    },
+    hook_stop: {
+      label: 'Stop hooks',
+      icon: '⏹',
+      prevLabel: 'Previous stop hook',
+      nextLabel: 'Next stop hook',
+    },
+  }
 
   interface Props {
     messages: Message[]
@@ -33,8 +50,7 @@
 
   // Navigation mode state with localStorage persistence
   const normalizeStoredMode = (mode: NavMode | null): NavMode => {
-    if (mode === 'user') return 'hook_stop'
-    return mode && NAV_MODES.includes(mode) ? mode : 'hook_stop'
+    return mode && NAV_MODES.includes(mode) ? mode : 'user'
   }
 
   const storedMode =
@@ -49,11 +65,32 @@
     }
   })
 
-  const cycleNavMode = () => {
-    const idx = NAV_MODES.indexOf(navMode)
-    navMode = NAV_MODES[(idx + 1) % NAV_MODES.length]
-    localStorage.setItem('claude-sessions-nav-mode', navMode)
+  // Dropdown state
+  let dropdownOpen = $state(false)
+  let dropdownRef: HTMLDivElement | undefined = $state()
+
+  const toggleDropdown = () => {
+    dropdownOpen = !dropdownOpen
   }
+
+  const selectMode = (mode: NavMode) => {
+    navMode = mode
+    dropdownOpen = false
+    localStorage.setItem('claude-sessions-nav-mode', mode)
+  }
+
+  const handleClickOutside = (event: MouseEvent) => {
+    if (dropdownRef && !dropdownRef.contains(event.target as Node)) {
+      dropdownOpen = false
+    }
+  }
+
+  $effect(() => {
+    if (dropdownOpen) {
+      document.addEventListener('click', handleClickOutside, true)
+      return () => document.removeEventListener('click', handleClickOutside, true)
+    }
+  })
 
   // Check if message has user text content (not just tool_result without user input)
   const hasUserTextContent = (m: Message): boolean => {
@@ -93,11 +130,29 @@
     return false
   }
 
+  const hasAssistantTextContent = (m: Message): boolean => {
+    if (m.type !== 'assistant') return false
+    const content = (m.message as { content?: unknown } | undefined)?.content ?? m.content
+    if (!content) return false
+    if (typeof content === 'string') return content.trim().length > 0
+    if (!Array.isArray(content)) return false
+    for (const item of content as Array<{ type?: string; text?: string }>) {
+      if (item.type === 'text' && item.text?.trim()) {
+        return true
+      }
+    }
+    return false
+  }
+
   // Check if message matches current navigation mode
   const matchesNavMode = (m: Message, mode: NavMode): boolean => {
     switch (mode) {
       case 'user':
         return hasUserTextContent(m)
+      case 'assistant':
+        return hasAssistantTextContent(m)
+      case 'all':
+        return hasUserTextContent(m) || hasAssistantTextContent(m)
       case 'compact':
         return (m as Message & { isCompactSummary?: boolean }).isCompactSummary === true
       case 'hook_stop': {
@@ -220,49 +275,26 @@
       </svg>
       <span class="tooltip">{NAV_MODE_CONFIG[navMode].prevLabel}</span>
     </button>
-    <button class="nav-btn mode-btn {buttonClass}" onclick={cycleNavMode}>
-      {#if navMode === 'user'}
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-          />
-        </svg>
-      {:else if navMode === 'compact'}
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"
-          />
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"
-          />
-        </svg>
-      {:else}
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"
-          />
-        </svg>
+    <div class="dropdown-wrapper" bind:this={dropdownRef}>
+      <button class="nav-btn mode-btn {buttonClass}" onclick={toggleDropdown}>
+        <span class="mode-icon">{NAV_MODE_CONFIG[navMode].icon}</span>
+        <span class="tooltip">Navigate: {NAV_MODE_CONFIG[navMode].label}</span>
+      </button>
+      {#if dropdownOpen}
+        <div class="dropdown-menu">
+          {#each NAV_MODES as mode}
+            <button
+              class="dropdown-item"
+              class:active={mode === navMode}
+              onclick={() => selectMode(mode)}
+            >
+              <span class="dropdown-icon">{NAV_MODE_CONFIG[mode].icon}</span>
+              <span>{NAV_MODE_CONFIG[mode].label}</span>
+            </button>
+          {/each}
+        </div>
       {/if}
-      <span class="tooltip">Navigate: {NAV_MODE_CONFIG[navMode].label}</span>
-    </button>
+    </div>
     <button class="nav-btn {buttonClass}" onclick={scrollToNext}>
       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 9l7 7 7-7" />
@@ -289,6 +321,53 @@
   }
   .mode-btn {
     border-style: dashed;
+  }
+  .mode-icon {
+    font-size: 0.875rem;
+    line-height: 1;
+  }
+  .dropdown-wrapper {
+    position: relative;
+  }
+  .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 0.25rem;
+    min-width: 10rem;
+    border-radius: 0.375rem;
+    background-color: #1c2128;
+    border: 1px solid #30363d;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    z-index: 50;
+    overflow: hidden;
+  }
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.75rem;
+    color: #c9d1d9;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    white-space: nowrap;
+  }
+  .dropdown-item:hover {
+    background-color: #30363d;
+  }
+  .dropdown-item.active {
+    background-color: #1f6feb33;
+    color: #58a6ff;
+  }
+  .dropdown-icon {
+    font-size: 0.875rem;
+    width: 1.25rem;
+    text-align: center;
   }
   .tooltip {
     position: absolute;

@@ -67,11 +67,11 @@
   })
 </script>
 
-<Story name="Default (Stop Hook Mode)">
+<Story name="Default (User Mode)">
   {#snippet children(args)}
     <div class="p-4 bg-gh-canvas text-gh-text">
       <p class="text-sm text-gh-text-secondary mb-4">
-        Click the middle button to cycle navigation mode: Stop Hook → Compact → User
+        Click the middle button to open navigation mode dropdown with 5 options
       </p>
       <ScrollButtons {...args} />
     </div>
@@ -95,6 +95,36 @@
     <div class="p-4 bg-gh-canvas text-gh-text">
       <p class="text-sm text-gh-text-secondary mb-4">
         Single user message — only user mode has targets
+      </p>
+      <ScrollButtons {...args} />
+    </div>
+  {/snippet}
+</Story>
+
+<Story
+  name="Rich Message Mix"
+  args={{
+    messages: [
+      ...baseMessages,
+      {
+        uuid: 'msg-10',
+        type: 'assistant',
+        timestamp: '2025-01-01T00:09:00Z',
+        message: { content: 'Here is a detailed response with text content' },
+      },
+      {
+        uuid: 'msg-11',
+        type: 'assistant',
+        timestamp: '2025-01-01T00:10:00Z',
+        message: { content: [{ type: 'text', text: 'Multi-part assistant message' }] },
+      },
+    ],
+  }}
+>
+  {#snippet children(args)}
+    <div class="p-4 bg-gh-canvas text-gh-text">
+      <p class="text-sm text-gh-text-secondary mb-4">
+        Mixed messages including assistant responses — try Assistant and All modes
       </p>
       <ScrollButtons {...args} />
     </div>
