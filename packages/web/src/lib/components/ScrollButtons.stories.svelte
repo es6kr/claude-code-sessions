@@ -98,6 +98,7 @@
   }}
 >
   {#snippet children(args)}
+    {@const _ = clearNavMode()}
     <div class="p-4 bg-gh-canvas text-gh-text">
       <p class="text-sm text-gh-text-secondary mb-4">
         Single user message — only user mode has targets
@@ -128,6 +129,7 @@
   }}
 >
   {#snippet children(args)}
+    {@const _ = clearNavMode()}
     <div class="p-4 bg-gh-canvas text-gh-text">
       <p class="text-sm text-gh-text-secondary mb-4">
         Mixed messages including assistant responses — try Assistant and All modes
@@ -139,6 +141,7 @@
 
 <Story name="Empty Messages" args={{ messages: [] }}>
   {#snippet children(args)}
+    {@const _ = clearNavMode()}
     <div class="p-4 bg-gh-canvas text-gh-text">
       <p class="text-sm text-gh-text-secondary mb-4">No messages — buttons hidden</p>
       <ScrollButtons {...args} />

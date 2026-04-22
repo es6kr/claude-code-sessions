@@ -80,6 +80,7 @@
   const selectMode = (mode: NavMode) => {
     navMode = mode
     dropdownOpen = false
+    ;(dropdownRef?.querySelector('.mode-btn') as HTMLElement)?.focus()
   }
 
   const handleClickOutside = (event: MouseEvent) => {
@@ -320,7 +321,8 @@
       <button
         class="nav-btn mode-btn {buttonClass}"
         onclick={toggleDropdown}
-        aria-haspopup="true"
+        type="button"
+        aria-haspopup="menu"
         aria-expanded={dropdownOpen}
         aria-label="Navigation mode: {NAV_MODE_CONFIG[navMode].label}"
       >
@@ -331,6 +333,7 @@
         <div class="dropdown-menu" role="menu" aria-label="Navigation modes">
           {#each NAV_MODES as mode, i}
             <button
+              type="button"
               class="dropdown-item"
               class:active={mode === navMode}
               class:focused={i === focusedIndex}
