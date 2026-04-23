@@ -60,8 +60,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      assert.fail('Extension not found: es6kr.claude-sessions')
     }
 
     // Activate extension if not already active
@@ -100,8 +99,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      assert.fail('Extension not found: es6kr.claude-sessions')
     }
 
     // Activate extension if not already active
@@ -161,8 +159,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      assert.fail('Extension not found: es6kr.claude-sessions')
     }
 
     // Activate extension if not already active
@@ -203,8 +200,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      assert.fail('Extension not found: es6kr.claude-sessions')
     }
 
     // Activate extension if not already active
@@ -280,7 +276,7 @@ suite('Webview Test Suite', () => {
       }
     }
 
-    console.log(`Web server /api/version responded: ${statusCode} ${body}`)
+    console.log(`Web server /api/version responded with status: ${statusCode}`)
     assert.strictEqual(statusCode, 200, 'Web server should respond with HTTP 200')
     const parsed = JSON.parse(body)
     assert.ok(parsed.version, 'Response should contain version field')
