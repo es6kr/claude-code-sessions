@@ -108,7 +108,17 @@
 
   // Derive SessionMeta[] from canonical fixtures
   const mockSessions = canonicalSessions.map(
-    ({ id, projectName, title, messageCount, createdAt, updatedAt, customTitle, agentName }) => ({
+    ({
+      id,
+      projectName,
+      title,
+      messageCount,
+      createdAt,
+      updatedAt,
+      customTitle,
+      agentName,
+      currentSummary,
+    }) => ({
       id,
       projectName,
       title,
@@ -117,6 +127,7 @@
       updatedAt,
       ...(customTitle && { customTitle }),
       ...(agentName && { agentName }),
+      ...(currentSummary && { currentSummary }),
     })
   )
 
