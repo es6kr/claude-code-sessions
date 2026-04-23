@@ -42,6 +42,12 @@ function createMockSessionTreeItem(projectName: string, sessionId: string) {
 }
 
 suite('Webview Test Suite', () => {
+  // Restore webServerPath after tests that override it
+  suiteTeardown(async () => {
+    const config = vscode.workspace.getConfiguration('claudeSessions')
+    await config.update('webServerPath', undefined, vscode.ConfigurationTarget.Global)
+  })
+
   test('Commands are registered', async function () {
     this.timeout(30000)
 
@@ -242,6 +248,15 @@ suite('Webview Test Suite', () => {
     }
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
+    // Use local build instead of npx to test current source
+    // __dirname = packages/vscode-extension/out/test/suite (compiled)
+    const webBuildPath = path.resolve(__dirname, '../../../../web/build/index.js')
+    if (fs.existsSync(webBuildPath)) {
+      const config = vscode.workspace.getConfiguration('claudeSessions')
+      await config.update('webServerPath', webBuildPath, vscode.ConfigurationTarget.Global)
+      console.log(`Using local web build: ${webBuildPath}`)
+    }
+
     await vscode.commands.executeCommand('claudeSessions.restartWebServer')
     console.log('restartWebServer executed, polling for server readiness...')
 
@@ -302,6 +317,14 @@ suite('Webview Test Suite', () => {
       await extension.activate()
     }
     await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Use local build instead of npx to test current source
+    const webBuildPath = path.resolve(__dirname, '../../../../web/build/index.js')
+    if (fs.existsSync(webBuildPath)) {
+      const config = vscode.workspace.getConfiguration('claudeSessions')
+      await config.update('webServerPath', webBuildPath, vscode.ConfigurationTarget.Global)
+      console.log(`Using local web build: ${webBuildPath}`)
+    }
 
     // Ensure web server is running (reuse from previous test or start fresh)
     await vscode.commands.executeCommand('claudeSessions.restartWebServer')
