@@ -238,8 +238,7 @@ suite('Webview Test Suite', () => {
 
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      assert.fail('Extension not found: es6kr.claude-sessions')
     }
 
     if (!extension.isActive) {
@@ -247,26 +246,39 @@ suite('Webview Test Suite', () => {
     }
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
-    await vscode.commands.executeCommand('claudeSessions.openWebUI')
-    console.log('openWebUI executed, waiting for server to be ready...')
-
-    await new Promise((resolve) => setTimeout(resolve, 5000))
+    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    console.log('restartWebServer executed, polling for server readiness...')
 
     const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
-    const { statusCode, body } = await new Promise<{ statusCode: number; body: string }>(
-      (resolve, reject) => {
-        const req = http.get(`http://localhost:${port}/api/version`, (res) => {
-          let data = ''
-          res.on('data', (chunk: Buffer) => (data += chunk.toString()))
-          res.on('end', () => resolve({ statusCode: res.statusCode ?? 0, body: data }))
-        })
-        req.on('error', reject)
-        req.setTimeout(10000, () => {
-          req.destroy()
-          reject(new Error('HTTP request timeout'))
-        })
+    const maxRetries = 10
+    const retryInterval = 1000
+    let statusCode = 0
+    let body = ''
+
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const result = await new Promise<{ statusCode: number; body: string }>(
+          (resolve, reject) => {
+            const req = http.get(`http://localhost:${port}/api/version`, (res) => {
+              let data = ''
+              res.on('data', (chunk: Buffer) => (data += chunk.toString()))
+              res.on('end', () => resolve({ statusCode: res.statusCode ?? 0, body: data }))
+            })
+            req.on('error', reject)
+            req.setTimeout(3000, () => {
+              req.destroy()
+              reject(new Error('HTTP request timeout'))
+            })
+          }
+        )
+        statusCode = result.statusCode
+        body = result.body
+        break
+      } catch {
+        console.log(`Retry ${i + 1}/${maxRetries}: server not ready yet`)
+        await new Promise((resolve) => setTimeout(resolve, retryInterval))
       }
-    )
+    }
 
     console.log(`Web server /api/version responded: ${statusCode} ${body}`)
     assert.strictEqual(statusCode, 200, 'Web server should respond with HTTP 200')
