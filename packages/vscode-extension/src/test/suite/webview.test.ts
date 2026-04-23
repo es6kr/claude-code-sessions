@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import * as assert from 'assert'
 import * as fs from 'fs'
+import * as http from 'http'
 import * as path from 'path'
 import * as os from 'os'
 
@@ -222,5 +223,54 @@ suite('Webview Test Suite', () => {
     } catch (err) {
       assert.fail(`openWebUI command failed: ${err}`)
     }
+  })
+
+  test('Web server responds with HTTP 200', async function () {
+    if (process.env.CI) {
+      console.log('Skipping web server HTTP test in CI environment')
+      this.skip()
+      return
+    }
+
+    this.timeout(60000)
+
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    if (!extension) {
+      console.log('Extension not found, skipping test')
+      return
+    }
+
+    if (!extension.isActive) {
+      await extension.activate()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    await vscode.commands.executeCommand('claudeSessions.openWebUI')
+    console.log('openWebUI executed, waiting for server to be ready...')
+
+    await new Promise((resolve) => setTimeout(resolve, 5000))
+
+    const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
+    const { statusCode, body } = await new Promise<{ statusCode: number; body: string }>(
+      (resolve, reject) => {
+        const req = http.get(`http://localhost:${port}/api/version`, (res) => {
+          let data = ''
+          res.on('data', (chunk: Buffer) => (data += chunk.toString()))
+          res.on('end', () => resolve({ statusCode: res.statusCode ?? 0, body: data }))
+        })
+        req.on('error', reject)
+        req.setTimeout(10000, () => {
+          req.destroy()
+          reject(new Error('HTTP request timeout'))
+        })
+      }
+    )
+
+    console.log(`Web server /api/version responded: ${statusCode} ${body}`)
+    assert.strictEqual(statusCode, 200, 'Web server should respond with HTTP 200')
+    const parsed = JSON.parse(body)
+    assert.ok(parsed.version, 'Response should contain version field')
   })
 })
