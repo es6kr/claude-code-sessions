@@ -3,6 +3,8 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import { Effect } from 'effect'
+import { sortSessions, buildProjectTreeResult } from '../session/tree.js'
+import type { SessionTreeData, SessionSortOptions } from '../types.js'
 
 // Mock the paths module to use temp directory
 vi.mock('../paths.js', async () => {
@@ -564,5 +566,261 @@ describe('loadSessionTreeData - single session (no global map)', () => {
 
     // No summaries should be found since no summary's leafUuid points to this session
     expect(result.summaries).toHaveLength(0)
+  })
+})
+
+// ============================================================================
+// Pure function tests (no I/O, no mocking required)
+// ============================================================================
+
+const makeSession = (overrides: Partial<SessionTreeData> & { id: string }): SessionTreeData => ({
+  projectName: 'test-project',
+  title: `Session ${overrides.id}`,
+  messageCount: 10,
+  sortTimestamp: Date.now(),
+  summaries: [],
+  agents: [],
+  todos: { sessionId: overrides.id, sessionTodos: [], agentTodos: [], hasTodos: false },
+  ...overrides,
+})
+
+describe('sortSessions', () => {
+  const sessionA = makeSession({
+    id: 'a',
+    title: 'Alpha',
+    sortTimestamp: 1000,
+    fileMtime: 5000,
+    createdAt: '2025-01-01T00:00:00.000Z',
+    updatedAt: '2025-01-03T00:00:00.000Z',
+    messageCount: 5,
+  })
+  const sessionB = makeSession({
+    id: 'b',
+    title: 'Beta',
+    sortTimestamp: 2000,
+    fileMtime: 3000,
+    createdAt: '2025-01-02T00:00:00.000Z',
+    updatedAt: '2025-01-01T00:00:00.000Z',
+    messageCount: 15,
+  })
+  const sessionC = makeSession({
+    id: 'c',
+    title: 'Charlie',
+    sortTimestamp: 3000,
+    fileMtime: 1000,
+    createdAt: '2025-01-03T00:00:00.000Z',
+    updatedAt: '2025-01-02T00:00:00.000Z',
+    messageCount: 10,
+  })
+
+  it('should return empty array for empty input', () => {
+    expect(sortSessions([], { field: 'summary', order: 'asc' })).toEqual([])
+  })
+
+  it('should return single element unchanged', () => {
+    const result = sortSessions([sessionA], { field: 'summary', order: 'asc' })
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('a')
+  })
+
+  it('should sort by summary (sortTimestamp) ascending', () => {
+    const result = sortSessions([sessionC, sessionA, sessionB], { field: 'summary', order: 'asc' })
+    expect(result.map((s) => s.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('should sort by summary (sortTimestamp) descending', () => {
+    const result = sortSessions([sessionA, sessionB, sessionC], {
+      field: 'summary',
+      order: 'desc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['c', 'b', 'a'])
+  })
+
+  it('should sort by modified (fileMtime) ascending', () => {
+    const result = sortSessions([sessionA, sessionB, sessionC], {
+      field: 'modified',
+      order: 'asc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['c', 'b', 'a'])
+  })
+
+  it('should sort by modified (fileMtime) descending', () => {
+    const result = sortSessions([sessionA, sessionB, sessionC], {
+      field: 'modified',
+      order: 'desc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('should sort by created ascending', () => {
+    const result = sortSessions([sessionC, sessionA, sessionB], {
+      field: 'created',
+      order: 'asc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('should sort by created descending', () => {
+    const result = sortSessions([sessionA, sessionB, sessionC], {
+      field: 'created',
+      order: 'desc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['c', 'b', 'a'])
+  })
+
+  it('should sort by updated ascending', () => {
+    const result = sortSessions([sessionA, sessionB, sessionC], {
+      field: 'updated',
+      order: 'asc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('should sort by updated descending', () => {
+    const result = sortSessions([sessionA, sessionB, sessionC], {
+      field: 'updated',
+      order: 'desc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('should sort by messageCount ascending', () => {
+    const result = sortSessions([sessionB, sessionA, sessionC], {
+      field: 'messageCount',
+      order: 'asc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['a', 'c', 'b'])
+  })
+
+  it('should sort by messageCount descending', () => {
+    const result = sortSessions([sessionA, sessionB, sessionC], {
+      field: 'messageCount',
+      order: 'desc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['b', 'c', 'a'])
+  })
+
+  it('should sort by title alphabetically ascending', () => {
+    const result = sortSessions([sessionC, sessionA, sessionB], {
+      field: 'title',
+      order: 'asc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('should sort by title alphabetically descending', () => {
+    const result = sortSessions([sessionA, sessionB, sessionC], {
+      field: 'title',
+      order: 'desc',
+    })
+    expect(result.map((s) => s.id)).toEqual(['c', 'b', 'a'])
+  })
+
+  it('should use customTitle over currentSummary and title for title sort', () => {
+    const s1 = makeSession({ id: 's1', title: 'Zebra', customTitle: 'Aardvark' })
+    const s2 = makeSession({ id: 's2', title: 'Apple', currentSummary: 'Mango' })
+    const s3 = makeSession({ id: 's3', title: 'Banana' })
+
+    const result = sortSessions([s1, s2, s3], { field: 'title', order: 'asc' })
+    // Aardvark (customTitle) < Banana (title) < Mango (currentSummary)
+    expect(result.map((s) => s.id)).toEqual(['s1', 's3', 's2'])
+  })
+
+  it('should handle null/undefined timestamps without crashing', () => {
+    const s1 = makeSession({ id: 's1', fileMtime: undefined, createdAt: undefined })
+    const s2 = makeSession({ id: 's2', fileMtime: 1000, createdAt: '2025-01-01T00:00:00.000Z' })
+
+    expect(() => sortSessions([s1, s2], { field: 'modified', order: 'asc' })).not.toThrow()
+    expect(() => sortSessions([s1, s2], { field: 'created', order: 'asc' })).not.toThrow()
+    expect(() => sortSessions([s1, s2], { field: 'updated', order: 'asc' })).not.toThrow()
+  })
+})
+
+describe('buildProjectTreeResult', () => {
+  const project = {
+    name: 'test-proj',
+    displayName: '/home/user/projects/test',
+    path: '/home/user/projects/test',
+  }
+  const sort: SessionSortOptions = { field: 'summary', order: 'desc' }
+
+  it('should wrap sessions into ProjectTreeData with correct shape', () => {
+    const sessions = [
+      makeSession({ id: 's1', sortTimestamp: 1000 }),
+      makeSession({ id: 's2', sortTimestamp: 2000 }),
+    ]
+
+    const result = buildProjectTreeResult(project, sessions, sort)
+
+    expect(result.name).toBe('test-proj')
+    expect(result.displayName).toBe('/home/user/projects/test')
+    expect(result.path).toBe('/home/user/projects/test')
+    expect(result.sessionCount).toBe(2)
+    expect(result.sessions).toHaveLength(2)
+  })
+
+  it('should filter sessions with error title', () => {
+    const sessions = [
+      makeSession({ id: 'good', title: 'Valid session' }),
+      makeSession({ id: 'bad-title', title: 'API Error: unauthorized' }),
+    ]
+
+    const result = buildProjectTreeResult(project, sessions, sort)
+    expect(result.sessionCount).toBe(1)
+    expect(result.sessions[0].id).toBe('good')
+  })
+
+  it('should filter sessions with error in customTitle', () => {
+    const sessions = [
+      makeSession({ id: 'good', title: 'Valid' }),
+      makeSession({ id: 'bad-custom', title: 'Valid', customTitle: 'API Error: invalid request' }),
+    ]
+
+    const result = buildProjectTreeResult(project, sessions, sort)
+    expect(result.sessionCount).toBe(1)
+    expect(result.sessions[0].id).toBe('good')
+  })
+
+  it('should filter sessions with error in currentSummary', () => {
+    const sessions = [
+      makeSession({ id: 'good', title: 'Valid' }),
+      makeSession({
+        id: 'bad-summary',
+        title: 'Valid',
+        currentSummary: 'API Error: timeout',
+      }),
+    ]
+
+    const result = buildProjectTreeResult(project, sessions, sort)
+    expect(result.sessionCount).toBe(1)
+    expect(result.sessions[0].id).toBe('good')
+  })
+
+  it('should sort sessions according to sort options', () => {
+    const sessions = [
+      makeSession({ id: 'old', sortTimestamp: 1000 }),
+      makeSession({ id: 'new', sortTimestamp: 3000 }),
+      makeSession({ id: 'mid', sortTimestamp: 2000 }),
+    ]
+
+    const result = buildProjectTreeResult(project, sessions, { field: 'summary', order: 'desc' })
+    expect(result.sessions.map((s) => s.id)).toEqual(['new', 'mid', 'old'])
+  })
+
+  it('should return empty sessions list when all are filtered', () => {
+    const sessions = [
+      makeSession({ id: 'err1', title: 'API Error: config failed' }),
+      makeSession({ id: 'err2', title: 'authentication_error: invalid credentials' }),
+    ]
+
+    const result = buildProjectTreeResult(project, sessions, sort)
+    expect(result.sessionCount).toBe(0)
+    expect(result.sessions).toEqual([])
+  })
+
+  it('should handle empty input', () => {
+    const result = buildProjectTreeResult(project, [], sort)
+    expect(result.sessionCount).toBe(0)
+    expect(result.sessions).toEqual([])
   })
 })
