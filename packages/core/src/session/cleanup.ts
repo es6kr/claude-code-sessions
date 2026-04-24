@@ -11,6 +11,7 @@ import { sessionHasTodos, findOrphanTodos, deleteOrphanTodos } from '../todos.js
 import { listProjects } from './projects.js'
 import { listSessions, deleteSession } from './crud.js'
 import { listSessionsMeta } from './crud-streaming.js'
+import { filterSessionFiles } from './crud-helpers.js'
 import type { Message, CleanupPreview, ClearSessionsResult } from '../types.js'
 
 // Remove invalid API key messages from a session, returns remaining message count
@@ -226,7 +227,7 @@ export const clearSessions = (options: {
       for (const project of targetProjects) {
         const projectPath = path.join(getSessionsDir(), project.name)
         const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
-        const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+        const sessionFiles = filterSessionFiles(files)
 
         for (const file of sessionFiles) {
           const sessionId = file.replace('.jsonl', '')
@@ -289,7 +290,7 @@ export const clearSessions = (options: {
       for (const project of targetProjects) {
         const projectPath = path.join(getSessionsDir(), project.name)
         const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
-        const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+        const sessionFiles = filterSessionFiles(files)
 
         for (const file of sessionFiles) {
           const sessionId = file.replace('.jsonl', '')
