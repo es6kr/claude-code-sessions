@@ -1,11 +1,147 @@
 import { describe, it, expect } from 'vitest'
 import { maskHomePath } from '$lib/stores/config'
 import {
+  ALL_MESSAGE_CATEGORIES,
+  getMessageCategory,
+  DEFAULT_VISIBLE_CATEGORIES,
+  MESSAGE_CATEGORY_LABELS,
   parseCommandMessage,
   parseProgress,
   parseStopHookSummary,
   parseTurnDuration,
 } from './message'
+import type { Message } from '$lib/api'
+
+const makeMsg = (overrides: Partial<Message>): Message => ({
+  uuid: 'test-uuid',
+  type: 'user',
+  ...overrides,
+})
+
+describe('getMessageCategory', () => {
+  it('should categorize human messages as user', () => {
+    expect(getMessageCategory(makeMsg({ type: 'human' }))).toBe('user')
+  })
+
+  it('should categorize user messages without tool_result as user', () => {
+    const msg = makeMsg({ type: 'user', message: { content: 'hello' } })
+    expect(getMessageCategory(msg)).toBe('user')
+  })
+
+  it('should categorize user messages with tool_result content as tool_result', () => {
+    const msg = makeMsg({
+      type: 'user',
+      message: { content: [{ type: 'tool_result', tool_use_id: 'id', content: 'result' }] },
+    })
+    expect(getMessageCategory(msg)).toBe('tool_result')
+  })
+
+  it('should categorize plain assistant text as assistant', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: 'Hello!' }] },
+    })
+    expect(getMessageCategory(msg)).toBe('assistant')
+  })
+
+  it('should categorize assistant with tool_use as tool_use', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'text', text: 'Let me check...' },
+          { type: 'tool_use', id: 'tu1', name: 'Read', input: {} },
+        ],
+      },
+    })
+    expect(getMessageCategory(msg)).toBe('tool_use')
+  })
+
+  it('should categorize assistant with only thinking as thinking', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: { content: [{ type: 'thinking', thinking: 'hmm...' }] },
+    })
+    expect(getMessageCategory(msg)).toBe('thinking')
+  })
+
+  it('should categorize assistant with text + thinking as assistant (text takes priority)', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'thinking', thinking: 'hmm...' },
+          { type: 'text', text: 'Here is the answer' },
+        ],
+      },
+    })
+    expect(getMessageCategory(msg)).toBe('assistant')
+  })
+
+  it('should categorize system messages as system', () => {
+    expect(getMessageCategory(makeMsg({ type: 'system', subtype: 'local_command' }))).toBe('system')
+  })
+
+  it('should categorize summary messages as summary', () => {
+    expect(getMessageCategory(makeMsg({ type: 'summary' }))).toBe('summary')
+  })
+
+  it('should categorize progress messages as progress', () => {
+    expect(getMessageCategory(makeMsg({ type: 'progress' }))).toBe('progress')
+  })
+
+  it('should categorize agent-name as metadata', () => {
+    expect(getMessageCategory(makeMsg({ type: 'agent-name' }))).toBe('metadata')
+  })
+
+  it('should categorize custom-title as metadata', () => {
+    expect(getMessageCategory(makeMsg({ type: 'custom-title' }))).toBe('metadata')
+  })
+
+  it('should categorize compact_boundary as metadata', () => {
+    expect(getMessageCategory(makeMsg({ type: 'compact_boundary' }))).toBe('metadata')
+  })
+
+  it('should categorize file-history-snapshot as metadata', () => {
+    expect(getMessageCategory(makeMsg({ type: 'file-history-snapshot' }))).toBe('metadata')
+  })
+
+  it('should categorize queue-operation as metadata', () => {
+    expect(getMessageCategory(makeMsg({ type: 'queue-operation' }))).toBe('metadata')
+  })
+
+  it('should categorize assistant without content array as assistant', () => {
+    const msg = makeMsg({ type: 'assistant', message: { content: 'plain string' } })
+    expect(getMessageCategory(msg)).toBe('assistant')
+  })
+})
+
+describe('ALL_MESSAGE_CATEGORIES', () => {
+  it('should contain all keys from MESSAGE_CATEGORY_LABELS', () => {
+    expect(ALL_MESSAGE_CATEGORIES).toEqual(Object.keys(MESSAGE_CATEGORY_LABELS))
+  })
+
+  it('should include every DEFAULT_VISIBLE_CATEGORIES entry', () => {
+    for (const cat of DEFAULT_VISIBLE_CATEGORIES) {
+      expect(ALL_MESSAGE_CATEGORIES).toContain(cat)
+    }
+  })
+})
+
+describe('DEFAULT_VISIBLE_CATEGORIES', () => {
+  it('should include user, assistant, summary, and metadata by default', () => {
+    expect(DEFAULT_VISIBLE_CATEGORIES).toContain('user')
+    expect(DEFAULT_VISIBLE_CATEGORIES).toContain('assistant')
+    expect(DEFAULT_VISIBLE_CATEGORIES).toContain('summary')
+    expect(DEFAULT_VISIBLE_CATEGORIES).toContain('metadata')
+  })
+
+  it('should not include thinking or tool types by default', () => {
+    expect(DEFAULT_VISIBLE_CATEGORIES).not.toContain('thinking')
+    expect(DEFAULT_VISIBLE_CATEGORIES).not.toContain('tool_use')
+    expect(DEFAULT_VISIBLE_CATEGORIES).not.toContain('tool_result')
+  })
+})
 
 describe('maskHomePath', () => {
   const homeDir = '/Users/david'
