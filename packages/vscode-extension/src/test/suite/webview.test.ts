@@ -250,7 +250,7 @@ suite('Webview Test Suite', () => {
 
     // Use local build instead of npx to test current source
     // __dirname = packages/vscode-extension/out/test/suite (compiled)
-    const webBuildPath = path.resolve(__dirname, '../../../../web/build/index.js')
+    const webBuildPath = path.resolve(__dirname, '../../../../web/dist/cli.js')
     if (fs.existsSync(webBuildPath)) {
       const config = vscode.workspace.getConfiguration('claudeSessions')
       await config.update('webServerPath', webBuildPath, vscode.ConfigurationTarget.Global)
@@ -319,7 +319,7 @@ suite('Webview Test Suite', () => {
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
     // Use local build instead of npx to test current source
-    const webBuildPath = path.resolve(__dirname, '../../../../web/build/index.js')
+    const webBuildPath = path.resolve(__dirname, '../../../../web/dist/cli.js')
     if (fs.existsSync(webBuildPath)) {
       const config = vscode.workspace.getConfiguration('claudeSessions')
       await config.update('webServerPath', webBuildPath, vscode.ConfigurationTarget.Global)

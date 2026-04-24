@@ -63,12 +63,12 @@ while read local_ref local_sha remote_ref remote_sha; do
       echo "🔍 Pushing to main: running full CI with act..."
       pnpm test:act
     else
-      echo "⚠️  Docker not available, falling back to typecheck and tests..."
-      pnpm typecheck && pnpm test
+      echo "⚠️  Docker not available, falling back to build, typecheck and tests..."
+      pnpm build && pnpm typecheck && pnpm test
     fi
   else
-    echo "🧪 Pushing to $remote_branch: running typecheck and tests..."
-    pnpm typecheck && pnpm test
+    echo "🧪 Pushing to $remote_branch: running build, typecheck and tests..."
+    pnpm build && pnpm typecheck && pnpm test
   fi
   exit $?
 done <<EOF
