@@ -7,6 +7,7 @@
   import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
   import { getDisplayTitle, truncate } from '$lib/utils'
+  import MessageEditor from './MessageEditor.svelte'
   import MessageFilter from './MessageFilter.svelte'
   import MessageList from './MessageList.svelte'
   import ScrollButtons from './ScrollButtons.svelte'
@@ -238,6 +239,32 @@
   })
 
   // Server sync - refreshes messages from server to get chain repair results
+  // Message editing state
+  let editingMessage = $state<Message | null>(null)
+  let showEditor = $state(false)
+
+  const handleEditMessage = (msg: Message) => {
+    editingMessage = msg
+    showEditor = true
+  }
+
+  const handleSaveEdit = async (newText: string) => {
+    if (!session || !editingMessage?.uuid) return
+    try {
+      await api.editMessageContent(session.projectName, session.id, editingMessage.uuid, newText)
+      showEditor = false
+      editingMessage = null
+      await syncFromServer()
+    } catch (e) {
+      console.error('Failed to edit message:', e)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    showEditor = false
+    editingMessage = null
+  }
+
   const syncFromServer = async () => {
     if (!onRefresh) return
     await onRefresh()
@@ -524,6 +551,7 @@
           sessionId={session.id}
           messages={filteredMessages}
           onDeleteMessage={handleSessionMessageDelete}
+          onEditMessage={handleEditMessage}
           {onEditTitle}
           {onSplitSession}
           enableScroll={false}
@@ -605,5 +633,24 @@
         ✕
       </button>
     </div>
+  {/if}
+
+  <!-- Message Editor -->
+  {#if editingMessage}
+    {@const msgContent = (() => {
+      const m = editingMessage.message as { content?: unknown } | undefined
+      if (typeof m?.content === 'string') return m.content
+      if (Array.isArray(m?.content)) {
+        const first = m.content[0] as { type?: string; text?: string } | undefined
+        if (first?.type === 'text') return first.text ?? ''
+      }
+      return ''
+    })()}
+    <MessageEditor
+      show={showEditor}
+      initialValue={msgContent}
+      onSave={handleSaveEdit}
+      onCancel={handleCancelEdit}
+    />
   {/if}
 </section>

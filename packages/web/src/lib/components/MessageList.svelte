@@ -6,6 +6,7 @@
     sessionId: string
     messages: Message[]
     onDeleteMessage: (msg: Message) => void
+    onEditMessage?: (msg: Message) => void
     onEditTitle?: (msg: Message) => void
     onSplitSession?: (msg: Message) => void
     enableScroll?: boolean
@@ -16,6 +17,7 @@
     sessionId,
     messages,
     onDeleteMessage,
+    onEditMessage,
     onEditTitle,
     onSplitSession,
     enableScroll = true,
@@ -40,6 +42,7 @@
         {sessionId}
         isFirst={i === 0 || i === firstMeaningfulIndex}
         onDelete={onDeleteMessage}
+        onEdit={onEditMessage}
         {onEditTitle}
         onSplit={onSplitSession}
       />

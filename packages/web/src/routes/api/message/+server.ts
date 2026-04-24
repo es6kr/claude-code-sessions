@@ -63,7 +63,19 @@ export const PATCH: RequestHandler = async ({ url, request }) => {
     throw error(400, 'project and session parameters required')
   }
 
+  const messageUuid = url.searchParams.get('uuid')
   const body = await request.json()
+
+  // UUID-based message content update
+  if (messageUuid) {
+    const { text } = body as { text?: string }
+    if (text === undefined) throw error(400, 'text is required')
+    const result = await Effect.runPromise(
+      session.updateMessageContent(projectName, sessionId, messageUuid, text)
+    )
+    return json(result)
+  }
+
   const { customTitle } = body as { customTitle?: string | null }
 
   // Line index based update for uuid-less messages
@@ -91,5 +103,5 @@ export const PATCH: RequestHandler = async ({ url, request }) => {
     return json(result)
   }
 
-  throw error(400, 'lineIndex parameter required for title message updates')
+  throw error(400, 'uuid or lineIndex parameter required for updates')
 }

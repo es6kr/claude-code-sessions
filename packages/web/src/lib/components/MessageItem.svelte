@@ -21,11 +21,12 @@
     sessionId: string
     isFirst?: boolean
     onDelete: (msg: Message) => void
+    onEdit?: (msg: Message) => void
     onEditTitle?: (msg: Message) => void
     onSplit?: (msg: Message) => void
   }
 
-  let { msg, sessionId, isFirst = false, onDelete, onEditTitle, onSplit }: Props = $props()
+  let { msg, sessionId, isFirst = false, onDelete, onEdit, onEditTitle, onSplit }: Props = $props()
 
   // Data attribute for scroll targeting
   const msgId = $derived(msg.uuid ?? '')
@@ -45,6 +46,8 @@
     const first = m.content[0] as { type?: string } | undefined
     return first?.type === 'tool_result'
   })
+
+  const isEditable = $derived(!!(msg.uuid && (isHuman || isAssistant) && !isToolResult && onEdit))
 
   // Parse file snapshot data
   const snapshotData = $derived.by(() => {
@@ -411,6 +414,15 @@
             class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gh-border text-xs"
             onclick={() => onEditTitle(msg)}
             title="Edit title"
+          >
+            ✏️
+          </TooltipButton>
+        {/if}
+        {#if isEditable}
+          <TooltipButton
+            class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gh-border text-xs"
+            onclick={() => onEdit!(msg)}
+            title="Edit message"
           >
             ✏️
           </TooltipButton>
