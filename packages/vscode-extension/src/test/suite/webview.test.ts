@@ -29,7 +29,7 @@ function findFirstSession(): { projectName: string; sessionId: string } | null {
   return null
 }
 
-// Verify web server endpoints return HTTP 200 (not 500)
+// Verify web server endpoints return HTTP 2xx (not 500)
 async function assertWebServerHealthy(port: number): Promise<void> {
   const endpoints = ['/api/version', '/']
   for (const endpoint of endpoints) {
@@ -75,8 +75,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      this.skip()
     }
 
     // Activate extension if not already active
@@ -115,8 +114,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      this.skip()
     }
 
     // Activate extension if not already active
@@ -128,8 +126,7 @@ suite('Webview Test Suite', () => {
     // Find a session to open
     const sessionInfo = findFirstSession()
     if (!sessionInfo) {
-      console.log('No sessions found, skipping test')
-      return
+      this.skip()
     }
 
     console.log(`Opening session: ${sessionInfo.projectName}/${sessionInfo.sessionId}`)
@@ -170,8 +167,8 @@ suite('Webview Test Suite', () => {
     const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
     await assertWebServerHealthy(port)
 
-    // Verify the session page itself returns 200
-    const sessionUrl = `http://localhost:${port}/session/${encodeURIComponent(sessionInfo.projectName)}/${sessionInfo.sessionId}`
+    // Verify the session page itself returns HTTP 2xx
+    const sessionUrl = `http://localhost:${port}/session/${encodeURIComponent(sessionInfo.projectName)}/${encodeURIComponent(sessionInfo.sessionId)}`
     console.log(`Session page health check: ${sessionUrl}`)
     const sessionResponse = await fetch(sessionUrl)
     assert.strictEqual(
@@ -191,8 +188,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      this.skip()
     }
 
     // Activate extension if not already active
@@ -233,8 +229,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      this.skip()
     }
 
     // Activate extension if not already active
