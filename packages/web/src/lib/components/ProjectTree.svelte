@@ -357,7 +357,7 @@
 
                     <!-- Action buttons (visible on hover, absolute positioned) -->
                     <div
-                      class="absolute right-0 top-0 h-full flex items-center gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gh-bg"
+                      class="absolute right-0 top-0 h-full flex items-center gap-0.5 pr-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-gh-bg"
                     >
                       {#if onResumeSession}
                         <TooltipButton
