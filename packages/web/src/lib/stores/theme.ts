@@ -1,17 +1,22 @@
 import { writable, derived } from 'svelte/store'
+import { browser } from '$app/environment'
 
 export type ThemePreference = 'light' | 'dark' | 'system'
 export type EffectiveTheme = 'light' | 'dark'
 
 const getStoredPreference = (): ThemePreference => {
-  if (typeof window === 'undefined') return 'system'
-  const stored = localStorage.getItem('theme')
-  if (stored === 'light' || stored === 'dark' || stored === 'system') return stored
+  if (!browser) return 'system'
+  try {
+    const stored = localStorage.getItem('theme')
+    if (stored === 'light' || stored === 'dark' || stored === 'system') return stored
+  } catch {
+    // localStorage unavailable (Node.js with broken --localstorage-file)
+  }
   return 'system'
 }
 
 const getSystemTheme = (): EffectiveTheme => {
-  if (typeof window === 'undefined') return 'dark'
+  if (!browser) return 'dark'
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
@@ -52,8 +57,12 @@ export const initTheme = () => {
 
   // Persist preference changes
   const unsubPref = themePreference.subscribe((pref) => {
-    if (typeof localStorage !== 'undefined') {
-      localStorage.setItem('theme', pref)
+    if (browser) {
+      try {
+        localStorage.setItem('theme', pref)
+      } catch {
+        // localStorage unavailable
+      }
     }
   })
 

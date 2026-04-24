@@ -33,7 +33,7 @@
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
     "@floating-ui/dom": "^1.7.6",
-    "effect": "^3.21.0",
+    "effect": "^3.21.1",
     "marked": "^17.0.6"
   },
   "devDependencies": {

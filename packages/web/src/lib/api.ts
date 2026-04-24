@@ -228,8 +228,9 @@ export const moveSession = (sourceProject: string, sessionId: string, targetProj
 
 export interface CompressSessionResult {
   success: boolean
-  originalSize: number
   compressedSize: number
+  error?: string
+  originalSize: number
   removedCustomTitles: number
   removedProgress: number
   removedSnapshots: number
