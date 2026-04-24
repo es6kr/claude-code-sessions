@@ -159,6 +159,12 @@ export const updateTitleMessage = (
     { customTitle }
   )
 
+export const editMessageContent = (project: string, session: string, uuid: string, text: string) =>
+  patch<{ success: boolean }>(
+    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&uuid=${encodeURIComponent(uuid)}`,
+    { text }
+  )
+
 export const previewCleanup = (project?: string) =>
   get<CleanupPreview[]>(`/cleanup${project ? `?project=${encodeURIComponent(project)}` : ''}`)
 

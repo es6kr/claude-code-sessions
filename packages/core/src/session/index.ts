@@ -15,6 +15,7 @@ export {
   renameSession,
   moveSession,
   splitSession,
+  updateMessageContent,
   updateSessionSummary,
   repairChain,
 } from './crud.js'
