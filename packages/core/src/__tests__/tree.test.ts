@@ -577,7 +577,7 @@ const makeSession = (overrides: Partial<SessionTreeData> & { id: string }): Sess
   projectName: 'test-project',
   title: `Session ${overrides.id}`,
   messageCount: 10,
-  sortTimestamp: Date.now(),
+  sortTimestamp: 0,
   summaries: [],
   agents: [],
   todos: { sessionId: overrides.id, sessionTodos: [], agentTodos: [], hasTodos: false },
@@ -822,5 +822,14 @@ describe('buildProjectTreeResult', () => {
     const result = buildProjectTreeResult(project, [], sort)
     expect(result.sessionCount).toBe(0)
     expect(result.sessions).toEqual([])
+  })
+
+  it('should remap sortTimestamp via getDisplaySortTimestamp for modified field', () => {
+    const sessions = [makeSession({ id: 'remap', sortTimestamp: 9999, fileMtime: 5000 })]
+
+    const result = buildProjectTreeResult(project, sessions, { field: 'modified', order: 'desc' })
+
+    // sortTimestamp should be remapped to fileMtime (5000), not the original (9999)
+    expect(result.sessions[0].sortTimestamp).toBe(5000)
   })
 })
