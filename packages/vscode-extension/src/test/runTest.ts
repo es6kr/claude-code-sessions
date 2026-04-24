@@ -9,8 +9,8 @@ async function main() {
   const extensionDevelopmentPath = path.resolve(__dirname, '../../')
   const extensionTestsPath = path.resolve(__dirname, './suite/index')
 
-  // Use short temp path for user data to avoid IPC path length issues
-  const userDataDir = path.join(os.tmpdir(), 'vscode-test-sessions')
+  // Use unique temp path per run to avoid lock conflicts with running VSCode instances
+  const userDataDir = path.join(os.tmpdir(), `vscode-test-sessions-${Date.now()}`)
 
   console.log('Extension path:', extensionDevelopmentPath)
   console.log('Tests path:', extensionTestsPath)
