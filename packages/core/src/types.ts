@@ -267,11 +267,12 @@ export interface MoveSessionResult {
 /** Result of clearing empty/invalid sessions */
 export interface ClearSessionsResult {
   success: boolean
+  deduplicatedRecordCount?: number
   deletedCount: number
-  removedMessageCount?: number
   deletedOrphanAgentCount?: number
   deletedOrphanTodoCount?: number
   deletedStaleProjectCount?: number
+  removedMessageCount?: number
 }
 
 /** Preview of sessions that would be cleaned up */
