@@ -18,26 +18,39 @@ const parseBackupFilename = (
   if (!filename.endsWith('.jsonl')) return null
   const base = filename.slice(0, -'.jsonl'.length)
   const lastUnderscore = base.lastIndexOf('_')
-  if (lastUnderscore <= 0) return null
+  if (lastUnderscore <= 0 || lastUnderscore >= base.length - 1) return null
   return {
     projectName: base.slice(0, lastUnderscore),
     sessionId: base.slice(lastUnderscore + 1),
   }
 }
 
-/** Extract title from backup file by reading first few lines */
+/** Extract title from backup file with tiered fallback: customTitle → summary → first user message */
 const extractBackupTitle = (lines: string[]): string => {
+  let latestSummary: string | undefined
+  let firstUserMessage: string | undefined
+
   for (const line of lines) {
     try {
       const parsed = JSON.parse(line) as Record<string, unknown>
       if (parsed.type === 'custom-title' && typeof parsed.customTitle === 'string') {
         return parsed.customTitle
       }
+      if (parsed.type === 'summary' && typeof parsed.summary === 'string') {
+        latestSummary = parsed.summary
+      }
+      if (
+        parsed.type === 'user' &&
+        typeof parsed.text === 'string' &&
+        firstUserMessage === undefined
+      ) {
+        firstUserMessage = parsed.text
+      }
     } catch {
       // skip invalid lines
     }
   }
-  return 'Untitled'
+  return latestSummary ?? firstUserMessage ?? 'Untitled'
 }
 
 /** List all backed-up sessions from the .bak directory */
@@ -121,7 +134,10 @@ export const restoreSession = (projectName: string, sessionId: string) =>
     // Verify backup exists
     const backupExists = yield* Effect.tryPromise(() => fileExists(backupPath))
     if (!backupExists) {
-      return yield* Effect.fail(new Error(`Backup not found: ${projectName}/${sessionId}`))
+      return {
+        success: false,
+        error: `Backup not found: ${projectName}/${sessionId}`,
+      } satisfies RestoreSessionResult
     }
 
     // Check target doesn't already exist
@@ -129,9 +145,10 @@ export const restoreSession = (projectName: string, sessionId: string) =>
     const targetPath = path.join(projectDir, `${sessionId}.jsonl`)
     const targetExists = yield* Effect.tryPromise(() => fileExists(targetPath))
     if (targetExists) {
-      return yield* Effect.fail(
-        new Error(`Session already exists: ${projectName}/${sessionId}. Cannot overwrite.`)
-      )
+      return {
+        success: false,
+        error: `Session already exists: ${projectName}/${sessionId}. Cannot overwrite.`,
+      } satisfies RestoreSessionResult
     }
 
     // Create project directory if needed
@@ -140,7 +157,7 @@ export const restoreSession = (projectName: string, sessionId: string) =>
     // Move session backup to original location
     yield* Effect.tryPromise(() => fs.rename(backupPath, targetPath))
 
-    // Restore linked agent backups
+    // Restore linked agent backups with per-file error handling
     const projectBackupDir = path.join(projectDir, '.bak')
     const linkedAgents = yield* findLinkedAgentBackups(projectBackupDir, sessionId)
     let restoredAgents = 0
@@ -148,10 +165,25 @@ export const restoreSession = (projectName: string, sessionId: string) =>
     for (const agentFile of linkedAgents) {
       const agentBackupPath = path.join(projectBackupDir, agentFile)
       const agentTargetPath = path.join(projectDir, agentFile)
-      const agentExists = yield* Effect.tryPromise(() => fileExists(agentTargetPath))
-      if (!agentExists) {
-        yield* Effect.tryPromise(() => fs.rename(agentBackupPath, agentTargetPath))
-        restoredAgents++
+      const agentRestoreResult = yield* Effect.either(
+        Effect.gen(function* () {
+          const agentExists = yield* Effect.tryPromise(() => fileExists(agentTargetPath))
+          if (!agentExists) {
+            yield* Effect.tryPromise(() => fs.rename(agentBackupPath, agentTargetPath))
+            return true
+          }
+          return false
+        })
+      )
+
+      if (agentRestoreResult._tag === 'Right') {
+        if (agentRestoreResult.right) {
+          restoredAgents++
+        }
+      } else {
+        log.warn(
+          `Failed to restore linked agent backup ${agentFile} for session ${projectName}/${sessionId}: ${String(agentRestoreResult.left)}`
+        )
       }
     }
 

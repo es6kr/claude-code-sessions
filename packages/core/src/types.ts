@@ -226,13 +226,21 @@ export interface DeleteSessionResult {
   deletedTodos?: number
 }
 
-/** Result of restoring a backed-up session */
-export interface RestoreSessionResult {
-  success: boolean
+/** Successful result of restoring a backed-up session */
+export interface RestoreSessionSuccessResult {
+  success: true
   restoredPath: string
   restoredAgents: number
-  error?: string
 }
+
+/** Failed result of restoring a backed-up session */
+export interface RestoreSessionFailureResult {
+  success: false
+  error: string
+}
+
+/** Result of restoring a backed-up session */
+export type RestoreSessionResult = RestoreSessionSuccessResult | RestoreSessionFailureResult
 
 /** Result of renaming a session */
 export interface RenameSessionResult {

@@ -106,6 +106,32 @@ describe('listBackupSessions', () => {
     expect(result[0].title).toBe('My Custom Title')
   })
 
+  it('falls back to summary when no custom-title exists', async () => {
+    await fs.mkdir(path.join(tmpDir, '.bak'), { recursive: true })
+    const messages = [makeMessage(), { type: 'summary', summary: 'Session about testing' }]
+    await writeBackup(tmpDir, 'project-a', 'session-sum', messages)
+
+    const result = await Effect.runPromise(listBackupSessions())
+    expect(result[0].title).toBe('Session about testing')
+  })
+
+  it('falls back to first user message text when no title or summary', async () => {
+    await fs.mkdir(path.join(tmpDir, '.bak'), { recursive: true })
+    const messages = [
+      {
+        type: 'user',
+        text: 'Help me with TypeScript',
+        uuid: 'msg-1',
+        timestamp: new Date().toISOString(),
+      },
+      makeMessage(),
+    ]
+    await writeBackup(tmpDir, 'project-a', 'session-usr', messages)
+
+    const result = await Effect.runPromise(listBackupSessions())
+    expect(result[0].title).toBe('Help me with TypeScript')
+  })
+
   it('lists multiple backup sessions', async () => {
     await fs.mkdir(path.join(tmpDir, '.bak'), { recursive: true })
     await writeBackup(tmpDir, 'project-a', 'session-1', [makeMessage()])
@@ -132,8 +158,11 @@ describe('listBackupSessions', () => {
     await writeBackup(tmpDir, 'project-a', 'session-1', [makeMessage()])
 
     const result = await Effect.runPromise(listBackupSessions())
-    // Should still return the valid backup, skip or include corrupted with defaults
-    expect(result.length).toBeGreaterThanOrEqual(1)
+    expect(result).toHaveLength(2)
+    const corrupted = result.find((s) => s.id === 'corrupted')
+    expect(corrupted).toBeDefined()
+    expect(corrupted!.title).toBe('Untitled')
+    expect(corrupted!.messageCount).toBe(1)
   })
 })
 
@@ -213,18 +242,17 @@ describe('restoreSession', () => {
     expect(stat.isFile()).toBe(true)
   })
 
-  it('fails when backup does not exist', async () => {
+  it('returns failure result when backup does not exist', async () => {
     await fs.mkdir(path.join(tmpDir, '.bak'), { recursive: true })
 
-    const result = await Effect.runPromise(
-      restoreSession('nonexistent', 'session-1').pipe(
-        Effect.catchAll((e) => Effect.succeed({ success: false, error: String(e) }))
-      )
-    )
+    const result = await Effect.runPromise(restoreSession('nonexistent', 'session-1'))
     expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain('Backup not found')
+    }
   })
 
-  it('does not overwrite existing session file', async () => {
+  it('returns failure result when session already exists', async () => {
     await fs.mkdir(path.join(tmpDir, '.bak'), { recursive: true })
     await fs.mkdir(path.join(tmpDir, 'test-project'), { recursive: true })
 
@@ -235,11 +263,10 @@ describe('restoreSession', () => {
       JSON.stringify(makeMessage()) + '\n'
     )
 
-    const result = await Effect.runPromise(
-      restoreSession('test-project', 'session-1').pipe(
-        Effect.catchAll((e) => Effect.succeed({ success: false, error: String(e) }))
-      )
-    )
+    const result = await Effect.runPromise(restoreSession('test-project', 'session-1'))
     expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error).toContain('Session already exists')
+    }
   })
 })
