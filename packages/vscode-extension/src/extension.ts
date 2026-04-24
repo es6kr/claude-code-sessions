@@ -665,10 +665,6 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
-    vscode.commands.registerCommand('claudeSessions.restartExtensionHost', () =>
-      vscode.commands.executeCommand('workbench.action.restartExtensionHost')
-    ),
-
     vscode.commands.registerCommand('claudeSessions.restartWebServer', async () => {
       await killWebServer()
       try {
