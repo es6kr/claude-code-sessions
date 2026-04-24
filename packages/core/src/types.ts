@@ -208,6 +208,16 @@ export interface SessionFilesSummary {
 // Operation Results
 // ============================================================================
 
+/** Information about a backed-up session */
+export interface BackupSessionInfo {
+  id: string
+  projectName: string
+  title: string
+  messageCount: number
+  backupDate: number
+  fileSize: number
+}
+
 /** Result of deleting a session */
 export interface DeleteSessionResult {
   success: boolean
@@ -215,6 +225,22 @@ export interface DeleteSessionResult {
   deletedAgents: number
   deletedTodos?: number
 }
+
+/** Successful result of restoring a backed-up session */
+export interface RestoreSessionSuccessResult {
+  success: true
+  restoredPath: string
+  restoredAgents: number
+}
+
+/** Failed result of restoring a backed-up session */
+export interface RestoreSessionFailureResult {
+  success: false
+  error: string
+}
+
+/** Result of restoring a backed-up session */
+export type RestoreSessionResult = RestoreSessionSuccessResult | RestoreSessionFailureResult
 
 /** Result of renaming a session */
 export interface RenameSessionResult {
@@ -241,11 +267,12 @@ export interface MoveSessionResult {
 /** Result of clearing empty/invalid sessions */
 export interface ClearSessionsResult {
   success: boolean
+  deduplicatedRecordCount?: number
   deletedCount: number
-  removedMessageCount?: number
   deletedOrphanAgentCount?: number
   deletedOrphanTodoCount?: number
   deletedStaleProjectCount?: number
+  removedMessageCount?: number
 }
 
 /** Preview of sessions that would be cleaned up */

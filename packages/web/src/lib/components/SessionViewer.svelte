@@ -7,11 +7,18 @@
   import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
   import { getDisplayTitle, truncate } from '$lib/utils'
+  import MessageFilter from './MessageFilter.svelte'
   import MessageList from './MessageList.svelte'
   import ScrollButtons from './ScrollButtons.svelte'
   import ValidationBadge from './ValidationBadge.svelte'
   import CommandTitle from './CommandTitle.svelte'
   import SessionActions from './SessionActions.svelte'
+  import {
+    ALL_MESSAGE_CATEGORIES,
+    getMessageCategory,
+    DEFAULT_VISIBLE_CATEGORIES,
+    type MessageCategory,
+  } from '$lib/utils'
 
   // Tab type - messages, todos, or agent:<agentId>
   type TabType = 'messages' | 'todos' | `agent:${string}`
@@ -80,6 +87,49 @@
   )
   let isRepairing = $state(false)
 
+  // Message type filter with localStorage persistence
+  const FILTER_STORAGE_KEY = 'claudeSessionsMessageTypeFilter'
+  const getInitialVisibleCategories = (): Set<MessageCategory> => {
+    if (typeof window === 'undefined') return new Set(DEFAULT_VISIBLE_CATEGORIES)
+    const stored = localStorage.getItem(FILTER_STORAGE_KEY)
+    if (stored === null) return new Set(DEFAULT_VISIBLE_CATEGORIES)
+    try {
+      const parsed = JSON.parse(stored)
+      if (!Array.isArray(parsed)) return new Set(DEFAULT_VISIBLE_CATEGORIES)
+      const valid = parsed.filter(
+        (c): c is MessageCategory =>
+          typeof c === 'string' && ALL_MESSAGE_CATEGORIES.includes(c as MessageCategory)
+      )
+      return new Set(valid)
+    } catch {
+      return new Set(DEFAULT_VISIBLE_CATEGORIES)
+    }
+  }
+  let visibleCategories = $state<Set<MessageCategory>>(getInitialVisibleCategories())
+  $effect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify([...visibleCategories]))
+    }
+  })
+
+  const filteredMessages = $derived(
+    messages.filter((m) => visibleCategories.has(getMessageCategory(m)))
+  )
+
+  const handleFilterToggle = (category: MessageCategory) => {
+    const next = new Set(visibleCategories)
+    if (next.has(category)) {
+      next.delete(category)
+    } else {
+      next.add(category)
+    }
+    visibleCategories = next
+  }
+
+  const handleFilterReset = () => {
+    visibleCategories = new Set(DEFAULT_VISIBLE_CATEGORIES)
+  }
+
   const handleRepairChain = async () => {
     if (!session || isRepairing) return
     isRepairing = true
@@ -119,6 +169,14 @@
   let activeTab = $state<TabType>('messages')
   let agentMessages = $state<Message[]>([])
   let loadingAgent = $state(false)
+
+  const filteredAgentMessages = $derived(
+    agentMessages.filter((m) => visibleCategories.has(getMessageCategory(m)))
+  )
+
+  const handleFilterShowAll = () => {
+    visibleCategories = new Set(ALL_MESSAGE_CATEGORIES)
+  }
 
   // Undo stack - stores already-deleted messages that can be restored
   interface DeletedMessage {
@@ -406,7 +464,9 @@
             : 'text-gh-text-secondary hover:text-gh-text hover:bg-gh-border-subtle'}"
           onclick={() => (activeTab = 'messages')}
         >
-          💬 Messages ({messages.length})
+          💬 Messages ({filteredMessages.length}{filteredMessages.length !== messages.length
+            ? `/${messages.length}`
+            : ''})
         </button>
         {#each agents as agent}
           <button
@@ -437,6 +497,17 @@
     </div>
   {/if}
 
+  <!-- Message Type Filter -->
+  {#if session && (activeTab === 'messages' || activeTab.startsWith('agent:'))}
+    <MessageFilter
+      messages={activeTab === 'messages' ? messages : agentMessages}
+      {visibleCategories}
+      onToggle={handleFilterToggle}
+      onShowAll={handleFilterShowAll}
+      onReset={handleFilterReset}
+    />
+  {/if}
+
   <!-- Content -->
   <div bind:this={internalScrollContainer} class="flex-1 {enableScroll ? 'overflow-y-auto' : ''}">
     {#if !session}
@@ -451,7 +522,7 @@
       {:else}
         <MessageList
           sessionId={session.id}
-          {messages}
+          messages={filteredMessages}
           onDeleteMessage={handleSessionMessageDelete}
           {onEditTitle}
           {onSplitSession}
@@ -497,7 +568,7 @@
       {:else}
         <MessageList
           sessionId={session.id}
-          messages={agentMessages}
+          messages={filteredAgentMessages}
           onDeleteMessage={handleAgentMessageDelete}
           enableScroll={false}
           fullWidth={true}

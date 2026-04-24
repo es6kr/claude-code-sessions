@@ -19,7 +19,7 @@ vi.mock('../todos.js', async () => ({
   deleteLinkedTodos: vi.fn(() => Effect.succeed({ deletedCount: 0 })),
 }))
 
-import { clearSessions } from './cleanup.js'
+import { clearSessions, deduplicateTitleRecords } from './cleanup.js'
 import { getSessionsDir } from '../paths.js'
 
 function makeMessage(overrides: Record<string, unknown> = {}) {
@@ -189,6 +189,169 @@ describe('clearSessions', () => {
       expect(result.removedMessageCount).toBe(0)
       const remaining = await readSession(tempDir, projectName, 'session-1')
       expect(remaining).toHaveLength(1)
+    })
+  })
+
+  describe('deduplicateTitleRecords (via clearSessions)', () => {
+    it('should remove duplicate agent-name records keeping the last', async () => {
+      const agentName1 = { type: 'agent-name', agentName: 'Task Agent', sessionId: 'session-1' }
+      const msg1 = makeMessage({ uuid: 'msg-1' })
+      const msg2 = makeMessage({ uuid: 'msg-2', type: 'assistant', parentUuid: 'msg-1' })
+      const agentName2 = { type: 'agent-name', agentName: 'Task Agent', sessionId: 'session-1' }
+      await writeSession(tempDir, projectName, 'session-1', [agentName1, msg1, msg2, agentName2])
+
+      const result = await Effect.runPromise(
+        clearSessions({
+          projectName,
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+          deduplicateTitles: true,
+        })
+      )
+
+      expect(result.deduplicatedRecordCount).toBe(1)
+      const remaining = await readSession(tempDir, projectName, 'session-1')
+      expect(remaining).toHaveLength(3) // msg1, msg2, agentName2
+      expect(remaining.filter((r: { type: string }) => r.type === 'agent-name')).toHaveLength(1)
+    })
+
+    it('should remove duplicate custom-title records keeping the last', async () => {
+      const title1 = { type: 'custom-title', customTitle: 'My Session', sessionId: 'session-1' }
+      const msg1 = makeMessage({ uuid: 'msg-1' })
+      const title2 = { type: 'custom-title', customTitle: 'My Session', sessionId: 'session-1' }
+      await writeSession(tempDir, projectName, 'session-1', [title1, msg1, title2])
+
+      const result = await Effect.runPromise(
+        clearSessions({
+          projectName,
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+          deduplicateTitles: true,
+        })
+      )
+
+      expect(result.deduplicatedRecordCount).toBe(1)
+      const remaining = await readSession(tempDir, projectName, 'session-1')
+      expect(remaining).toHaveLength(2) // msg1, title2
+      expect(remaining.filter((r: { type: string }) => r.type === 'custom-title')).toHaveLength(1)
+    })
+
+    it('should handle both agent-name and custom-title duplicates', async () => {
+      const agentName1 = { type: 'agent-name', agentName: 'Agent', sessionId: 'session-1' }
+      const title1 = { type: 'custom-title', customTitle: 'Title', sessionId: 'session-1' }
+      const msg1 = makeMessage({ uuid: 'msg-1' })
+      const compact = {
+        type: 'system',
+        subtype: 'compact_boundary',
+        uuid: 'compact-1',
+        timestamp: new Date().toISOString(),
+      }
+      const agentName2 = { type: 'agent-name', agentName: 'Agent', sessionId: 'session-1' }
+      const title2 = { type: 'custom-title', customTitle: 'Title', sessionId: 'session-1' }
+      const msg2 = makeMessage({ uuid: 'msg-2', parentUuid: 'compact-1' })
+      await writeSession(tempDir, projectName, 'session-1', [
+        agentName1,
+        title1,
+        msg1,
+        compact,
+        agentName2,
+        title2,
+        msg2,
+      ])
+
+      const result = await Effect.runPromise(
+        clearSessions({
+          projectName,
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+          deduplicateTitles: true,
+        })
+      )
+
+      expect(result.deduplicatedRecordCount).toBe(2) // removed agentName1 + title1
+      const remaining = await readSession(tempDir, projectName, 'session-1')
+      expect(remaining).toHaveLength(5) // msg1, compact, agentName2, title2, msg2
+    })
+
+    it('should not modify file when no duplicates exist', async () => {
+      const agentName = { type: 'agent-name', agentName: 'Agent', sessionId: 'session-1' }
+      const msg1 = makeMessage({ uuid: 'msg-1' })
+      await writeSession(tempDir, projectName, 'session-1', [agentName, msg1])
+
+      const result = await Effect.runPromise(
+        clearSessions({
+          projectName,
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+          deduplicateTitles: true,
+        })
+      )
+
+      expect(result.deduplicatedRecordCount).toBe(0)
+      const remaining = await readSession(tempDir, projectName, 'session-1')
+      expect(remaining).toHaveLength(2)
+    })
+
+    it('should keep last when values differ across duplicates', async () => {
+      const title1 = { type: 'custom-title', customTitle: 'Old Title', sessionId: 'session-1' }
+      const msg1 = makeMessage({ uuid: 'msg-1' })
+      const title2 = { type: 'custom-title', customTitle: 'New Title', sessionId: 'session-1' }
+      await writeSession(tempDir, projectName, 'session-1', [title1, msg1, title2])
+
+      await Effect.runPromise(
+        clearSessions({
+          projectName,
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+          deduplicateTitles: true,
+        })
+      )
+
+      const remaining = await readSession(tempDir, projectName, 'session-1')
+      expect(remaining).toHaveLength(2) // msg1, title2
+      const titles = remaining.filter((r: { type: string }) => r.type === 'custom-title')
+      expect(titles).toHaveLength(1)
+      expect(titles[0].customTitle).toBe('New Title')
+    })
+
+    it('should be disabled by default', async () => {
+      const title1 = { type: 'custom-title', customTitle: 'Title', sessionId: 'session-1' }
+      const msg1 = makeMessage({ uuid: 'msg-1' })
+      const title2 = { type: 'custom-title', customTitle: 'Title', sessionId: 'session-1' }
+      await writeSession(tempDir, projectName, 'session-1', [title1, msg1, title2])
+
+      const result = await Effect.runPromise(
+        clearSessions({
+          projectName,
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+        })
+      )
+
+      expect(result.deduplicatedRecordCount).toBe(0)
+      const remaining = await readSession(tempDir, projectName, 'session-1')
+      expect(remaining).toHaveLength(3) // all preserved
+    })
+  })
+
+  describe('deduplicateTitleRecords standalone', () => {
+    it('should deduplicate a single session file', async () => {
+      const title1 = { type: 'custom-title', customTitle: 'Title', sessionId: 'session-1' }
+      const msg1 = makeMessage({ uuid: 'msg-1' })
+      const title2 = { type: 'custom-title', customTitle: 'Title', sessionId: 'session-1' }
+      await writeSession(tempDir, projectName, 'session-1', [title1, msg1, title2])
+
+      const result = await Effect.runPromise(deduplicateTitleRecords(projectName, 'session-1'))
+
+      expect(result.removedCount).toBe(1)
+      const remaining = await readSession(tempDir, projectName, 'session-1')
+      expect(remaining).toHaveLength(2)
     })
   })
 
