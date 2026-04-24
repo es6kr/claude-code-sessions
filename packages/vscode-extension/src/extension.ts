@@ -119,6 +119,10 @@ async function ensureWebServer({
   let spawnCmd: string
   let spawnArgs: string[]
 
+  // SvelteKit adapter-node only reads PORT env var, not --port CLI arg.
+  // Always set PORT in spawn env to ensure it works regardless of entry point.
+  const spawnEnv = { ...process.env, PORT: String(port) }
+
   if (webServerPath) {
     spawnCmd = 'node'
     spawnArgs = [webServerPath, '--port', String(port)]
@@ -135,6 +139,7 @@ async function ensureWebServer({
 
   return new Promise((resolve, reject) => {
     const child = spawn(spawnCmd, spawnArgs, {
+      env: spawnEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
       detached: process.platform !== 'win32',
