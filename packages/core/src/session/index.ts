@@ -36,6 +36,9 @@ export {
 // Streaming session metadata
 export { listSessionsMeta } from './crud-streaming.js'
 
+// Backup operations
+export { listBackupSessions, restoreSession } from './backup.js'
+
 // Cleanup operations
 export { previewCleanup, clearSessions } from './cleanup.js'
 

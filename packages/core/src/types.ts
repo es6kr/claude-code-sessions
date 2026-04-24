@@ -208,12 +208,30 @@ export interface SessionFilesSummary {
 // Operation Results
 // ============================================================================
 
+/** Information about a backed-up session */
+export interface BackupSessionInfo {
+  id: string
+  projectName: string
+  title: string
+  messageCount: number
+  backupDate: number
+  fileSize: number
+}
+
 /** Result of deleting a session */
 export interface DeleteSessionResult {
   success: boolean
   backupPath?: string
   deletedAgents: number
   deletedTodos?: number
+}
+
+/** Result of restoring a backed-up session */
+export interface RestoreSessionResult {
+  success: boolean
+  restoredPath: string
+  restoredAgents: number
+  error?: string
 }
 
 /** Result of renaming a session */
