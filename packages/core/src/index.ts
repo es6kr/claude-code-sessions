@@ -135,6 +135,7 @@ export {
   loadSessionTreeData,
   loadProjectTreeData,
   getCachePath,
+  updateMessageContent,
   updateSessionSummary,
   repairChain,
 } from './session.js'

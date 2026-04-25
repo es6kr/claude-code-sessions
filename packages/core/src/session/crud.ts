@@ -204,6 +204,35 @@ export const restoreMessage = (
     return { success: true }
   })
 
+// Update message content by UUID (overwrite existing content)
+export const updateMessageContent = (
+  projectName: string,
+  sessionId: string,
+  messageUuid: string,
+  newText: string
+) =>
+  Effect.gen(function* () {
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath, { strict: true })
+
+    const idx = messages.findIndex((m) => m.uuid === messageUuid)
+    if (idx === -1) {
+      return { success: false, error: 'Message not found' }
+    }
+
+    const msg = messages[idx]
+    const payload = (msg.message as Record<string, unknown>) ?? {}
+    messages[idx] = {
+      ...msg,
+      message: { ...payload, content: [{ type: 'text', text: newText }] },
+    }
+
+    const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+
+    return { success: true }
+  })
+
 // Delete a session and its linked agent/todo files
 export const deleteSession = (projectName: string, sessionId: string) =>
   Effect.gen(function* () {

@@ -33,6 +33,7 @@
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
     "@floating-ui/dom": "^1.7.6",
+    "carta-md": "^4.11.2",
     "effect": "^3.21.1",
     "marked": "^17.0.6"
   },
