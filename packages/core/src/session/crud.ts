@@ -78,13 +78,6 @@ const readSessionMeta = (projectPath: string, file: string, projectName: string)
       O.getOrUndefined
     )
 
-    const currentSummary = pipe(
-      messages,
-      A.findFirst((m) => m.type === 'summary'),
-      O.map((m) => m.summary as string),
-      O.getOrUndefined
-    )
-
     // Only titles after the last user/assistant message count as current
     let customTitle: string | undefined
     let agentName: string | undefined
@@ -102,7 +95,6 @@ const readSessionMeta = (projectPath: string, file: string, projectName: string)
       title,
       agentName,
       customTitle,
-      currentSummary,
       userAssistantCount: userAssistantMessages.length,
       hasSummary,
       firstTimestamp: userAssistantMessages[0]?.timestamp,
