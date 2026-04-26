@@ -14,6 +14,7 @@ import type {
   TitleDisplayMode,
 } from './types.js'
 import { createLogger } from './logger.js'
+import { validateMessage } from './schemas/message.js'
 
 const logger = createLogger('utils')
 
@@ -347,18 +348,27 @@ export const tryParseJsonLine = <T = Record<string, unknown>>(
 }
 
 /**
- * Parse JSONL lines with optional strict mode
+ * Parse JSONL lines with optional strict mode and schema validation.
  * @param strict - When true, throws on malformed lines. When false (default), skips with a warning.
+ * @param validate - When true, validates each parsed line against SessionMessage schema.
+ *   Lines that fail validation are still included (as raw parsed JSON) but a warning is logged.
+ *   This is non-breaking: validation failures never reject lines.
  */
 export const parseJsonlLines = <T = Record<string, unknown>>(
   lines: string[],
   filePath: string,
-  { strict = false }: { strict?: boolean } = {}
+  { strict = false, validate = false }: { strict?: boolean; validate?: boolean } = {}
 ): T[] => {
   const results: T[] = []
   for (let idx = 0; idx < lines.length; idx++) {
     try {
-      results.push(JSON.parse(lines[idx]) as T)
+      const parsed = JSON.parse(lines[idx])
+      if (validate) {
+        validateMessage(parsed, (msg) => {
+          logger.warn(`Schema warning at line ${idx + 1} in ${filePath}: ${msg}`)
+        })
+      }
+      results.push(parsed as T)
     } catch (e) {
       const err = e as Error
       if (strict) {
