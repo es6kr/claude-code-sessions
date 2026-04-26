@@ -1,4 +1,6 @@
-# Claude Code Sessions for VS Code
+# Claude Code Sessions for VS Code (Beta)
+
+> **This is the Beta version.** For the stable release, install from [Open VSX Registry](https://open-vsx.org/extension/es6kr/claude-sessions).
 
 Manage Claude Code sessions directly from VS Code sidebar.
 

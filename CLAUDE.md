@@ -111,6 +111,29 @@ pnpm dev      # Dev server
 pnpm build    # Production build
 ```
 
+## Publishing
+
+### Registry Mapping
+
+| Registry                                  | Extension Name           | Purpose                   |
+| ----------------------------------------- | ------------------------ | ------------------------- |
+| VS Code Marketplace                       | `es6kr.claude-sessions`  | Production releases       |
+| Open VSX (`es6kr/claude-sessions`)        | `claude-sessions`        | Production releases       |
+| Open VSX (`es6kr/claude-sessions-vscode`) | `claude-sessions-vscode` | **Beta/pre-release only** |
+
+### Beta Release to Open VSX
+
+Beta versions go to the **separate** `claude-sessions-vscode` listing (not the production `claude-sessions`):
+
+1. **Use beta branch** - Beta settings (name change, versioning) are maintained in the `beta` branch
+2. Change `name` in `packages/vscode-extension/package.json` to `claude-sessions-vscode`
+3. Package: `npx vsce package --no-dependencies`
+4. Publish: `npx ovsx publish <file>.vsix -p $OVSX_PAT`
+
+### Production Release
+
+Production goes through CI (`release-vscode.yml`) via tag push `vscode-v*`. Publishes to both VS Code Marketplace and Open VSX `claude-sessions`.
+
 ## VSCode Extension Workflow
 
 **IMPORTANT**: After modifying any files in `packages/core/` or `packages/vscode-extension/`, use `/vsix` slash command to rebuild and reinstall.
@@ -122,3 +145,12 @@ This applies to:
 - `packages/vscode-extension/package.json` - Extension manifest
 
 **Note**: A PostToolUse hook marks rebuild needed, but explicit "vsix 빌드" request should trigger immediate rebuild.
+
+### Beta Deploy (Open VSX)
+
+`vsix-beta` 브랜치에 베타 패키징 커밋(`DO NOT PUSH: beta packaging`)이 존재함. 배포 요청 시:
+
+1. `git show vsix-beta:packages/vscode-extension/package.json`로 현재 베타 버전 확인
+2. production에서 vsix-beta 브랜치를 rebase하여 최신 코드 반영
+3. 버전 범프 필요 시 beta.N 증가 (`pnpm version prerelease --preid beta`)
+4. `pnpm build && vsce package --no-dependencies` → `npx ovsx publish`
