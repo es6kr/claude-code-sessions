@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 import * as assert from 'assert'
 import * as fs from 'fs'
+import * as http from 'http'
 import * as path from 'path'
 import * as os from 'os'
 
@@ -41,6 +42,12 @@ function createMockSessionTreeItem(projectName: string, sessionId: string) {
 }
 
 suite('Webview Test Suite', () => {
+  // Restore webServerPath after tests that override it
+  suiteTeardown(async () => {
+    const config = vscode.workspace.getConfiguration('claudeSessions')
+    await config.update('webServerPath', undefined, vscode.ConfigurationTarget.Global)
+  })
+
   test('Commands are registered', async function () {
     this.timeout(30000)
 
@@ -59,8 +66,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      assert.fail('Extension not found: es6kr.claude-sessions')
     }
 
     // Activate extension if not already active
@@ -99,8 +105,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      assert.fail('Extension not found: es6kr.claude-sessions')
     }
 
     // Activate extension if not already active
@@ -160,8 +165,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      assert.fail('Extension not found: es6kr.claude-sessions')
     }
 
     // Activate extension if not already active
@@ -202,8 +206,7 @@ suite('Webview Test Suite', () => {
     // Get the extension
     const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
     if (!extension) {
-      console.log('Extension not found, skipping test')
-      return
+      assert.fail('Extension not found: es6kr.claude-sessions')
     }
 
     // Activate extension if not already active
@@ -222,5 +225,154 @@ suite('Webview Test Suite', () => {
     } catch (err) {
       assert.fail(`openWebUI command failed: ${err}`)
     }
+  })
+
+  test('Web server responds with HTTP 200', async function () {
+    if (process.env.CI) {
+      console.log('Skipping web server HTTP test in CI environment')
+      this.skip()
+      return
+    }
+
+    this.timeout(60000)
+
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    if (!extension) {
+      assert.fail('Extension not found: es6kr.claude-sessions')
+    }
+
+    if (!extension.isActive) {
+      await extension.activate()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Use local build instead of npx to test current source
+    // __dirname = packages/vscode-extension/out/test/suite (compiled)
+    const webBuildPath = path.resolve(__dirname, '../../../../web/dist/cli.js')
+    if (fs.existsSync(webBuildPath)) {
+      const config = vscode.workspace.getConfiguration('claudeSessions')
+      await config.update('webServerPath', webBuildPath, vscode.ConfigurationTarget.Global)
+      console.log(`Using local web build: ${webBuildPath}`)
+    }
+
+    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    console.log('restartWebServer executed, polling for server readiness...')
+
+    const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
+    const maxRetries = 10
+    const retryInterval = 1000
+    let statusCode = 0
+    let body = ''
+
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const result = await new Promise<{ statusCode: number; body: string }>(
+          (resolve, reject) => {
+            const req = http.get(`http://localhost:${port}/api/version`, (res) => {
+              let data = ''
+              res.on('data', (chunk: Buffer) => (data += chunk.toString()))
+              res.on('end', () => resolve({ statusCode: res.statusCode ?? 0, body: data }))
+            })
+            req.on('error', reject)
+            req.setTimeout(3000, () => {
+              req.destroy()
+              reject(new Error('HTTP request timeout'))
+            })
+          }
+        )
+        statusCode = result.statusCode
+        body = result.body
+        break
+      } catch {
+        console.log(`Retry ${i + 1}/${maxRetries}: server not ready yet`)
+        await new Promise((resolve) => setTimeout(resolve, retryInterval))
+      }
+    }
+
+    console.log(`Web server /api/version responded with status: ${statusCode}`)
+    assert.strictEqual(statusCode, 200, 'Web server should respond with HTTP 200')
+    const parsed = JSON.parse(body)
+    assert.ok(parsed.version, 'Response should contain version field')
+  })
+
+  test('Frontend root path responds with HTTP 200', async function () {
+    if (process.env.CI) {
+      console.log('Skipping frontend root test in CI environment')
+      this.skip()
+      return
+    }
+
+    this.timeout(60000)
+
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    if (!extension) {
+      assert.fail('Extension not found: es6kr.claude-sessions')
+    }
+
+    if (!extension.isActive) {
+      await extension.activate()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Use local build instead of npx to test current source
+    const webBuildPath = path.resolve(__dirname, '../../../../web/dist/cli.js')
+    if (fs.existsSync(webBuildPath)) {
+      const config = vscode.workspace.getConfiguration('claudeSessions')
+      await config.update('webServerPath', webBuildPath, vscode.ConfigurationTarget.Global)
+      console.log(`Using local web build: ${webBuildPath}`)
+    }
+
+    // Ensure web server is running (reuse from previous test or start fresh)
+    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    console.log('restartWebServer executed, polling for server readiness...')
+
+    const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
+
+    // Wait for /api/version first (server is ready)
+    const maxRetries = 10
+    const retryInterval = 1000
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const result = await new Promise<{ statusCode: number }>((resolve, reject) => {
+          const req = http.get(`http://localhost:${port}/api/version`, (res) => {
+            res.resume()
+            res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
+          })
+          req.on('error', reject)
+          req.setTimeout(3000, () => {
+            req.destroy()
+            reject(new Error('timeout'))
+          })
+        })
+        if (result.statusCode === 200) break
+      } catch {
+        console.log(`Retry ${i + 1}/${maxRetries}: server not ready yet`)
+        await new Promise((resolve) => setTimeout(resolve, retryInterval))
+      }
+    }
+
+    // Now test the frontend root path
+    const rootResult = await new Promise<{ statusCode: number }>((resolve, reject) => {
+      const req = http.get(`http://localhost:${port}/`, (res) => {
+        res.resume()
+        res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
+      })
+      req.on('error', reject)
+      req.setTimeout(5000, () => {
+        req.destroy()
+        reject(new Error('Root path request timeout'))
+      })
+    })
+
+    console.log(`Web server / responded with status: ${rootResult.statusCode}`)
+    assert.strictEqual(
+      rootResult.statusCode,
+      200,
+      `Frontend root path should respond with HTTP 200, got ${rootResult.statusCode}`
+    )
   })
 })

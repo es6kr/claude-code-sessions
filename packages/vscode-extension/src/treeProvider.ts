@@ -140,7 +140,7 @@ export class SessionTreeProvider
 
     // Enable drag-to-editor: drop onto editor area opens the file
     const uris = source
-      .filter((s): s is SessionTreeItem => 'resourceUri' in s && !!s.resourceUri)
+      .filter((s): s is SessionTreeItem => s.type === 'session' && !!s.resourceUri)
       .map((s) => s.resourceUri!.toString())
     if (uris.length > 0) {
       dataTransfer.set('text/uri-list', new vscode.DataTransferItem(uris.join('\r\n')))

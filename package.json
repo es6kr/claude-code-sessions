@@ -24,6 +24,7 @@
     "test:core": "pnpm --filter @claude-sessions/core test",
     "test:e2e": "pnpm --filter @claude-sessions/web exec playwright test",
     "test:mcp": "pnpm --filter claude-sessions-mcp test",
+    "test:vsx": "pnpm --filter claude-sessions test",
     "test:web": "pnpm --filter @claude-sessions/web test",
     "typecheck": "pnpm -r typecheck",
     "prepare": "husky",

@@ -30,9 +30,10 @@
     titleDisplayMode: TitleDisplayMode
     onToggleProject: (name: string) => void
     onSelectSession: (session: SessionMeta) => void
-    onRenameSession: (e: Event, session: SessionMeta) => void
+    onCompressSession?: (e: Event, session: SessionMeta) => void
     onDeleteSession: (e: Event, session: SessionMeta) => void
     onMoveSession?: (session: SessionMeta, targetProject: string) => void
+    onRenameSession: (e: Event, session: SessionMeta) => void
     onResumeSession?: (e: Event, session: SessionMeta) => void
     onSortChange?: (field: SessionSortField, order: SessionSortOrder) => void
     onTitleModeChange?: (mode: TitleDisplayMode) => void
@@ -50,9 +51,10 @@
     titleDisplayMode,
     onToggleProject,
     onSelectSession,
-    onRenameSession,
+    onCompressSession,
     onDeleteSession,
     onMoveSession,
+    onRenameSession,
     onResumeSession,
     onSortChange,
     onTitleModeChange,
@@ -355,7 +357,7 @@
 
                     <!-- Action buttons (visible on hover, absolute positioned) -->
                     <div
-                      class="absolute right-0 top-0 h-full flex items-center gap-0.5 pr-2 opacity-0 group-hover:opacity-100 transition-opacity bg-gh-bg"
+                      class="absolute right-0 top-0 h-full flex items-center gap-0.5 pr-2 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity bg-gh-bg"
                     >
                       {#if onResumeSession}
                         <TooltipButton
@@ -373,6 +375,16 @@
                       >
                         ✏️
                       </TooltipButton>
+                      {#if onCompressSession}
+                        <TooltipButton
+                          aria-label="Compress session"
+                          class="p-1 rounded hover:bg-gh-accent/20 text-xs"
+                          onclick={(e) => onCompressSession(e, session)}
+                          title="Compress session"
+                        >
+                          🗜️
+                        </TooltipButton>
+                      {/if}
                       <TooltipButton
                         class="p-1 rounded hover:bg-gh-red/20 text-xs"
                         onclick={(e) => onDeleteSession(e, session)}

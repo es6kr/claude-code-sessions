@@ -30,6 +30,9 @@ export {
   compressSession,
   extractProjectKnowledge,
   summarizeSession,
+  // Backup
+  listBackupSessions,
+  restoreSession,
   // Cleanup
   previewCleanup,
   clearSessions,

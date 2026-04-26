@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import { SessionTreeProvider, type SessionTreeItem } from './treeProvider'
 import * as session from '@claude-sessions/core'
-import { resumeSession, startClaude } from '@claude-sessions/core/server'
+import { openExternalTerminal, resumeSession, startClaude } from '@claude-sessions/core/server'
 import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { outputChannel } from './output'
@@ -548,26 +548,51 @@ export function activate(context: vscode.ExtensionContext) {
     }),
 
     vscode.commands.registerCommand('claudeSessions.cleanup', async () => {
-      const preview = await Effect.runPromise(session.previewCleanup())
+      const preview = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'Scanning sessions...' },
+        () => Effect.runPromise(session.previewCleanup())
+      )
 
       const totalEmpty = preview.reduce((sum, p) => sum + p.emptySessions.length, 0)
       const totalInvalid = preview.reduce((sum, p) => sum + p.invalidSessions.length, 0)
+      const staleProjects = preview.filter((p) => p.isStale).map((p) => p.project)
+      const totalStale = staleProjects.length
 
-      if (totalEmpty === 0 && totalInvalid === 0) {
+      if (totalEmpty === 0 && totalInvalid === 0 && totalStale === 0) {
         vscode.window.showInformationMessage('No sessions to clean up')
         return
       }
 
+      const parts: string[] = []
+      if (totalEmpty > 0) parts.push(`${totalEmpty} empty sessions`)
+      if (totalInvalid > 0) parts.push(`${totalInvalid} invalid sessions`)
+      if (totalStale > 0) parts.push(`${totalStale} stale projects (directory gone)`)
+
       const confirm = await vscode.window.showWarningMessage(
-        `Clean up ${totalEmpty} empty sessions and ${totalInvalid} invalid sessions?`,
+        `Clean up ${parts.join(', ')}?`,
         { modal: true },
         'Clean Up'
       )
 
       if (confirm === 'Clean Up') {
-        const result = await Effect.runPromise(session.clearSessions({}))
+        const result = await vscode.window.withProgress(
+          { location: vscode.ProgressLocation.Notification, title: 'Cleaning up sessions...' },
+          () =>
+            Effect.runPromise(
+              session.clearSessions({
+                clearStale: totalStale > 0,
+                staleProjects,
+              })
+            )
+        )
         treeProvider.refresh()
-        vscode.window.showInformationMessage(`Cleaned up ${result.deletedCount} sessions`)
+        const msgs: string[] = []
+        if (result.deletedCount > 0) msgs.push(`${result.deletedCount} sessions`)
+        if (result.deletedStaleProjectCount)
+          msgs.push(`${result.deletedStaleProjectCount} stale projects`)
+        vscode.window.showInformationMessage(
+          msgs.length > 0 ? `Cleaned up ${msgs.join(', ')}` : 'Cleanup complete'
+        )
       }
     }),
 
@@ -689,13 +714,53 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (!item || (item.type !== 'session' && item.type !== 'project')) return
 
+        const { defaultTerminalMode } = getConfig()
         const cwd = await resolveProjectCwd(item.projectName)
 
-        const terminal = vscode.window.createTerminal({
-          name: `Terminal: ${shortProjectName(item.projectName)}`,
-          cwd,
-        })
-        terminal.show()
+        let mode: 'internal' | 'external'
+        if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
+          mode = defaultTerminalMode
+        } else {
+          const choice = await vscode.window.showQuickPick(
+            [
+              {
+                label: '$(terminal) Internal Terminal',
+                description: 'Open in VSCode integrated terminal',
+                mode: 'internal' as const,
+              },
+              {
+                label: '$(link-external) External Terminal',
+                description: 'Open in system default terminal',
+                mode: 'external' as const,
+              },
+            ],
+            {
+              placeHolder: 'Where to open terminal?',
+              title: 'Open Terminal Here',
+            }
+          )
+
+          if (!choice) return
+          mode = choice.mode
+        }
+
+        if (mode === 'internal') {
+          const terminal = vscode.window.createTerminal({
+            name: `Terminal: ${shortProjectName(item.projectName)}`,
+            cwd,
+          })
+          terminal.show()
+        } else {
+          const result = openExternalTerminal({ cwd })
+
+          if (result.success) {
+            vscode.window.showInformationMessage(
+              `Terminal opened in external terminal (PID: ${result.pid})`
+            )
+          } else {
+            vscode.window.showErrorMessage(`Failed to open external terminal: ${result.error}`)
+          }
+        }
       }
     ),
 

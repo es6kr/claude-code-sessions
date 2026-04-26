@@ -11,6 +11,7 @@ import { sessionHasTodos, findOrphanTodos, deleteOrphanTodos } from '../todos.js
 import { listProjects } from './projects.js'
 import { listSessions, deleteSession } from './crud.js'
 import { listSessionsMeta } from './crud-streaming.js'
+import { filterSessionFiles } from './crud-helpers.js'
 import type { Message, CleanupPreview, ClearSessionsResult } from '../types.js'
 
 // Remove invalid API key messages from a session, returns remaining message count
@@ -133,6 +134,64 @@ export const previewCleanup = (projectName?: string) =>
     return results
   })
 
+// Regex to extract "type" field from JSONL line without full parse
+const TITLE_TYPE_RE = /^{"type":"(agent-name|custom-title)"/
+
+/** Remove duplicate agent-name and custom-title records, keeping only the last of each type */
+export const deduplicateTitleRecords = (projectName: string, sessionId: string) =>
+  Effect.gen(function* () {
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const content = yield* Effect.tryPromise({
+      try: () => fs.readFile(filePath, 'utf-8'),
+      catch: (error) => new FileReadError({ filePath, cause: error }),
+    })
+    const lines = content.trim().split('\n').filter(Boolean)
+
+    if (lines.length === 0) return { removedCount: 0 }
+
+    // Find last index for each title type
+    let lastAgentNameIdx = -1
+    let lastCustomTitleIdx = -1
+    let agentNameCount = 0
+    let customTitleCount = 0
+
+    for (let i = 0; i < lines.length; i++) {
+      const match = TITLE_TYPE_RE.exec(lines[i])
+      if (!match) continue
+      if (match[1] === 'agent-name') {
+        lastAgentNameIdx = i
+        agentNameCount++
+      } else if (match[1] === 'custom-title') {
+        lastCustomTitleIdx = i
+        customTitleCount++
+      }
+    }
+
+    // Only duplicates if count > 1 for either type
+    const agentNameDuplicates = agentNameCount > 1 ? agentNameCount - 1 : 0
+    const customTitleDuplicates = customTitleCount > 1 ? customTitleCount - 1 : 0
+    const totalDuplicates = agentNameDuplicates + customTitleDuplicates
+
+    if (totalDuplicates === 0) return { removedCount: 0 }
+
+    // Build filtered lines — remove all but the last of each type
+    const filtered = lines.filter((line, idx) => {
+      const match = TITLE_TYPE_RE.exec(line)
+      if (!match) return true
+      if (match[1] === 'agent-name' && idx !== lastAgentNameIdx) return false
+      if (match[1] === 'custom-title' && idx !== lastCustomTitleIdx) return false
+      return true
+    })
+
+    const newContent = filtered.join('\n') + '\n'
+    yield* Effect.tryPromise({
+      try: () => fs.writeFile(filePath, newContent, 'utf-8'),
+      catch: (error) => new FileWriteError({ filePath, cause: error }),
+    })
+
+    return { removedCount: totalDuplicates }
+  })
+
 // Clear sessions
 export const clearSessions = (options: {
   projectName?: string
@@ -141,6 +200,7 @@ export const clearSessions = (options: {
   skipWithTodos?: boolean
   clearOrphanAgents?: boolean
   clearOrphanTodos?: boolean
+  deduplicateTitles?: boolean
 }) =>
   Effect.gen(function* () {
     const {
@@ -150,12 +210,14 @@ export const clearSessions = (options: {
       skipWithTodos = true,
       clearOrphanAgents = true,
       clearOrphanTodos = false,
+      deduplicateTitles = false,
     } = options
     const projects = yield* listProjects
     const targetProjects = projectName ? projects.filter((p) => p.name === projectName) : projects
 
     let deletedSessionCount = 0
     let removedMessageCount = 0
+    let deduplicatedRecordCount = 0
     let deletedOrphanAgentCount = 0
     let deletedOrphanTodoCount = 0
     const sessionsToDelete: { project: string; sessionId: string }[] = []
@@ -165,7 +227,7 @@ export const clearSessions = (options: {
       for (const project of targetProjects) {
         const projectPath = path.join(getSessionsDir(), project.name)
         const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
-        const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+        const sessionFiles = filterSessionFiles(files)
 
         for (const file of sessionFiles) {
           const sessionId = file.replace('.jsonl', '')
@@ -223,11 +285,30 @@ export const clearSessions = (options: {
       deletedOrphanTodoCount = result.deletedCount
     }
 
+    // Step 6: Deduplicate title records (agent-name, custom-title) if requested
+    if (deduplicateTitles) {
+      for (const project of targetProjects) {
+        const projectPath = path.join(getSessionsDir(), project.name)
+        const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+        const sessionFiles = filterSessionFiles(files)
+
+        for (const file of sessionFiles) {
+          const sessionId = file.replace('.jsonl', '')
+          // Skip sessions marked for deletion
+          if (sessionsToDelete.some((s) => s.project === project.name && s.sessionId === sessionId))
+            continue
+          const result = yield* deduplicateTitleRecords(project.name, sessionId)
+          deduplicatedRecordCount += result.removedCount
+        }
+      }
+    }
+
     return {
       success: true,
+      deduplicatedRecordCount,
       deletedCount: deletedSessionCount,
-      removedMessageCount,
       deletedOrphanAgentCount,
       deletedOrphanTodoCount,
+      removedMessageCount,
     } satisfies ClearSessionsResult
   })
