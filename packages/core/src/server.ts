@@ -6,5 +6,10 @@
  * Usage: import { resumeSession } from '@claude-sessions/core/server'
  */
 
-export { resumeSession, startClaude } from './resume.js'
-export type { ResumeSessionOptions, ResumeSessionResult, StartClaudeOptions } from './types.js'
+export { openExternalTerminal, resumeSession, startClaude } from './resume.js'
+export type {
+  OpenExternalTerminalOptions,
+  ResumeSessionOptions,
+  ResumeSessionResult,
+  StartClaudeOptions,
+} from './types.js'

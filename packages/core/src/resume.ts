@@ -3,7 +3,12 @@
  * This module uses child_process and should NOT be imported in browser environments
  */
 import { spawn } from 'node:child_process'
-import type { ResumeSessionOptions, ResumeSessionResult, StartClaudeOptions } from './types.js'
+import type {
+  OpenExternalTerminalOptions,
+  ResumeSessionOptions,
+  ResumeSessionResult,
+  StartClaudeOptions,
+} from './types.js'
 
 /**
  * Start claude CLI in an external terminal window.
@@ -87,4 +92,68 @@ export const resumeSession = (options: ResumeSessionOptions): ResumeSessionResul
     command: `claude ${claudeArgs.join(' ')}`,
     cwd,
   })
+}
+
+/**
+ * Open the OS default terminal at the given directory without running a command.
+ * OS-specific: Terminal.app (macOS), cmd (Windows), gnome-terminal/konsole/xterm (Linux)
+ */
+export const openExternalTerminal = (options: OpenExternalTerminalOptions): ResumeSessionResult => {
+  const { cwd } = options
+
+  try {
+    if (process.platform === 'darwin') {
+      const escapedDir = cwd.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      const script = `
+tell application "Terminal"
+  activate
+  do script "cd \\"${escapedDir}\\""
+end tell
+tell application "System Events"
+  set frontmost of process "Terminal" to true
+end tell
+`
+      const child = spawn('osascript', ['-e', script], {
+        detached: true,
+        stdio: 'ignore',
+      })
+      child.unref()
+
+      return { success: true, pid: child.pid }
+    }
+
+    if (process.platform === 'win32') {
+      const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', `cd /d "${cwd}"`], {
+        cwd,
+        detached: true,
+        stdio: 'ignore',
+      })
+      child.unref()
+
+      return { success: true, pid: child.pid }
+    }
+
+    // Linux: try common terminal emulators
+    const terminals = ['gnome-terminal', 'konsole', 'xterm']
+    for (const term of terminals) {
+      try {
+        const args = term === 'gnome-terminal' ? ['--working-directory', cwd] : ['--workdir', cwd]
+        const child = spawn(term, args, {
+          detached: true,
+          stdio: 'ignore',
+        })
+        child.unref()
+        return { success: true, pid: child.pid }
+      } catch {
+        continue
+      }
+    }
+
+    return { success: false, error: 'No supported terminal emulator found' }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
 }

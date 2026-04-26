@@ -425,6 +425,12 @@ export interface StartClaudeOptions {
   cwd?: string
 }
 
+/** Options for opening an external terminal at a directory */
+export interface OpenExternalTerminalOptions {
+  /** Working directory to open the terminal in */
+  cwd: string
+}
+
 export interface ResumeSessionOptions {
   /** Session ID to resume */
   sessionId: string
