@@ -131,6 +131,7 @@ export {
   splitSession,
   previewCleanup,
   clearSessions,
+  searchBySessionId,
   searchSessions,
   loadSessionTreeData,
   loadProjectTreeData,
