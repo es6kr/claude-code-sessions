@@ -1,0 +1,162 @@
+name: Suggest Next Version
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  suggest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Calculate next version
+        id: version
+        run: |
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+
+          # Get latest npm tag (v* without vscode- prefix)
+          LATEST_TAG=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -1 || echo '')
+          echo "latest_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+
+          if [ -z "$LATEST_TAG" ]; then
+            echo "No previous tags found"
+            echo "has_bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Analyze commits since last tag
+          FEAT_COUNT=$(git log "$LATEST_TAG"..HEAD --oneline --grep="^feat" | wc -l | tr -d ' ')
+          FIX_COUNT=$(git log "$LATEST_TAG"..HEAD --oneline --grep="^fix" | wc -l | tr -d ' ')
+          PERF_COUNT=$(git log "$LATEST_TAG"..HEAD --oneline --grep="^perf" | wc -l | tr -d ' ')
+          BREAKING_COUNT=$(git log "$LATEST_TAG"..HEAD --oneline --grep="BREAKING CHANGE" | wc -l | tr -d ' ')
+          TOTAL=$(git log "$LATEST_TAG"..HEAD --oneline | wc -l | tr -d ' ')
+
+          echo "feat_count=$FEAT_COUNT" >> "$GITHUB_OUTPUT"
+          echo "fix_count=$FIX_COUNT" >> "$GITHUB_OUTPUT"
+          echo "perf_count=$PERF_COUNT" >> "$GITHUB_OUTPUT"
+          echo "breaking_count=$BREAKING_COUNT" >> "$GITHUB_OUTPUT"
+          echo "total_commits=$TOTAL" >> "$GITHUB_OUTPUT"
+
+          # Determine bump type
+          if [ "$BREAKING_COUNT" -gt 0 ]; then
+            echo "bump=major" >> "$GITHUB_OUTPUT"
+            echo "has_bump=true" >> "$GITHUB_OUTPUT"
+          elif [ "$FEAT_COUNT" -gt 0 ]; then
+            echo "bump=minor" >> "$GITHUB_OUTPUT"
+            echo "has_bump=true" >> "$GITHUB_OUTPUT"
+          elif [ "$FIX_COUNT" -gt 0 ] || [ "$PERF_COUNT" -gt 0 ]; then
+            echo "bump=patch" >> "$GITHUB_OUTPUT"
+            echo "has_bump=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "bump=none" >> "$GITHUB_OUTPUT"
+            echo "has_bump=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Calculate suggested next version
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${CURRENT%-*}"
+          if [ "$BREAKING_COUNT" -gt 0 ]; then
+            NEXT="$((MAJOR + 1)).0.0"
+          elif [ "$FEAT_COUNT" -gt 0 ]; then
+            NEXT="$MAJOR.$((MINOR + 1)).0"
+          elif [ "$FIX_COUNT" -gt 0 ] || [ "$PERF_COUNT" -gt 0 ]; then
+            NEXT="$MAJOR.$MINOR.$((PATCH + 1))"
+          else
+            NEXT="$CURRENT"
+          fi
+          echo "next=$NEXT" >> "$GITHUB_OUTPUT"
+
+      - name: Generate commit breakdown
+        id: breakdown
+        if: ${{ steps.version.outputs.has_bump == 'true' || steps.version.outputs.total_commits > 0 }}
+        run: |
+          LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
+          {
+            echo 'commits<<COMMITS_EOF'
+            git log "$LATEST_TAG"..HEAD --oneline --no-decorate
+            echo 'COMMITS_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Post summary
+        run: |
+          CURRENT="${{ steps.version.outputs.current }}"
+          NEXT="${{ steps.version.outputs.next }}"
+          BUMP="${{ steps.version.outputs.bump }}"
+          LATEST_TAG="${{ steps.version.outputs.latest_tag }}"
+          TOTAL="${{ steps.version.outputs.total_commits }}"
+          FEAT="${{ steps.version.outputs.feat_count }}"
+          FIX="${{ steps.version.outputs.fix_count }}"
+          PERF="${{ steps.version.outputs.perf_count }}"
+          BREAKING="${{ steps.version.outputs.breaking_count }}"
+
+          {
+            echo "## 📦 Version Suggestion"
+            echo ""
+
+            if [ "$BUMP" = "none" ] || [ -z "$BUMP" ]; then
+              echo "**No version bump needed** — only non-release commits since \`$LATEST_TAG\`"
+              echo ""
+              echo "| Metric | Value |"
+              echo "|--------|-------|"
+              echo "| Current version | \`$CURRENT\` |"
+              echo "| Latest tag | \`$LATEST_TAG\` |"
+              echo "| Commits since tag | $TOTAL |"
+            else
+              echo "| Metric | Value |"
+              echo "|--------|-------|"
+              echo "| Current version | \`$CURRENT\` |"
+              echo "| **Suggested next** | **\`$NEXT\`** |"
+              echo "| Bump type | \`$BUMP\` |"
+              echo "| Latest tag | \`$LATEST_TAG\` |"
+              echo ""
+              echo "### Commit breakdown since \`$LATEST_TAG\`"
+              echo ""
+              echo "| Type | Count | Impact |"
+              echo "|------|-------|--------|"
+              if [ "$BREAKING" -gt 0 ]; then
+                echo "| 💥 BREAKING | $BREAKING | major |"
+              fi
+              if [ "$FEAT" -gt 0 ]; then
+                echo "| ✨ feat | $FEAT | minor |"
+              fi
+              if [ "$FIX" -gt 0 ]; then
+                echo "| 🐛 fix | $FIX | patch |"
+              fi
+              if [ "$PERF" -gt 0 ]; then
+                echo "| ⚡ perf | $PERF | patch |"
+              fi
+              NON_BUMP=$((TOTAL - FEAT - FIX - PERF - BREAKING))
+              if [ "$NON_BUMP" -gt 0 ]; then
+                echo "| 📝 other | $NON_BUMP | none |"
+              fi
+              echo ""
+              echo "### To release"
+              echo ""
+              echo "\`\`\`bash"
+              echo "pnpm version $BUMP"
+              echo "git push origin main"
+              echo "git push origin v$NEXT"
+              echo "\`\`\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
