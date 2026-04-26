@@ -295,7 +295,7 @@ export interface SearchResult {
   sessionId: string
   projectName: string
   title: string
-  matchType: 'title' | 'content'
+  matchType: 'title' | 'content' | 'sessionId'
   snippet?: string
   messageUuid?: string
   timestamp?: string

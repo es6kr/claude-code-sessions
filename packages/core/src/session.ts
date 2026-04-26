@@ -37,6 +37,7 @@ export {
   previewCleanup,
   clearSessions,
   // Search
+  searchBySessionId,
   searchSessions,
   // Files
   getSessionFiles,
