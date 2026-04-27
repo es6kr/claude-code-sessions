@@ -25,19 +25,16 @@ const parseBackupFilename = (
   }
 }
 
-/** Extract title from backup file with tiered fallback: customTitle → summary → first user message */
+/** Extract title from backup file with tiered fallback: customTitle → first user message */
 const extractBackupTitle = (lines: string[]): string => {
-  let latestSummary: string | undefined
+  let latestCustomTitle: string | undefined
   let firstUserMessage: string | undefined
 
   for (const line of lines) {
     try {
       const parsed = JSON.parse(line) as Record<string, unknown>
       if (parsed.type === 'custom-title' && typeof parsed.customTitle === 'string') {
-        return parsed.customTitle
-      }
-      if (parsed.type === 'summary' && typeof parsed.summary === 'string') {
-        latestSummary = parsed.summary
+        latestCustomTitle = parsed.customTitle
       }
       if (
         parsed.type === 'user' &&
@@ -50,7 +47,7 @@ const extractBackupTitle = (lines: string[]): string => {
       // skip invalid lines
     }
   }
-  return latestSummary ?? firstUserMessage ?? 'Untitled'
+  return latestCustomTitle ?? firstUserMessage ?? 'Untitled'
 }
 
 /** List all backed-up sessions from the .bak directory */

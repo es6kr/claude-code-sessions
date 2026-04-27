@@ -138,6 +138,7 @@ async function ensureWebServer({
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
       detached: process.platform !== 'win32',
+      env: { ...process.env, PORT: String(port) },
     })
 
     webServerProcess = child
