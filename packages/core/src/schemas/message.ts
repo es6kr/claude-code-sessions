@@ -41,6 +41,9 @@ export const AssistantMessage = Schema.Struct({
   sessionId: Schema.optional(Schema.String),
   timestamp: Schema.optional(Schema.String),
   message: Schema.optional(Schema.Unknown),
+  content: Schema.optional(Schema.Unknown),
+  toolUseResult: Schema.optional(Schema.Unknown),
+  isCompactSummary: Schema.optional(Schema.Boolean),
 })
 
 export const SummaryMessage = Schema.Struct({
