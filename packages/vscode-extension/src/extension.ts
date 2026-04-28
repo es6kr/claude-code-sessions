@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 import { SessionTreeProvider, type SessionTreeItem } from './treeProvider'
 import * as session from '@claude-sessions/core'
-import { resumeSession, startClaude } from '@claude-sessions/core/server'
+import { openExternalTerminal, resumeSession, startClaude } from '@claude-sessions/core/server'
 import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { outputChannel } from './output'
@@ -720,13 +720,53 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (!item || (item.type !== 'session' && item.type !== 'project')) return
 
+        const { defaultTerminalMode } = getConfig()
         const cwd = await resolveProjectCwd(item.projectName)
 
-        const terminal = vscode.window.createTerminal({
-          name: `Terminal: ${shortProjectName(item.projectName)}`,
-          cwd,
-        })
-        terminal.show()
+        let mode: 'internal' | 'external'
+        if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
+          mode = defaultTerminalMode
+        } else {
+          const choice = await vscode.window.showQuickPick(
+            [
+              {
+                label: '$(terminal) Internal Terminal',
+                description: 'Open in VSCode integrated terminal',
+                mode: 'internal' as const,
+              },
+              {
+                label: '$(link-external) External Terminal',
+                description: 'Open in system default terminal',
+                mode: 'external' as const,
+              },
+            ],
+            {
+              placeHolder: 'Where to open terminal?',
+              title: 'Open Terminal Here',
+            }
+          )
+
+          if (!choice) return
+          mode = choice.mode
+        }
+
+        if (mode === 'internal') {
+          const terminal = vscode.window.createTerminal({
+            name: `Terminal: ${shortProjectName(item.projectName)}`,
+            cwd,
+          })
+          terminal.show()
+        } else {
+          const result = openExternalTerminal({ cwd })
+
+          if (result.success) {
+            vscode.window.showInformationMessage(
+              `Terminal opened in external terminal (PID: ${result.pid})`
+            )
+          } else {
+            vscode.window.showErrorMessage(`Failed to open external terminal: ${result.error}`)
+          }
+        }
       }
     ),
 

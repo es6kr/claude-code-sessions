@@ -2,8 +2,13 @@
  * Resume/start session functionality - Server-side only
  * This module uses child_process and should NOT be imported in browser environments
  */
-import { spawn } from 'node:child_process'
-import type { ResumeSessionOptions, ResumeSessionResult, StartClaudeOptions } from './types.js'
+import { execSync, spawn } from 'node:child_process'
+import type {
+  OpenExternalTerminalOptions,
+  ResumeSessionOptions,
+  ResumeSessionResult,
+  StartClaudeOptions,
+} from './types.js'
 
 /**
  * Start claude CLI in an external terminal window.
@@ -47,19 +52,29 @@ end tell
       return { success: true, pid: child.pid }
     }
 
-    // Linux: try common terminal emulators
-    const terminals = ['gnome-terminal', 'konsole', 'xterm']
-    for (const term of terminals) {
+    // Linux: try common terminal emulators with command -v pre-check.
+    // spawn() ENOENT is async, so try/catch cannot catch missing binaries.
+    // Use execSync('command -v <term>') to verify the binary exists first.
+    const terminalConfigs: Array<{ bin: string; args: string[] }> = [
+      {
+        bin: 'gnome-terminal',
+        args: ['--working-directory', workingDir, '--', 'bash', '-c', command],
+      },
+      { bin: 'konsole', args: ['--workdir', workingDir, '-e', 'bash', '-c', command] },
+      { bin: 'xterm', args: ['-e', `cd "${workingDir}" && ${command}; exec $SHELL`] },
+    ]
+    for (const { bin, args } of terminalConfigs) {
       try {
-        const child = spawn(term, ['--', 'bash', '-c', `cd "${workingDir}" && ${command}`], {
-          detached: true,
-          stdio: 'ignore',
-        })
-        child.unref()
-        return { success: true, pid: child.pid }
+        execSync(`command -v ${bin}`, { stdio: 'ignore' })
       } catch {
         continue
       }
+      const child = spawn(bin, args, {
+        detached: true,
+        stdio: 'ignore',
+      })
+      child.unref()
+      return { success: true, pid: child.pid }
     }
 
     return { success: false, error: 'No supported terminal emulator found' }
@@ -87,4 +102,73 @@ export const resumeSession = (options: ResumeSessionOptions): ResumeSessionResul
     command: `claude ${claudeArgs.join(' ')}`,
     cwd,
   })
+}
+
+/**
+ * Open the OS default terminal at the given directory without running a command.
+ * OS-specific: Terminal.app (macOS), cmd (Windows), gnome-terminal/konsole/xterm (Linux)
+ */
+export const openExternalTerminal = (options: OpenExternalTerminalOptions): ResumeSessionResult => {
+  const { cwd } = options
+
+  try {
+    if (process.platform === 'darwin') {
+      const escapedDir = cwd.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+      const script = `
+tell application "Terminal"
+  activate
+  do script "cd \\"${escapedDir}\\""
+end tell
+tell application "System Events"
+  set frontmost of process "Terminal" to true
+end tell
+`
+      const child = spawn('osascript', ['-e', script], {
+        detached: true,
+        stdio: 'ignore',
+      })
+      child.unref()
+
+      return { success: true, pid: child.pid }
+    }
+
+    if (process.platform === 'win32') {
+      const child = spawn('cmd', ['/c', 'start', 'cmd', '/k', `cd /d "${cwd}"`], {
+        cwd,
+        detached: true,
+        stdio: 'ignore',
+      })
+      child.unref()
+
+      return { success: true, pid: child.pid }
+    }
+
+    // Linux: try common terminal emulators with command -v pre-check.
+    // spawn() ENOENT is async, so try/catch cannot catch missing binaries.
+    const openTermConfigs: Array<{ bin: string; args: string[] }> = [
+      { bin: 'gnome-terminal', args: ['--working-directory', cwd] },
+      { bin: 'konsole', args: ['--workdir', cwd] },
+      { bin: 'xterm', args: ['-e', `cd "${cwd}" && exec $SHELL`] },
+    ]
+    for (const { bin, args } of openTermConfigs) {
+      try {
+        execSync(`command -v ${bin}`, { stdio: 'ignore' })
+      } catch {
+        continue
+      }
+      const child = spawn(bin, args, {
+        detached: true,
+        stdio: 'ignore',
+      })
+      child.unref()
+      return { success: true, pid: child.pid }
+    }
+
+    return { success: false, error: 'No supported terminal emulator found' }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  }
 }
