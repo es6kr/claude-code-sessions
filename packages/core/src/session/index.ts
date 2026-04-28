@@ -43,7 +43,7 @@ export { listBackupSessions, restoreSession } from './backup.js'
 export { previewCleanup, clearSessions } from './cleanup.js'
 
 // Search
-export { searchSessions } from './search.js'
+export { searchBySessionId, searchSessions } from './search.js'
 
 // File tracking
 export { getSessionFiles } from './files.js'
