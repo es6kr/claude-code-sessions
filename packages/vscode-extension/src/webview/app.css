@@ -1,0 +1,20 @@
+@import 'tailwindcss';
+
+/*
+ * Spike CSS for the JSONL preview webview.
+ *
+ * Goal: prove that Tailwind 4 utilities resolve inside the webview CSP.
+ * Real styling (message bubbles, syntax highlighting, etc.) lives in Phase 1.
+ */
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--vscode-font-family, system-ui);
+  color: var(--vscode-foreground);
+  background-color: var(--vscode-editor-background);
+}

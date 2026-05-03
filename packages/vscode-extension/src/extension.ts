@@ -1,10 +1,11 @@
 import * as vscode from 'vscode'
 import { SessionTreeProvider, type SessionTreeItem } from './treeProvider'
 import * as session from '@claude-sessions/core'
-import { openExternalTerminal, resumeSession, startClaude } from '@claude-sessions/core/server'
+import { resumeSession, startClaude } from '@claude-sessions/core/server'
 import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { outputChannel } from './output'
+import { SESSION_EDITOR_VIEW_TYPE, SessionEditorProvider } from './sessionEditorProvider'
 
 let webServerProcess: ChildProcess | null = null
 
@@ -119,10 +120,6 @@ async function ensureWebServer({
   let spawnCmd: string
   let spawnArgs: string[]
 
-  // SvelteKit adapter-node only reads PORT env var, not --port CLI arg.
-  // Always set PORT in spawn env to ensure it works regardless of entry point.
-  const spawnEnv = { ...process.env, PORT: String(port) }
-
   if (webServerPath) {
     spawnCmd = 'node'
     spawnArgs = [webServerPath, '--port', String(port)]
@@ -139,11 +136,9 @@ async function ensureWebServer({
 
   return new Promise((resolve, reject) => {
     const child = spawn(spawnCmd, spawnArgs, {
-      env: spawnEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
       detached: process.platform !== 'win32',
-      env: { ...process.env, PORT: String(port) },
     })
 
     webServerProcess = child
@@ -256,6 +251,20 @@ export function activate(context: vscode.ExtensionContext) {
     canSelectMany: true,
     dragAndDropController: treeProvider,
   })
+
+  // SPIKE (Issue #138): Custom Editor for *.jsonl preview.
+  // `priority: "option"` (set in package.json) keeps this as an opt-in editor —
+  // the existing simpleBrowser flow remains the default. See sessionEditorProvider.ts.
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      SESSION_EDITOR_VIEW_TYPE,
+      new SessionEditorProvider(context.extensionUri),
+      {
+        webviewOptions: { retainContextWhenHidden: true },
+        supportsMultipleEditorsPerDocument: false,
+      }
+    )
+  )
 
   // Register commands
   context.subscriptions.push(
@@ -720,53 +729,13 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (!item || (item.type !== 'session' && item.type !== 'project')) return
 
-        const { defaultTerminalMode } = getConfig()
         const cwd = await resolveProjectCwd(item.projectName)
 
-        let mode: 'internal' | 'external'
-        if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
-          mode = defaultTerminalMode
-        } else {
-          const choice = await vscode.window.showQuickPick(
-            [
-              {
-                label: '$(terminal) Internal Terminal',
-                description: 'Open in VSCode integrated terminal',
-                mode: 'internal' as const,
-              },
-              {
-                label: '$(link-external) External Terminal',
-                description: 'Open in system default terminal',
-                mode: 'external' as const,
-              },
-            ],
-            {
-              placeHolder: 'Where to open terminal?',
-              title: 'Open Terminal Here',
-            }
-          )
-
-          if (!choice) return
-          mode = choice.mode
-        }
-
-        if (mode === 'internal') {
-          const terminal = vscode.window.createTerminal({
-            name: `Terminal: ${shortProjectName(item.projectName)}`,
-            cwd,
-          })
-          terminal.show()
-        } else {
-          const result = openExternalTerminal({ cwd })
-
-          if (result.success) {
-            vscode.window.showInformationMessage(
-              `Terminal opened in external terminal (PID: ${result.pid})`
-            )
-          } else {
-            vscode.window.showErrorMessage(`Failed to open external terminal: ${result.error}`)
-          }
-        }
+        const terminal = vscode.window.createTerminal({
+          name: `Terminal: ${shortProjectName(item.projectName)}`,
+          cwd,
+        })
+        terminal.show()
       }
     ),
 
