@@ -187,8 +187,10 @@
           const result = await api.splitSession(session!.projectName, session!.id, msg.uuid)
 
           if (result.success && result.newSessionId) {
-            // Keep messages from split point onwards (original session keeps newer messages)
-            messages = messages.slice(msgIndex)
+            // Reload messages from server so the cleanupSplitFirstMessage transformation
+            // (Q&A formatting for AskUserQuestion responses, rejection-reason extraction)
+            // applied server-side is reflected in the UI. Slicing in-memory bypasses it.
+            messages = await api.getSession(session!.projectName, session!.id)
             toast = `Session split! Old messages moved to new session: ${result.newSessionId.slice(0, 8)}...`
 
             // Refresh session metadata so title/summary reflects the new first message
