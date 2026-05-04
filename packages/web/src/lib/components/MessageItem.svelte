@@ -47,7 +47,19 @@
     return first?.type === 'tool_result'
   })
 
-  const isEditable = $derived(!!(msg.uuid && (isHuman || isAssistant) && !isToolResult && onEdit))
+  // Assistant messages may carry tool_use, thinking, or other non-text blocks.
+  // Replacing content for those would silently drop structured data and break
+  // tool_use ↔ tool_result pairing, so block editing whenever any non-text block is present.
+  const hasNonTextBlocks = $derived.by(() => {
+    if (!isAssistant) return false
+    const m = msg.message as { content?: unknown } | undefined
+    if (!Array.isArray(m?.content)) return false
+    return m.content.some((b) => (b as { type?: string })?.type !== 'text')
+  })
+
+  const isEditable = $derived(
+    !!(msg.uuid && (isHuman || isAssistant) && !isToolResult && !hasNonTextBlocks && onEdit)
+  )
 
   // Parse file snapshot data
   const snapshotData = $derived.by(() => {
@@ -422,9 +434,9 @@
           <TooltipButton
             class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gh-border text-xs"
             onclick={() => onEdit!(msg)}
-            title="Edit message"
+            title="Edit message content"
           >
-            ✏️
+            📝
           </TooltipButton>
         {/if}
         {@render splitButton()}

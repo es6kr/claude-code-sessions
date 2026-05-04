@@ -1,6 +1,7 @@
 <script lang="ts">
   import { Carta, CartaEditor } from 'carta-md'
   import 'carta-md/default.css'
+  import DOMPurify from 'isomorphic-dompurify'
 
   interface Props {
     show: boolean
@@ -12,19 +13,24 @@
   let { show, initialValue, onSave, onCancel }: Props = $props()
 
   let value = $state('')
+  let dialogElement: HTMLDivElement | undefined = $state()
+  let prevShow = false
 
-  const carta = new Carta()
+  const carta = new Carta({ sanitizer: (html: string) => DOMPurify.sanitize(html) })
 
   $effect(() => {
-    if (show) {
+    if (show && !prevShow) {
       value = initialValue
+      // Focus the dialog so the keydown handler attached to it actually fires
+      // without requiring the user to click into the modal first.
+      queueMicrotask(() => dialogElement?.focus())
     }
+    prevShow = show
   })
 
   const handleSave = () => {
-    const trimmed = value.trim()
-    if (trimmed && trimmed !== initialValue) {
-      onSave(trimmed)
+    if (value !== initialValue) {
+      onSave(value)
     } else {
       onCancel()
     }
@@ -44,6 +50,7 @@
 
 {#if show}
   <div
+    bind:this={dialogElement}
     class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
     onclick={(e) => e.target === e.currentTarget && onCancel()}
     onkeydown={handleKeydown}

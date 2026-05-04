@@ -68,11 +68,15 @@ export const PATCH: RequestHandler = async ({ url, request }) => {
 
   // UUID-based message content update
   if (messageUuid) {
-    const { text } = body as { text?: string }
-    if (text === undefined) throw error(400, 'text is required')
+    const { text } = (body ?? {}) as { text?: unknown }
+    if (typeof text !== 'string') throw error(400, 'text must be a string')
     const result = await Effect.runPromise(
       session.updateMessageContent(projectName, sessionId, messageUuid, text)
     )
+    if (!result.success) {
+      const message = (result as { error?: string }).error ?? 'Update failed'
+      throw error(message === 'Message not found' ? 404 : 422, message)
+    }
     return json(result)
   }
 

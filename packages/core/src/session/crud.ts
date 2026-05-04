@@ -196,7 +196,12 @@ export const restoreMessage = (
     return { success: true }
   })
 
-// Update message content by UUID (overwrite existing content)
+// Editable JSONL message types — others (summary, file-history-snapshot, etc.) are rejected
+const EDITABLE_MESSAGE_TYPES = new Set(['user', 'human', 'assistant'])
+
+// Update message content by UUID — replace the first text block while preserving
+// non-text blocks (tool_use, tool_result, thinking, image, ...). Append a new text
+// block if the message has no text. Reject non-editable message types up front.
 export const updateMessageContent = (
   projectName: string,
   sessionId: string,
@@ -213,10 +218,30 @@ export const updateMessageContent = (
     }
 
     const msg = messages[idx]
+    const msgType = typeof msg.type === 'string' ? msg.type : ''
+    if (!EDITABLE_MESSAGE_TYPES.has(msgType)) {
+      return {
+        success: false,
+        error: `Message type '${msgType}' is not editable`,
+      }
+    }
+
     const payload = (msg.message as Record<string, unknown>) ?? {}
+    const rawContent = payload.content
+    const blocks: Array<Record<string, unknown>> = Array.isArray(rawContent)
+      ? (rawContent as Array<Record<string, unknown>>).map((b) => ({ ...b }))
+      : []
+
+    const textIdx = blocks.findIndex((b) => b.type === 'text')
+    if (textIdx === -1) {
+      blocks.push({ type: 'text', text: newText })
+    } else {
+      blocks[textIdx] = { ...blocks[textIdx], type: 'text', text: newText }
+    }
+
     messages[idx] = {
       ...msg,
-      message: { ...payload, content: [{ type: 'text', text: newText }] },
+      message: { ...payload, content: blocks },
     }
 
     const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'

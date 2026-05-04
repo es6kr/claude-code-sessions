@@ -160,7 +160,7 @@ export const updateTitleMessage = (
   )
 
 export const editMessageContent = (project: string, session: string, uuid: string, text: string) =>
-  patch<{ success: boolean }>(
+  patch<{ success: boolean; error?: string }>(
     `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&uuid=${encodeURIComponent(uuid)}`,
     { text }
   )
