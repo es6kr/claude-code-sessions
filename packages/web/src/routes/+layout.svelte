@@ -4,12 +4,29 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import type { Snippet } from 'svelte'
+  import { provideSessionContext } from '@claude-sessions/ui'
   import * as api from '$lib/api'
   import { appConfig } from '$lib/stores/config'
   import { initTheme, toggleTheme, effectiveTheme, themePreference } from '$lib/stores/theme'
   import { ConfirmModal, Toast } from '$lib/components'
 
   let { children }: { children: Snippet } = $props()
+
+  // Provide @claude-sessions/ui shared components with web-side adapters.
+  // The vscode-extension webview supplies a different provider built on
+  // postMessage RPC; the contract (SessionApi/SessionStorage) is the same.
+  provideSessionContext({
+    api: {
+      openFile: (filePath) => api.openFile(filePath),
+      checkFileExists: (filePath) => api.checkFileExists(filePath),
+    },
+    storage: {
+      get: (key) => (typeof window === 'undefined' ? null : localStorage.getItem(key)),
+      set: (key, value) => {
+        if (typeof window !== 'undefined') localStorage.setItem(key, value)
+      },
+    },
+  })
 
   // Check if we're on a session page for search context
   const isSessionPage = $derived(page.url.pathname.startsWith('/session/'))

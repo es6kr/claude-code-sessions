@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as api from '$lib/api'
+  import { useSession } from '../context'
 
   interface Props {
     tag: string
@@ -7,6 +7,7 @@
   }
 
   const { tag, content }: Props = $props()
+  const { api } = useSession()
 
   // Extract file path from content
   const filePath = $derived.by(() => {

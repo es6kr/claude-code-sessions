@@ -11,8 +11,8 @@
     parseStopHookSummary,
     parseTurnDuration,
   } from '$lib/utils'
+  import { IdeTag } from '@claude-sessions/ui'
   import ExpandableContent from './ExpandableContent.svelte'
-  import IdeTag from './IdeTag.svelte'
   import TodoItem from './TodoItem.svelte'
   import TooltipButton from './TooltipButton.svelte'
 
