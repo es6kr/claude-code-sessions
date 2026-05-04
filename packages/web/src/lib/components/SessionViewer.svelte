@@ -7,6 +7,7 @@
   import type { AgentInfo, Message, SessionMeta, TodoItem } from '$lib/api'
   import * as api from '$lib/api'
   import { getDisplayTitle, truncate } from '$lib/utils'
+  import MessageEditor from './MessageEditor.svelte'
   import MessageFilter from './MessageFilter.svelte'
   import MessageList from './MessageList.svelte'
   import ScrollButtons from './ScrollButtons.svelte'
@@ -237,7 +238,64 @@
     }
   })
 
-  // Server sync - refreshes messages from server to get chain repair results
+  // Message editing state
+  let editingMessage = $state<Message | null>(null)
+  let showEditor = $state(false)
+  let editError = $state<string | null>(null)
+
+  // Read the editable text from a message: prefer message.content, fall back to
+  // top-level content, scan the array for the first 'text' block (not just index 0).
+  const getMessageText = (m: Message | null): string => {
+    if (!m) return ''
+    const nested = (m.message as { content?: unknown } | undefined)?.content
+    const direct = (m as unknown as { content?: unknown }).content
+    const source = nested ?? direct
+    if (typeof source === 'string') return source
+    if (Array.isArray(source)) {
+      const textBlock = source.find((b) => (b as { type?: string })?.type === 'text') as
+        | { text?: string }
+        | undefined
+      return textBlock?.text ?? ''
+    }
+    return ''
+  }
+
+  const handleEditMessage = (msg: Message) => {
+    editingMessage = msg
+    showEditor = true
+    editError = null
+  }
+
+  const handleSaveEdit = async (newText: string) => {
+    if (!session || !editingMessage?.uuid) return
+    try {
+      const result = await api.editMessageContent(
+        session.projectName,
+        session.id,
+        editingMessage.uuid,
+        newText
+      )
+      if (!result.success) {
+        editError = result.error ?? 'Failed to update message'
+        return
+      }
+      showEditor = false
+      editingMessage = null
+      editError = null
+      await syncFromServer()
+    } catch (e) {
+      console.error('Failed to edit message:', e)
+      editError = e instanceof Error ? e.message : 'Failed to update message'
+    }
+  }
+
+  const handleCancelEdit = () => {
+    showEditor = false
+    editingMessage = null
+    editError = null
+  }
+
+  // Server sync — refreshes messages from server to get chain repair results
   const syncFromServer = async () => {
     if (!onRefresh) return
     await onRefresh()
@@ -524,6 +582,7 @@
           sessionId={session.id}
           messages={filteredMessages}
           onDeleteMessage={handleSessionMessageDelete}
+          onEditMessage={handleEditMessage}
           {onEditTitle}
           {onSplitSession}
           enableScroll={false}
@@ -605,5 +664,33 @@
         ✕
       </button>
     </div>
+  {/if}
+
+  <!-- Message Editor -->
+  {#if editingMessage}
+    <MessageEditor
+      show={showEditor}
+      initialValue={getMessageText(editingMessage)}
+      onSave={handleSaveEdit}
+      onCancel={handleCancelEdit}
+    />
+    {#if editError}
+      <div
+        class="fixed bottom-6 right-6 z-50 max-w-sm rounded-md border border-red-500/40 bg-red-900/80 px-4 py-3 text-sm text-white shadow-lg"
+        role="alert"
+      >
+        <div class="flex items-start gap-3">
+          <span>{editError}</span>
+          <button
+            type="button"
+            class="opacity-80 hover:opacity-100"
+            onclick={() => (editError = null)}
+            aria-label="Dismiss error"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    {/if}
   {/if}
 </section>

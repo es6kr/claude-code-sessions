@@ -18,6 +18,7 @@ export {
   renameSession,
   moveSession,
   splitSession,
+  updateMessageContent,
   updateSessionSummary,
   repairChain,
   // Tree data
