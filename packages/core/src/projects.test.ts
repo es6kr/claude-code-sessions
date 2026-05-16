@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { sortProjects } from './projects.js'
-import type { Project } from './types.js'
+import { sortProjects, groupProjects } from './projects.js'
+import type { Project, ProjectGroup, ProjectLeaf, ProjectTreeNode } from './types.js'
 
 describe('sortProjects', () => {
   // Use folder name format for name (as returned by pathToFolderName)
@@ -87,5 +87,172 @@ describe('sortProjects', () => {
     expect(sorted.length).toBe(4)
     // /home/me/work/project-a has displayName that sorts first alphabetically
     expect(sorted[0].displayName).toBe('/home/me/work/project-a')
+  })
+})
+
+describe('groupProjects', () => {
+  const mkProject = (displayName: string, sessionCount = 1): Project => ({
+    name: displayName.replace(/[^a-zA-Z0-9]/g, '-'),
+    displayName,
+    path: `/sessions/${displayName.replace(/[^a-zA-Z0-9]/g, '-')}`,
+    sessionCount,
+  })
+
+  const isGroup = (node: ProjectTreeNode): node is ProjectGroup => node.kind === 'group'
+  const isLeaf = (node: ProjectTreeNode): node is ProjectLeaf => node.kind === 'project'
+
+  it('returns empty array for empty input', () => {
+    expect(groupProjects([])).toEqual([])
+  })
+
+  it('returns a single leaf with collapsed path when only one project exists', () => {
+    const projects = [mkProject('~/ghq/github.com/es6kr/skills', 3)]
+    const result = groupProjects(projects)
+
+    expect(result).toHaveLength(1)
+    expect(isLeaf(result[0])).toBe(true)
+    const leaf = result[0] as ProjectLeaf
+    expect(leaf.collapsedPath).toBe('~/ghq/github.com/es6kr/skills')
+    expect(leaf.project.sessionCount).toBe(3)
+    expect(leaf.depth).toBe(0)
+  })
+
+  it('creates a group when two projects share the same prefix', () => {
+    const projects = [
+      mkProject('~/ghq/github.com/es6kr/skills'),
+      mkProject('~/ghq/github.com/es6kr/blog'),
+    ]
+    const result = groupProjects(projects)
+
+    expect(result).toHaveLength(1)
+    expect(isGroup(result[0])).toBe(true)
+    const group = result[0] as ProjectGroup
+    expect(group.name).toBe('~/ghq/github.com/es6kr')
+    expect(group.displayName).toBe('es6kr')
+    expect(group.children).toHaveLength(2)
+    expect(group.totalSessions).toBe(2)
+    expect(group.children.every(isLeaf)).toBe(true)
+    expect(group.depth).toBe(0)
+    // Leaf depth is parent + 1
+    expect(group.children[0].depth).toBe(1)
+  })
+
+  it('auto-flattens a single-child group into a path-collapsed leaf', () => {
+    const projects = [
+      // Two top-level branches under ~/ghq: github.com (with 2 leaves) and local (with 1 leaf).
+      mkProject('~/ghq/github.com/es6kr/skills'),
+      mkProject('~/ghq/github.com/es6kr/blog'),
+      mkProject('~/ghq/local/myapp'),
+    ]
+    const result = groupProjects(projects)
+
+    // After walk-down ~/ghq has children [github.com (group), local/myapp (leaf)].
+    // Top-level walks down ~ -> ~/ghq to the first branching point.
+    expect(result).toHaveLength(1)
+    const top = result[0] as ProjectGroup
+    expect(isGroup(top)).toBe(true)
+    expect(top.name).toBe('~/ghq')
+
+    const githubGroup = top.children.find(
+      (c): c is ProjectGroup => isGroup(c) && c.name.includes('es6kr')
+    )
+    expect(githubGroup).toBeDefined()
+    expect(githubGroup!.name).toBe('~/ghq/github.com/es6kr')
+    expect(githubGroup!.children).toHaveLength(2)
+
+    const localLeaf = top.children.find(
+      (c): c is ProjectLeaf => isLeaf(c) && c.collapsedPath.endsWith('local/myapp')
+    )
+    expect(localLeaf).toBeDefined()
+    expect(localLeaf!.collapsedPath).toBe('~/ghq/local/myapp')
+  })
+
+  it('handles mixed-depth groups at multiple top-level paths', () => {
+    const projects = [
+      mkProject('~/ghq/github.com/es6kr/a'),
+      mkProject('~/ghq/github.com/es6kr/b'),
+      mkProject('/opt/projects/c'),
+      mkProject('/opt/projects/d'),
+    ]
+    const result = groupProjects(projects)
+
+    // Two distinct top-level chains: '~' (-> github.com/es6kr group) and 'opt' (-> projects group).
+    expect(result).toHaveLength(2)
+    const names = result.filter(isGroup).map((g) => g.name)
+    expect(names).toContain('~/ghq/github.com/es6kr')
+    expect(names).toContain('opt/projects')
+  })
+
+  it('preserves leading "~" as the root segment', () => {
+    const projects = [mkProject('~/ghq/foo'), mkProject('~/ghq/bar')]
+    const result = groupProjects(projects)
+    expect(result).toHaveLength(1)
+    const group = result[0] as ProjectGroup
+    expect(isGroup(group)).toBe(true)
+    expect(group.name).toBe('~/ghq')
+    expect(group.children.every(isLeaf)).toBe(true)
+  })
+
+  it('respects custom minGroupSize', () => {
+    const projects = [mkProject('~/ghq/github.com/es6kr/a'), mkProject('~/ghq/github.com/es6kr/b')]
+    // With minGroupSize=3, the two-leaf cluster should flatten instead of forming a group.
+    const result = groupProjects(projects, { minGroupSize: 3 })
+    expect(result.every(isLeaf)).toBe(true)
+    expect(result).toHaveLength(2)
+  })
+
+  it('filters empty projects by default and keeps them when filterEmpty is false', () => {
+    const projects = [mkProject('~/ghq/foo/a', 0), mkProject('~/ghq/foo/b', 5)]
+    const filtered = groupProjects(projects)
+    // Only one project remains; auto-flattens to a single leaf.
+    expect(filtered).toHaveLength(1)
+    expect(isLeaf(filtered[0])).toBe(true)
+
+    const unfiltered = groupProjects(projects, { filterEmpty: false })
+    // Both projects present; same prefix → group with two leaves.
+    expect(unfiltered).toHaveLength(1)
+    const group = unfiltered[0] as ProjectGroup
+    expect(isGroup(group)).toBe(true)
+    expect(group.children).toHaveLength(2)
+  })
+
+  it('puts ancestors of the current project first at each level', () => {
+    const projects = [
+      mkProject('~/ghq/github.com/es6kr/a'),
+      mkProject('~/ghq/github.com/es6kr/b'),
+      mkProject('~/ghq/github.com/alpha-org/repo'),
+      mkProject('~/ghq/github.com/alpha-org/repo2'),
+    ]
+    const result = groupProjects(projects, {
+      sort: { currentProjectDisplayName: '~/ghq/github.com/es6kr/a' },
+    })
+
+    // Top-level walks down to ~/ghq/github.com with es6kr and alpha-org as direct subgroups.
+    const top = result[0] as ProjectGroup
+    expect(isGroup(top)).toBe(true)
+    expect(top.name).toBe('~/ghq/github.com')
+    // Ancestor 'es6kr' should be first sibling.
+    const firstChild = top.children[0]
+    expect(isGroup(firstChild)).toBe(true)
+    expect((firstChild as ProjectGroup).displayName).toBe('es6kr')
+  })
+
+  it('computes totalSessions across nested descendants', () => {
+    const projects = [
+      mkProject('~/ghq/x/a', 3),
+      mkProject('~/ghq/x/b', 7),
+      mkProject('~/ghq/y/c', 2),
+      mkProject('~/ghq/y/d', 5),
+    ]
+    const result = groupProjects(projects)
+
+    // ~/ghq is the top-level group, containing x and y subgroups.
+    const top = result[0] as ProjectGroup
+    expect(isGroup(top)).toBe(true)
+    expect(top.totalSessions).toBe(3 + 7 + 2 + 5)
+
+    const xGroup = top.children.find((n): n is ProjectGroup => isGroup(n) && n.displayName === 'x')
+    expect(xGroup).toBeDefined()
+    expect(xGroup!.totalSessions).toBe(10)
   })
 })
