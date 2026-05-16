@@ -8,10 +8,15 @@ import type {
   TitleDisplayMode,
   DateGroupKey,
   DateGroup,
+  Project,
+  ProjectGroup,
+  ProjectTreeNode,
+  ProjectViewMode,
 } from '@claude-sessions/core'
 import {
   maskHomePath,
   sortProjects,
+  groupProjects,
   formatRelativeTime,
   getTotalTodoCount,
   sessionHasSubItems,
@@ -73,6 +78,12 @@ export class SessionTreeProvider
   // Date grouping toggle
   private groupByDate = false
 
+  // Folder grouping toggle
+  private groupByFolder = false
+
+  // Cache of project groups (keyed by full group name → group) for getChildren lookups
+  private folderGroupCache = new Map<string, ProjectGroup>()
+
   // Project display name cache (for date-grouped mode)
   private projectDisplayNames = new Map<string, string>()
 
@@ -98,6 +109,31 @@ export class SessionTreeProvider
     this._onDidChangeTreeData.fire()
   }
 
+  getGroupByFolder(): boolean {
+    return this.groupByFolder
+  }
+
+  setGroupByFolder(enabled: boolean): void {
+    this.groupByFolder = enabled
+    this.folderGroupCache.clear()
+    this._onDidChangeTreeData.fire()
+  }
+
+  /** Resolve the active 3-way view mode (date-group wins over folder-group). */
+  getViewMode(): ProjectViewMode {
+    if (this.groupByDate) return 'date-group'
+    if (this.groupByFolder) return 'folder-group'
+    return 'flat'
+  }
+
+  setViewMode(mode: ProjectViewMode): void {
+    this.groupByDate = mode === 'date-group'
+    this.groupByFolder = mode === 'folder-group'
+    this.groupedSessionsCache = null
+    this.folderGroupCache.clear()
+    this._onDidChangeTreeData.fire()
+  }
+
   getFilterText(): string {
     return this.filterText
   }
@@ -113,7 +149,53 @@ export class SessionTreeProvider
     this.projectDataCache.clear()
     this.projectDisplayNames.clear()
     this.groupedSessionsCache = null
+    this.folderGroupCache.clear()
     this._onDidChangeTreeData.fire()
+  }
+
+  /**
+   * Build a SessionTreeItem from a ProjectTreeNode (folder-grouped mode).
+   * Caches groups by their full name so getChildren() can resolve them later.
+   */
+  private buildFolderNodeItem(
+    node: ProjectTreeNode,
+    currentProjectName: string | null
+  ): SessionTreeItem {
+    if (node.kind === 'group') {
+      this.folderGroupCache.set(node.name, node)
+      const item = new SessionTreeItem(
+        node.displayName,
+        vscode.TreeItemCollapsibleState.Collapsed,
+        'project-group',
+        '',
+        '',
+        node.totalSessions,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        node.name
+      )
+      return item
+    }
+
+    // Leaf — render as project but show the collapsed path so the breadcrumb is preserved.
+    const p = node.project
+    const isCurrent = p.name === currentProjectName
+    return new SessionTreeItem(
+      maskHomePath(node.collapsedPath, USER_HOME),
+      isCurrent
+        ? vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.Collapsed,
+      'project',
+      p.name,
+      '',
+      p.sessionCount || 0
+    )
   }
 
   getTreeItem(element: SessionTreeItem): vscode.TreeItem {
@@ -431,6 +513,27 @@ export class SessionTreeProvider
 
       this.currentProjectName = currentProjectName
 
+      // Folder-grouped mode: build a hierarchical tree and emit top-level nodes.
+      // Filter active OR date-grouped → fall back to the flat list below.
+      if (this.groupByFolder && !this.filterText) {
+        this.folderGroupCache.clear()
+        const minGroupSize = vscode.workspace
+          .getConfiguration('claudeSessions')
+          .get<number>('minGroupSize', 2)
+        const currentProject = currentProjectName
+          ? (projects.find((p) => p.name === currentProjectName) as Project | undefined)
+          : undefined
+        const treeNodes = groupProjects(projects, {
+          minGroupSize,
+          sort: {
+            currentProjectName,
+            currentProjectDisplayName: currentProject?.displayName,
+            homeDir: USER_HOME,
+          },
+        })
+        return treeNodes.map((n) => this.buildFolderNodeItem(n, currentProjectName))
+      }
+
       // Sort: 1) current project, 2) current user's home subpaths, 3) others
       const sorted = sortProjects(projects, {
         currentProjectName,
@@ -478,6 +581,13 @@ export class SessionTreeProvider
             p.sessionCount || 0
           )
       )
+    }
+
+    if (element.type === 'project-group') {
+      const groupName = element.groupPath ?? ''
+      const group = this.folderGroupCache.get(groupName)
+      if (!group) return []
+      return group.children.map((c) => this.buildFolderNodeItem(c, this.currentProjectName))
     }
 
     if (element.type === 'date-group') {
@@ -681,13 +791,16 @@ export class SessionTreeItem extends vscode.TreeItem {
     public readonly sessionTooltipText?: string,
     public readonly sessionDescription?: string,
     public readonly dateGroupKey?: DateGroupKey,
-    public readonly shortProjectName?: string
+    public readonly shortProjectName?: string,
+    public readonly groupPath?: string
   ) {
     super(label, collapsibleState)
 
     // Set unique ID for drag and drop to work (required by VSCode)
     if (type === 'date-group') {
       this.id = `date-group:${projectName}:${dateGroupKey}`
+    } else if (type === 'project-group') {
+      this.id = `project-group:${groupPath ?? label}`
     } else {
       this.id = generateTreeNodeId(type, projectName, sessionId, agentId, itemIndex)
     }
@@ -700,6 +813,10 @@ export class SessionTreeItem extends vscode.TreeItem {
       // Bind the item natively to the sessions folder for this project
       const sessionsDir = session.getSessionsDir()
       this.resourceUri = vscode.Uri.file(path.join(sessionsDir, projectName))
+    } else if (type === 'project-group') {
+      this.iconPath = new vscode.ThemeIcon(TREE_ICONS['project-group'].codicon)
+      this.description = `${count ?? 0}`
+      this.tooltip = groupPath
     } else if (type === 'date-group') {
       this.iconPath = new vscode.ThemeIcon(TREE_ICONS['date-group'].codicon)
       this.description = `${count ?? 0}`

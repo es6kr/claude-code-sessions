@@ -249,6 +249,28 @@ async function resolveProjectCwd(projectName: string): Promise<string> {
 export function activate(context: vscode.ExtensionContext) {
   const treeProvider = new SessionTreeProvider()
 
+  // Restore the configured view mode (flat / date-group / folder-group).
+  const initialViewMode = vscode.workspace
+    .getConfiguration('claudeSessions')
+    .get<'flat' | 'date-group' | 'folder-group'>('viewMode', 'flat')
+  if (initialViewMode !== 'flat') {
+    treeProvider.setViewMode(initialViewMode)
+  }
+
+  // React to configuration changes so the tree stays in sync with the setting.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('claudeSessions.viewMode')) {
+        const next = vscode.workspace
+          .getConfiguration('claudeSessions')
+          .get<'flat' | 'date-group' | 'folder-group'>('viewMode', 'flat')
+        treeProvider.setViewMode(next)
+      } else if (event.affectsConfiguration('claudeSessions.minGroupSize')) {
+        treeProvider.refresh()
+      }
+    })
+  )
+
   // Register tree view with drag and drop support
   const treeView = vscode.window.createTreeView('claudeSessions', {
     treeDataProvider: treeProvider,
@@ -549,8 +571,22 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('claudeSessions.toggleGroupByDate', () => {
       const current = treeProvider.getGroupByDate()
-      treeProvider.setGroupByDate(!current)
+      treeProvider.setViewMode(current ? 'flat' : 'date-group')
       vscode.window.showInformationMessage(`Date grouping ${!current ? 'enabled' : 'disabled'}`)
+    }),
+
+    vscode.commands.registerCommand('claudeSessions.toggleGroupByFolder', () => {
+      const current = treeProvider.getGroupByFolder()
+      treeProvider.setViewMode(current ? 'flat' : 'folder-group')
+      vscode.window.showInformationMessage(`Folder grouping ${!current ? 'enabled' : 'disabled'}`)
+    }),
+
+    vscode.commands.registerCommand('claudeSessions.cycleViewMode', () => {
+      const current = treeProvider.getViewMode()
+      const next =
+        current === 'flat' ? 'folder-group' : current === 'folder-group' ? 'date-group' : 'flat'
+      treeProvider.setViewMode(next)
+      vscode.window.showInformationMessage(`View mode: ${next}`)
     }),
 
     vscode.commands.registerCommand('claudeSessions.cleanup', async () => {

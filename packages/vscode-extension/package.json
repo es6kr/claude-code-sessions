@@ -134,6 +134,16 @@
         "icon": "$(calendar)"
       },
       {
+        "command": "claudeSessions.toggleGroupByFolder",
+        "title": "Toggle Group by Folder",
+        "icon": "$(folder-library)"
+      },
+      {
+        "command": "claudeSessions.cycleViewMode",
+        "title": "Cycle View Mode (Flat / Date / Folder)",
+        "icon": "$(list-tree)"
+      },
+      {
         "command": "claudeSessions.filterSessions",
         "title": "Filter Sessions",
         "icon": "$(search)"
@@ -181,6 +191,11 @@
         },
         {
           "command": "claudeSessions.toggleGroupByDate",
+          "when": "view == claudeSessions",
+          "group": "navigation@3"
+        },
+        {
+          "command": "claudeSessions.toggleGroupByFolder",
           "when": "view == claudeSessions",
           "group": "navigation@3"
         },
@@ -351,6 +366,27 @@
           },
           "default": [],
           "description": "Patterns to exclude from project list (e.g., 'es6.kr' to hide personal projects)"
+        },
+        "claudeSessions.viewMode": {
+          "type": "string",
+          "enum": [
+            "flat",
+            "date-group",
+            "folder-group"
+          ],
+          "default": "flat",
+          "enumDescriptions": [
+            "Flat list of projects (legacy behavior)",
+            "Group sessions across all projects by date",
+            "Group projects hierarchically by folder path"
+          ],
+          "description": "How to render the project tree. Mutually exclusive with date-group/folder-group toggles."
+        },
+        "claudeSessions.minGroupSize": {
+          "type": "number",
+          "default": 2,
+          "minimum": 2,
+          "description": "Minimum number of projects required to create a folder group when viewMode is 'folder-group'. Single-child subtrees auto-flatten into the parent."
         },
         "claudeSessions.packageTag": {
           "type": "string",

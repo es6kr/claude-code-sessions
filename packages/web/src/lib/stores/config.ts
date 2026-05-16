@@ -49,14 +49,32 @@ const EXPANDED_GROUPS_KEY = 'claude-sessions.expandedGroups'
 const isViewMode = (value: string | null): value is ProjectViewMode =>
   value === 'flat' || value === 'date-group' || value === 'folder-group'
 
+// localStorage may be undefined (SSR) or partially mocked (some test environments
+// define `localStorage` without getItem/setItem). Probe defensively before use.
+const hasLocalStorage = (): boolean => {
+  try {
+    return (
+      typeof localStorage !== 'undefined' &&
+      typeof localStorage.getItem === 'function' &&
+      typeof localStorage.setItem === 'function'
+    )
+  } catch {
+    return false
+  }
+}
+
 const initialViewMode = (): ProjectViewMode => {
-  if (typeof localStorage === 'undefined') return 'folder-group'
-  const stored = localStorage.getItem(VIEW_MODE_KEY)
-  return isViewMode(stored) ? stored : 'folder-group'
+  if (!hasLocalStorage()) return 'folder-group'
+  try {
+    const stored = localStorage.getItem(VIEW_MODE_KEY)
+    return isViewMode(stored) ? stored : 'folder-group'
+  } catch {
+    return 'folder-group'
+  }
 }
 
 const initialExpandedGroups = (): Set<string> => {
-  if (typeof localStorage === 'undefined') return new Set()
+  if (!hasLocalStorage()) return new Set()
   try {
     const stored = localStorage.getItem(EXPANDED_GROUPS_KEY)
     if (!stored) return new Set()
@@ -72,7 +90,7 @@ const initialExpandedGroups = (): Set<string> => {
 export const viewMode = writable<ProjectViewMode>(initialViewMode())
 export const expandedGroups = writable<Set<string>>(initialExpandedGroups())
 
-if (typeof localStorage !== 'undefined') {
+if (hasLocalStorage()) {
   viewMode.subscribe((mode) => {
     try {
       localStorage.setItem(VIEW_MODE_KEY, mode)
