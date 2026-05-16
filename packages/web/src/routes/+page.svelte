@@ -5,9 +5,14 @@
   import type { Project, SessionMeta, SessionData, Message, TodoItem, AgentInfo } from '$lib/api'
   import { ConfirmModal, InputModal, ProjectTree, SessionViewer, Toast } from '$lib/components'
   import { getDisplayTitle } from '$lib/utils'
-  import { appConfig } from '$lib/stores/config'
+  import { appConfig, viewMode, expandedGroups } from '$lib/stores/config'
   import { deleteMessageWithChainRepair } from '@claude-sessions/core'
-  import type { SessionSortField, SessionSortOrder, TitleDisplayMode } from '@claude-sessions/core'
+  import type {
+    SessionSortField,
+    SessionSortOrder,
+    TitleDisplayMode,
+    ProjectViewMode,
+  } from '@claude-sessions/core'
 
   // State
   let projects = $state<Project[]>([])
@@ -638,6 +643,19 @@
     }
   }
 
+  const handleViewModeChange = (mode: ProjectViewMode) => {
+    viewMode.set(mode)
+  }
+
+  const handleToggleGroup = (name: string) => {
+    expandedGroups.update((set) => {
+      const next = new Set(set)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
   // Restore sort options from localStorage
   const restoreSortOptions = () => {
     if (!browser) return
@@ -672,7 +690,11 @@
     {sortField}
     {sortOrder}
     {titleDisplayMode}
+    viewMode={$viewMode}
+    expandedGroups={$expandedGroups}
     onToggleProject={toggleProject}
+    onToggleGroup={handleToggleGroup}
+    onViewModeChange={handleViewModeChange}
     onSelectSession={selectSession}
     onCompressSession={handleCompressSession}
     onDeleteSession={handleDeleteSession}

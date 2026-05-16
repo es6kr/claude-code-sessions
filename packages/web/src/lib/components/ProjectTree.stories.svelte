@@ -153,6 +153,52 @@
     ['/home/user/projects/empty-project', []],
   ])
 
+  // Folder-grouped fixtures (Issue #152). Use hierarchical "~/ghq/..." displayNames so
+  // groupProjects() can build folder groups.
+  const groupedProjects = [
+    {
+      name: '-home-user-ghq-github-com-es6kr-claude-code-sessions',
+      displayName: '~/ghq/github.com/es6kr/claude-code-sessions',
+      path: '/sessions/claude-code-sessions',
+      sessionCount: 12,
+    },
+    {
+      name: '-home-user-ghq-github-com-es6kr-skills',
+      displayName: '~/ghq/github.com/es6kr/skills',
+      path: '/sessions/skills',
+      sessionCount: 3,
+    },
+    {
+      name: '-home-user-ghq-github-com-example-org-example-repo',
+      displayName: '~/ghq/github.com/example-org/example-repo',
+      path: '/sessions/example-repo',
+      sessionCount: 8,
+    },
+    {
+      name: '-home-user-ghq-local-projects-local-app',
+      displayName: '~/ghq/local/projects/local-app',
+      path: '/sessions/local-app',
+      sessionCount: 2,
+    },
+  ]
+
+  const singleGroupedProjects = [
+    {
+      name: '-home-user-ghq-github-com-es6kr-claude-code-sessions',
+      displayName: '~/ghq/github.com/es6kr/claude-code-sessions',
+      path: '/sessions/claude-code-sessions',
+      sessionCount: 12,
+    },
+    {
+      name: '-home-user-ghq-github-com-es6kr-skills',
+      displayName: '~/ghq/github.com/es6kr/skills',
+      path: '/sessions/skills',
+      sessionCount: 3,
+    },
+  ]
+
+  const groupedExpandedSet = new Set(['~/ghq', '~/ghq/github.com', '~/ghq/github.com/es6kr'])
+
   const WRAPPER_CLASS = 'w-80 h-[600px]'
 
   const { Story } = defineMeta({
@@ -245,6 +291,72 @@
     projectSessions: new Map(),
     projectSessionData: new Map(),
     expandedProjects: new Set(),
+  }}
+>
+  {#snippet children(args)}
+    <div class={WRAPPER_CLASS}>
+      <ProjectTree {...args} />
+    </div>
+  {/snippet}
+</Story>
+
+<!--
+  ============================================================================
+  Folder-grouped view stories (Issue #152)
+  ============================================================================
+  These stories use projects whose displayName carries hierarchical "~/ghq/..."
+  paths so groupProjects() can build folder groups.
+-->
+
+<Story
+  name="Grouped View — Multi-org"
+  args={{
+    projects: groupedProjects,
+    projectSessions: new Map(),
+    projectSessionData: new Map(),
+    expandedProjects: new Set(),
+    viewMode: 'folder-group',
+    expandedGroups: groupedExpandedSet,
+    onToggleGroup: fn(),
+    onViewModeChange: fn(),
+  }}
+>
+  {#snippet children(args)}
+    <div class={WRAPPER_CLASS}>
+      <ProjectTree {...args} />
+    </div>
+  {/snippet}
+</Story>
+
+<Story
+  name="Grouped View — Single Group"
+  args={{
+    projects: singleGroupedProjects,
+    projectSessions: new Map(),
+    projectSessionData: new Map(),
+    expandedProjects: new Set(),
+    viewMode: 'folder-group',
+    expandedGroups: new Set(['~/ghq/github.com/es6kr']),
+    onToggleGroup: fn(),
+    onViewModeChange: fn(),
+  }}
+>
+  {#snippet children(args)}
+    <div class={WRAPPER_CLASS}>
+      <ProjectTree {...args} />
+    </div>
+  {/snippet}
+</Story>
+
+<Story
+  name="Flat View — Legacy"
+  args={{
+    projects: groupedProjects,
+    projectSessions: new Map(),
+    projectSessionData: new Map(),
+    expandedProjects: new Set(),
+    viewMode: 'flat',
+    onViewModeChange: fn(),
   }}
 >
   {#snippet children(args)}
