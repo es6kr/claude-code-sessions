@@ -19,7 +19,7 @@ vi.mock('../todos.js', async () => ({
   deleteLinkedTodos: vi.fn(() => Effect.succeed({ deletedCount: 0 })),
 }))
 
-import { clearSessions, deduplicateTitleRecords } from './cleanup.js'
+import { clearSessions, deduplicateTitleRecords, previewCleanup } from './cleanup.js'
 import { getSessionsDir } from '../paths.js'
 
 function makeMessage(overrides: Record<string, unknown> = {}) {
@@ -373,6 +373,128 @@ describe('clearSessions', () => {
       expect(result.deletedCount).toBe(1)
       const otherFiles = await fs.readdir(path.join(tempDir, otherProject))
       expect(otherFiles).toContain('empty-2.jsonl')
+    })
+  })
+
+  describe('stale project handling', () => {
+    const staleProjectA = '-Users-test-stale-A-nonexistent-workspace'
+    const staleProjectB = '-Users-test-stale-B-nonexistent-workspace'
+
+    async function setSessionMtimeDaysAgo(
+      dir: string,
+      projectFolder: string,
+      sessionId: string,
+      daysAgo: number
+    ) {
+      const filePath = path.join(dir, projectFolder, `${sessionId}.jsonl`)
+      const mtime = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+      await fs.utimes(filePath, mtime, mtime)
+    }
+
+    it('does not delete project directories when clearStale is false (default)', async () => {
+      await fs.mkdir(path.join(tempDir, staleProjectA), { recursive: true })
+      await writeSession(tempDir, staleProjectA, 'session-1', [makeMessage({ uuid: 'm1' })])
+
+      const result = await Effect.runPromise(
+        clearSessions({
+          projectName: staleProjectA,
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+        })
+      )
+
+      const projectStillExists = await fs
+        .access(path.join(tempDir, staleProjectA))
+        .then(() => true)
+        .catch(() => false)
+      expect(projectStillExists).toBe(true)
+      expect(result.deletedStaleProjectCount ?? 0).toBe(0)
+    })
+
+    it('deletes listed stale projects when clearStale is true', async () => {
+      await fs.mkdir(path.join(tempDir, staleProjectA), { recursive: true })
+      await fs.mkdir(path.join(tempDir, staleProjectB), { recursive: true })
+      await writeSession(tempDir, staleProjectA, 'session-1', [makeMessage({ uuid: 'a1' })])
+      await writeSession(tempDir, staleProjectB, 'session-1', [makeMessage({ uuid: 'b1' })])
+
+      const result = await Effect.runPromise(
+        clearSessions({
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+          clearStale: true,
+          staleProjects: [staleProjectA, staleProjectB],
+        })
+      )
+
+      const aExists = await fs
+        .access(path.join(tempDir, staleProjectA))
+        .then(() => true)
+        .catch(() => false)
+      const bExists = await fs
+        .access(path.join(tempDir, staleProjectB))
+        .then(() => true)
+        .catch(() => false)
+      expect(aExists).toBe(false)
+      expect(bExists).toBe(false)
+      expect(result.deletedStaleProjectCount).toBe(2)
+    })
+
+    it('ignores staleProjects list when clearStale is false', async () => {
+      await fs.mkdir(path.join(tempDir, staleProjectA), { recursive: true })
+      await writeSession(tempDir, staleProjectA, 'session-1', [makeMessage({ uuid: 'a1' })])
+
+      const result = await Effect.runPromise(
+        clearSessions({
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+          clearStale: false,
+          staleProjects: [staleProjectA],
+        })
+      )
+
+      const stillExists = await fs
+        .access(path.join(tempDir, staleProjectA))
+        .then(() => true)
+        .catch(() => false)
+      expect(stillExists).toBe(true)
+      expect(result.deletedStaleProjectCount ?? 0).toBe(0)
+    })
+
+    it('handles missing project directories gracefully when clearStale is true', async () => {
+      const result = await Effect.runPromise(
+        clearSessions({
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+          clearStale: true,
+          staleProjects: ['ghost-project-that-does-not-exist'],
+        })
+      )
+
+      expect(result.deletedStaleProjectCount).toBe(1)
+    })
+
+    it('previewCleanup does NOT mark recent sessions as stale even when folder missing', async () => {
+      await writeSession(tempDir, projectName, 'recent-session', [makeMessage({ uuid: 'r1' })])
+      await setSessionMtimeDaysAgo(tempDir, projectName, 'recent-session', 5)
+
+      const result = await Effect.runPromise(previewCleanup(projectName))
+
+      expect(result).toHaveLength(1)
+      expect(result[0].isStale).toBe(false)
+    })
+
+    it('previewCleanup marks old sessions as stale when folder missing', async () => {
+      await writeSession(tempDir, projectName, 'old-session', [makeMessage({ uuid: 'o1' })])
+      await setSessionMtimeDaysAgo(tempDir, projectName, 'old-session', 60)
+
+      const result = await Effect.runPromise(previewCleanup(projectName))
+
+      expect(result).toHaveLength(1)
+      expect(result[0].isStale).toBe(true)
     })
   })
 })
