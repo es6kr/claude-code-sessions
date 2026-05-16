@@ -64,12 +64,12 @@ const hasLocalStorage = (): boolean => {
 }
 
 const initialViewMode = (): ProjectViewMode => {
-  if (!hasLocalStorage()) return 'folder-group'
+  if (!hasLocalStorage()) return 'flat'
   try {
     const stored = localStorage.getItem(VIEW_MODE_KEY)
-    return isViewMode(stored) ? stored : 'folder-group'
+    return isViewMode(stored) ? stored : 'flat'
   } catch {
-    return 'folder-group'
+    return 'flat'
   }
 }
 
