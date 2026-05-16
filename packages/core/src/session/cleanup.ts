@@ -355,10 +355,24 @@ export const clearSessions = (options: {
       }
     }
 
-    // Step 7: Delete stale project directories wholesale (opt-in, destructive)
+    // Step 7: Delete stale project directories wholesale (opt-in, destructive).
+    // GUARD: staleProjects entries must be single-component encoded names —
+    // fs.rm runs recursively on the resolved path.
     if (clearStale && staleProjects.length > 0) {
+      const sessionsDir = path.resolve(getSessionsDir())
       for (const encodedName of staleProjects) {
-        const staleProjectPath = path.join(getSessionsDir(), encodedName)
+        if (
+          encodedName.includes('..') ||
+          encodedName.includes('/') ||
+          encodedName.includes('\\') ||
+          path.isAbsolute(encodedName)
+        ) {
+          continue
+        }
+        const staleProjectPath = path.resolve(sessionsDir, encodedName)
+        if (!staleProjectPath.startsWith(sessionsDir + path.sep)) {
+          continue
+        }
         yield* Effect.tryPromise({
           try: () => fs.rm(staleProjectPath, { recursive: true, force: true }),
           catch: (error) => new FileWriteError({ filePath: staleProjectPath, cause: error }),

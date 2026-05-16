@@ -496,5 +496,90 @@ describe('clearSessions', () => {
       expect(result).toHaveLength(1)
       expect(result[0].isStale).toBe(true)
     })
+
+    it('rejects path traversal entries (..) when clearStale is true', async () => {
+      // Create a sibling directory OUTSIDE the sessions dir that must NOT be deleted
+      const parentDir = path.resolve(tempDir, '..')
+      const siblingName = `traversal-target-${Date.now()}`
+      const siblingPath = path.join(parentDir, siblingName)
+      await fs.mkdir(siblingPath, { recursive: true })
+
+      try {
+        const result = await Effect.runPromise(
+          clearSessions({
+            clearEmpty: false,
+            clearInvalid: false,
+            clearOrphanAgents: false,
+            clearStale: true,
+            staleProjects: [`../${siblingName}`],
+          })
+        )
+
+        // Sibling must still exist — traversal entry must be rejected
+        const siblingStillExists = await fs
+          .access(siblingPath)
+          .then(() => true)
+          .catch(() => false)
+        expect(siblingStillExists).toBe(true)
+        // The traversal entry must NOT be counted as deleted
+        expect(result.deletedStaleProjectCount ?? 0).toBe(0)
+      } finally {
+        await fs.rm(siblingPath, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects absolute path entries when clearStale is true', async () => {
+      const parentDir = path.resolve(tempDir, '..')
+      const absoluteName = `absolute-target-${Date.now()}`
+      const absolutePath = path.join(parentDir, absoluteName)
+      await fs.mkdir(absolutePath, { recursive: true })
+
+      try {
+        const result = await Effect.runPromise(
+          clearSessions({
+            clearEmpty: false,
+            clearInvalid: false,
+            clearOrphanAgents: false,
+            clearStale: true,
+            staleProjects: [absolutePath],
+          })
+        )
+
+        const absoluteStillExists = await fs
+          .access(absolutePath)
+          .then(() => true)
+          .catch(() => false)
+        expect(absoluteStillExists).toBe(true)
+        expect(result.deletedStaleProjectCount ?? 0).toBe(0)
+      } finally {
+        await fs.rm(absolutePath, { recursive: true, force: true })
+      }
+    })
+
+    it('rejects entries containing path separators when clearStale is true', async () => {
+      // Even if the entry stays within tempDir, embedded separators bypass the
+      // contract of "encoded project name" (a single directory component).
+      await fs.mkdir(path.join(tempDir, 'nested', 'inside'), { recursive: true })
+      await writeSession(tempDir, path.join('nested', 'inside'), 'session-1', [
+        makeMessage({ uuid: 'n1' }),
+      ])
+
+      const result = await Effect.runPromise(
+        clearSessions({
+          clearEmpty: false,
+          clearInvalid: false,
+          clearOrphanAgents: false,
+          clearStale: true,
+          staleProjects: ['nested/inside'],
+        })
+      )
+
+      const nestedStillExists = await fs
+        .access(path.join(tempDir, 'nested', 'inside'))
+        .then(() => true)
+        .catch(() => false)
+      expect(nestedStillExists).toBe(true)
+      expect(result.deletedStaleProjectCount ?? 0).toBe(0)
+    })
   })
 })
