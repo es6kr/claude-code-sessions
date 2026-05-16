@@ -148,8 +148,6 @@ export interface SessionMeta {
   agentName?: string
   /** User-set custom title */
   customTitle?: string
-  /** Current (first) summary text for display */
-  currentSummary?: string
   messageCount: number
   createdAt?: string
   updatedAt?: string
@@ -362,8 +360,6 @@ export interface SessionTreeData {
   agentName?: string
   /** User-set custom title */
   customTitle?: string
-  /** Current (first) summary text for display/tooltip */
-  currentSummary?: string
   messageCount: number
   createdAt?: string
   updatedAt?: string

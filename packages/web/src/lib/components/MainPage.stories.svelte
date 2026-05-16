@@ -90,8 +90,6 @@
       {
         id: 'session-001',
         customTitle: null,
-        currentSummary:
-          'Implementing JWT-based authentication with refresh tokens and secure cookie storage',
         summaries: [
           {
             summary:
@@ -109,7 +107,6 @@
       {
         id: 'session-002',
         customTitle: 'Layout Bug Fixes',
-        currentSummary: 'Fixed mobile breakpoints and flexbox issues in the dashboard',
         summaries: [{ summary: 'Fixed mobile breakpoints and flexbox issues in the dashboard' }],
         agents: [],
         todos: { sessionTodos: [], agentTodos: [] },
@@ -120,8 +117,6 @@
       {
         id: 'session-003',
         customTitle: null,
-        currentSummary:
-          'Added system preference detection and manual toggle with localStorage persistence',
         summaries: [
           {
             summary:
@@ -241,7 +236,6 @@
           todos={mockTodos}
           agents={[{ id: 'agent-explore-001', messageCount: 8 }]}
           customTitle={null}
-          currentSummary="Implementing JWT-based authentication with refresh tokens and secure cookie storage"
           onDeleteMessage={noop}
           onMessagesChange={noop}
           onEditTitle={noop}
@@ -282,7 +276,6 @@
             { id: 'agent-bash-1', messageCount: 5 },
           ]}
           customTitle="Authentication Implementation"
-          currentSummary="Implementing JWT-based authentication with refresh tokens"
           onDeleteMessage={noop}
           onMessagesChange={noop}
           onEditTitle={noop}

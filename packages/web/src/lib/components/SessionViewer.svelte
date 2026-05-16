@@ -31,7 +31,6 @@
     agents?: AgentInfo[]
     agentName?: string
     customTitle?: string
-    currentSummary?: string
     projectDisplayName?: string
     backUrl?: string // If provided, shows back button header
     onDeleteMessage?: (msg: Message) => void // Called after actual deletion
@@ -55,7 +54,6 @@
     agents = [],
     agentName,
     customTitle,
-    currentSummary,
     backUrl,
     onDeleteMessage,
     onMessagesChange,
@@ -75,7 +73,6 @@
     getDisplayTitle({
       agentName,
       customTitle,
-      currentSummary,
       title: session?.title,
       maxLength: 50,
     })

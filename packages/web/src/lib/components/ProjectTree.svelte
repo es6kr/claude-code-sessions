@@ -90,7 +90,6 @@
     return coreGetDisplayTitle({
       agentName: data?.agentName,
       customTitle: data?.customTitle,
-      currentSummary: data?.currentSummary,
       title: session.title,
       createdAt: session.createdAt,
       mode: titleDisplayMode,
@@ -135,7 +134,6 @@
         id: session.id,
         title: session.title,
         customTitle: data?.customTitle,
-        currentSummary: data?.currentSummary,
         createdAt: data?.createdAt,
         updatedAt: data?.updatedAt,
       })
@@ -292,7 +290,7 @@
                 {@const sessionInfo = getSessionInfo(session)}
                 {@const displayTitle = getDisplayTitle(session)}
                 {@const data = getSessionData(session.projectName, session.id)}
-                {@const isSummaryFallback = !data?.customTitle && !data?.currentSummary}
+                {@const isTitleFallback = !data?.customTitle && !data?.agentName}
                 {@const isExpanded = expandedSessions.has(session.id)}
                 {@const hasSubItems = hasSessionSubItems(session)}
                 <li
@@ -325,7 +323,7 @@
                         onclick={() => onSelectSession(session)}
                       >
                         <span
-                          class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap {isSummaryFallback
+                          class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap {isTitleFallback
                             ? 'italic text-gh-text-secondary'
                             : ''}"
                         >

@@ -284,7 +284,6 @@ export interface SessionData {
   title: string
   agentName?: string
   customTitle?: string
-  currentSummary?: string
   messageCount: number
   createdAt?: string
   updatedAt?: string

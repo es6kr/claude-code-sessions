@@ -149,7 +149,6 @@ export const isContinuationSummary = (msg: Message): boolean => {
 export interface DisplayTitleOptions {
   agentName?: string
   customTitle?: string
-  currentSummary?: string
   title?: string
   createdAt?: string
   maxLength?: number
@@ -162,26 +161,22 @@ export interface DisplayTitleOptions {
 
 /**
  * Get display title with fallback logic
- * Priority: customTitle > agentName > currentSummary (truncated) > title/datetime > fallback
+ * Priority: customTitle > agentName > title/datetime > fallback
  * Also handles slash command format in title
  *
  * Supports two call signatures:
- * - Legacy: getDisplayTitle(customTitle, currentSummary, title, maxLength?, fallback?)
+ * - Positional: getDisplayTitle(customTitle, title, fallback?)
  * - Options: getDisplayTitle(options)
  */
 export function getDisplayTitle(options: DisplayTitleOptions): string
 export function getDisplayTitle(
   customTitle: string | undefined,
-  currentSummary: string | undefined,
   title: string | undefined,
-  maxLength?: number,
   fallback?: string
 ): string
 export function getDisplayTitle(
   customTitleOrOptions: string | undefined | DisplayTitleOptions,
-  currentSummary?: string | undefined,
   title?: string | undefined,
-  maxLength = 60,
   fallback = 'Untitled'
 ): string {
   let mode: TitleDisplayMode = 'message'
@@ -194,10 +189,8 @@ export function getDisplayTitle(
     const opts = customTitleOrOptions
     agentName = opts.agentName
     customTitle = opts.customTitle
-    currentSummary = opts.currentSummary
     title = opts.title
     createdAt = opts.createdAt
-    maxLength = opts.maxLength ?? 60
     fallback = opts.fallback ?? 'Untitled'
     mode = opts.mode ?? 'message'
     locale = opts.locale
@@ -207,11 +200,6 @@ export function getDisplayTitle(
 
   if (customTitle) return customTitle
   if (agentName) return agentName
-  if (currentSummary) {
-    return currentSummary.length > maxLength
-      ? currentSummary.slice(0, maxLength - 3) + '...'
-      : currentSummary
-  }
 
   if (mode === 'datetime' && createdAt) {
     return formatRelativeTime(createdAt, locale)
@@ -453,9 +441,9 @@ export const sessionHasSubItems = (data: {
  * Shows complementary information to the displayed title + session ID
  *
  * Logic:
- * - If customTitle is displayed → show currentSummary
- * - If currentSummary is displayed → show original title
- * - If title is displayed → show currentSummary
+ * - If customTitle is displayed → show agentName or title
+ * - If agentName is displayed → show title
+ * - If title is displayed → show title
  * - Always append session ID at the end
  */
 export const getSessionTooltip = (session: {
@@ -463,21 +451,18 @@ export const getSessionTooltip = (session: {
   title?: string
   agentName?: string
   customTitle?: string
-  currentSummary?: string
   createdAt?: string
   updatedAt?: string
 }): string => {
-  const { id, title, agentName, customTitle, currentSummary, createdAt, updatedAt } = session
+  const { id, title, agentName, customTitle, createdAt, updatedAt } = session
   let text: string
   // Show complementary info: if a title override is displayed, show the next fallback
-  if (customTitle && (agentName || currentSummary)) {
-    text = agentName || currentSummary!
-  } else if (agentName && currentSummary) {
-    text = currentSummary
-  } else if (currentSummary && title && title !== 'Untitled') {
+  if (customTitle && agentName) {
+    text = agentName
+  } else if (customTitle && title && title !== 'Untitled') {
     text = title
-  } else if (currentSummary) {
-    text = currentSummary
+  } else if (agentName && title && title !== 'Untitled') {
+    text = title
   } else {
     text = title ?? 'No title'
   }

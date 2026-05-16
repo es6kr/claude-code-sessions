@@ -279,13 +279,7 @@ export class SessionTreeProvider
     }
     return sessions.filter((s) => {
       // Search across all available text: title, custom title, all summaries
-      const texts = [
-        s.title,
-        s.agentName,
-        s.customTitle,
-        s.currentSummary,
-        ...s.summaries.map((sum) => sum.summary),
-      ]
+      const texts = [s.title, s.agentName, s.customTitle, ...s.summaries.map((sum) => sum.summary)]
       return texts.some((t) => t && t.toLowerCase().includes(this.filterText))
     })
   }
@@ -314,15 +308,14 @@ export class SessionTreeProvider
       const shouldExpand = !this.filterText && expandFirst && index === 0 && hasSubItems
 
       const descriptionText =
-        titleMode === 'datetime' && !s.customTitle && !s.agentName && !s.currentSummary
-          ? session.getDisplayTitle(undefined, undefined, s.title)
+        titleMode === 'datetime' && !s.customTitle && !s.agentName
+          ? session.getDisplayTitle(undefined, s.title)
           : undefined
 
       return new SessionTreeItem(
         session.getDisplayTitle({
           agentName: s.agentName,
           customTitle: s.customTitle,
-          currentSummary: s.currentSummary,
           title: s.title,
           createdAt: s.createdAt,
           mode: titleMode,
