@@ -13,6 +13,12 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
+  resolve: {
+    alias: {
+      'node:fs/promises': resolve(__dirname, 'src/lib/stubs/fs-promises.ts'),
+      'node:fs': resolve(__dirname, 'src/lib/stubs/fs.ts'),
+    },
+  },
   test: {
     exclude: ['e2e/**', 'node_modules/**'],
   },

@@ -19,7 +19,11 @@
   let { initialMessages, title = 'Validation Demo' }: Props = $props()
 
   // Convert to Message type and make reactive copy
-  let messages = $state(initialMessages.map((m) => ({ ...m }) as GenericMessage))
+  let messages = $state<GenericMessage[]>([])
+
+  $effect(() => {
+    messages = initialMessages.map((m) => ({ ...m }) as GenericMessage)
+  })
 
   const chainResult = $derived(validateChain(messages))
   const toolResult = $derived(validateToolUseResult(messages))
