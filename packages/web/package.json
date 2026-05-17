@@ -37,7 +37,7 @@
     "carta-md": "^4.11.2",
     "commander": "^14.0.3",
     "effect": "^3.21.2",
-    "isomorphic-dompurify": "^3.12.0",
+    "isomorphic-dompurify": "^3.13.0",
     "marked": "^17.0.6"
   },
   "devDependencies": {
