@@ -106,6 +106,21 @@ importers:
 
   packages/test-fixtures: {}
 
+  packages/ui:
+    devDependencies:
+      '@claude-sessions/core':
+        specifier: workspace:^
+        version: link:../core
+      svelte:
+        specifier: ^5.55.5
+        version: 5.55.5(@typescript-eslint/types@8.59.1)
+      svelte-check:
+        specifier: ^4.4.6
+        version: 4.4.7(picomatch@4.0.4)(svelte@5.55.5(@typescript-eslint/types@8.59.1))(typescript@5.9.3)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/vscode-extension:
     dependencies:
       '@claude-sessions/core':
@@ -115,6 +130,15 @@ importers:
         specifier: ^3.21.2
         version: 3.21.2
     devDependencies:
+      '@claude-sessions/ui':
+        specifier: workspace:^
+        version: link:../ui
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^6.2.4
+        version: 6.2.4(svelte@5.55.5(@typescript-eslint/types@8.59.1))(vite@7.3.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2))
+      '@tailwindcss/vite':
+        specifier: ^4.2.4
+        version: 4.2.4(vite@7.3.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2))
       '@types/glob':
         specifier: ^9.0.0
         version: 9.0.0
@@ -139,18 +163,33 @@ importers:
       mocha:
         specifier: ^11.7.5
         version: 11.7.5
+      svelte:
+        specifier: ^5.55.5
+        version: 5.55.5(@typescript-eslint/types@8.59.1)
+      svelte-check:
+        specifier: ^4.4.6
+        version: 4.4.7(picomatch@4.0.4)(svelte@5.55.5(@typescript-eslint/types@8.59.1))(typescript@5.9.3)
+      tailwindcss:
+        specifier: ^4.2.4
+        version: 4.2.4
       tsup:
         specifier: ^8.3.0
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.10)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
       typescript:
         specifier: ^5.7.0
         version: 5.9.3
+      vite:
+        specifier: ^7.3.2
+        version: 7.3.2(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/web:
     dependencies:
       '@claude-sessions/core':
         specifier: workspace:^
         version: link:../core
+      '@claude-sessions/ui':
+        specifier: workspace:^
+        version: link:../ui
       '@floating-ui/dom':
         specifier: ^1.7.6
         version: 1.7.6

@@ -312,15 +312,17 @@
       </svg>
       <span class="tooltip">{NAV_MODE_CONFIG[navMode].prevLabel}</span>
     </button>
-    <div
-      class="dropdown-wrapper"
-      role="group"
-      bind:this={dropdownRef}
-      onkeydown={handleDropdownKeydown}
-    >
+    <div class="dropdown-wrapper" role="group" bind:this={dropdownRef}>
       <button
         class="nav-btn mode-btn {buttonClass}"
         onclick={toggleDropdown}
+        onkeydown={(e) => {
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            dropdownOpen = true
+            focusedIndex = e.key === 'ArrowDown' ? 0 : NAV_MODES.length - 1
+            e.preventDefault()
+          }
+        }}
         type="button"
         aria-haspopup="menu"
         aria-expanded={dropdownOpen}
@@ -330,7 +332,13 @@
         <span class="tooltip">Navigate: {NAV_MODE_CONFIG[navMode].label}</span>
       </button>
       {#if dropdownOpen}
-        <div class="dropdown-menu" role="menu" aria-label="Navigation modes">
+        <div
+          class="dropdown-menu"
+          role="menu"
+          aria-label="Navigation modes"
+          tabindex="-1"
+          onkeydown={handleDropdownKeydown}
+        >
           {#each NAV_MODES as mode, i}
             <button
               type="button"
