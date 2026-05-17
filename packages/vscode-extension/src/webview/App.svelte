@@ -21,8 +21,8 @@
   const sessionCtx = createMockSessionContext()
 
   function basename(p: string): string {
-    const slash = p.lastIndexOf('/')
-    return slash >= 0 ? p.slice(slash + 1) : p
+    const sep = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'))
+    return sep >= 0 ? p.slice(sep + 1) : p
   }
 
   function formatTime(iso: string | undefined): string {

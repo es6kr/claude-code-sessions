@@ -36,7 +36,7 @@
     : 'border border-gh-border rounded-lg'}"
 >
   <div class="{enableScroll ? 'overflow-y-auto' : ''} flex-1 p-4 flex flex-col gap-4">
-    {#each messages as msg, i (msg.uuid ? `${msg.uuid}-${i}` : `idx-${i}`)}
+    {#each messages as msg, i (msg.uuid ?? `idx-${i}`)}
       <MessageItem
         {msg}
         {sessionId}
