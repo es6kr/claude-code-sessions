@@ -8,8 +8,7 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
 
-// @ts-expect-error ssrBuild is available in Vite 5+ but might not be in ConfigEnv type here
-export default defineConfig(({ ssrBuild }) => ({
+export default defineConfig(({ isSsrBuild }) => ({
   plugins: [tailwindcss(), sveltekit()],
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
@@ -18,7 +17,7 @@ export default defineConfig(({ ssrBuild }) => ({
     alias: {
       '@claude-sessions/ui/components': resolve(__dirname, '../ui/src/lib/components'),
       '@claude-sessions/ui': resolve(__dirname, '../ui/src/lib/index.ts'),
-      ...(!ssrBuild
+      ...(!isSsrBuild
         ? {
             'node:fs/promises': resolve(__dirname, 'src/lib/stubs/fs-promises.ts'),
             'node:fs': resolve(__dirname, 'src/lib/stubs/fs.ts'),
