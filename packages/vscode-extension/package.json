@@ -412,7 +412,7 @@
     "vscode:prepublish": "pnpm build",
     "build": "pnpm build:extension && pnpm build:webview",
     "build:extension": "tsup",
-    "build:webview": "vite build --config vite.webview.config.ts",
+    "build:webview": "pnpm exec vite build --config vite.webview.config.ts",
     "dev": "tsup --watch",
     "lint": "eslint src",
     "package": "vsce package --no-dependencies",
