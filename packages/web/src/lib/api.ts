@@ -159,6 +159,12 @@ export const updateTitleMessage = (
     { customTitle }
   )
 
+export const editMessageContent = (project: string, session: string, uuid: string, text: string) =>
+  patch<{ success: boolean; error?: string }>(
+    `/message?project=${encodeURIComponent(project)}&session=${encodeURIComponent(session)}&uuid=${encodeURIComponent(uuid)}`,
+    { text }
+  )
+
 export const previewCleanup = (project?: string) =>
   get<CleanupPreview[]>(`/cleanup${project ? `?project=${encodeURIComponent(project)}` : ''}`)
 
@@ -254,7 +260,7 @@ export interface SearchResult {
   sessionId: string
   projectName: string
   title: string
-  matchType: 'title' | 'content'
+  matchType: 'title' | 'content' | 'sessionId'
   snippet?: string
   messageUuid?: string
   timestamp?: string

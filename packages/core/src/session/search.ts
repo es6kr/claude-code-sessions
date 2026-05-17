@@ -92,6 +92,69 @@ const searchProjectContent = (project: Project, queryLower: string, alreadyFound
     return results.filter((r): r is NonNullable<typeof r> => r !== null)
   })
 
+// Pattern to detect potential session ID queries (hex chars and hyphens, 8+ chars)
+const SESSION_ID_PATTERN = /^[a-f0-9][a-f0-9-]{7,}$/i
+
+// Search sessions by partial session ID (file name prefix matching)
+export const searchBySessionId = (partialId: string, options: { projectName?: string } = {}) =>
+  Effect.gen(function* () {
+    const partialIdLower = partialId.toLowerCase()
+    const projects = yield* listProjects
+    const targetProjects = options.projectName
+      ? projects.filter((p) => p.name === options.projectName)
+      : projects
+
+    const scanEffects = targetProjects.map((project) =>
+      pipe(
+        Effect.tryPromise(() => fs.readdir(path.join(getSessionsDir(), project.name))),
+        Effect.map((files) =>
+          files
+            .filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
+            .map((f) => f.replace('.jsonl', ''))
+            .filter((id) => id.toLowerCase().startsWith(partialIdLower))
+            .map((sessionId) => ({ sessionId, projectName: project.name }))
+        ),
+        Effect.catchAll(() => Effect.succeed([] as { sessionId: string; projectName: string }[]))
+      )
+    )
+
+    const matchesNested = yield* Effect.all(scanEffects, { concurrency: 10 })
+    const matches = matchesNested.flat()
+
+    // Resolve titles for matched sessions
+    const resultEffects = matches.map(({ sessionId, projectName }) =>
+      pipe(
+        listSessions(projectName),
+        Effect.map((sessions) => {
+          const session = sessions.find((s) => s.id === sessionId)
+          return {
+            sessionId,
+            projectName,
+            title: session?.title ?? session?.customTitle ?? `Session ${sessionId.slice(0, 8)}`,
+            matchType: 'sessionId' as const,
+            timestamp: session?.updatedAt,
+          } satisfies SearchResult
+        }),
+        Effect.catchAll(() =>
+          Effect.succeed({
+            sessionId,
+            projectName,
+            title: `Session ${sessionId.slice(0, 8)}`,
+            matchType: 'sessionId' as const,
+            timestamp: undefined,
+          } satisfies SearchResult)
+        )
+      )
+    )
+
+    const results = yield* Effect.all(resultEffects, { concurrency: 10 })
+    return results.sort((a, b) => {
+      const dateA = a.timestamp ? new Date(a.timestamp).getTime() : 0
+      const dateB = b.timestamp ? new Date(b.timestamp).getTime() : 0
+      return dateB - dateA
+    })
+  })
+
 // Search sessions - two-phase: title search (fast) then content search (slow)
 export const searchSessions = (
   query: string,
@@ -100,6 +163,14 @@ export const searchSessions = (
   Effect.gen(function* () {
     const { projectName, searchContent = false } = options
     const queryLower = query.toLowerCase()
+
+    // Phase 0: Session ID detection — if query looks like a session ID, search by ID first
+    if (SESSION_ID_PATTERN.test(query)) {
+      const idResults = yield* searchBySessionId(query, { projectName })
+      if (idResults.length > 0) {
+        return idResults
+      }
+    }
 
     const projects = yield* listProjects
     const targetProjects = projectName ? projects.filter((p) => p.name === projectName) : projects

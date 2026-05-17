@@ -31,7 +31,6 @@ const scanSessionMeta = async (
   let title: string | undefined
   let agentName: string | undefined
   let customTitle: string | undefined
-  let currentSummary: string | undefined
   let firstTimestamp: string | undefined
   let lastTimestamp: string | undefined
 
@@ -65,12 +64,6 @@ const scanSessionMeta = async (
       }
     } else if (type === 'summary' && !hasSummary) {
       hasSummary = true
-      try {
-        const msg = JSON.parse(line) as Message
-        currentSummary = msg.summary as string
-      } catch {
-        /* skip malformed */
-      }
     } else if (type === 'custom-title') {
       try {
         const msg = JSON.parse(line) as { customTitle?: string }
@@ -92,7 +85,6 @@ const scanSessionMeta = async (
     title,
     agentName,
     customTitle,
-    currentSummary,
     userAssistantCount,
     hasSummary,
     firstTimestamp,

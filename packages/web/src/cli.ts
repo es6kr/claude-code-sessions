@@ -1,58 +1,57 @@
 #!/usr/bin/env node
-/**
- * CLI entry point for @claude-sessions/web
- * Runs the SvelteKit server with configurable port
- *
- * Options:
- *   --port <number>    Port to run the server on (default: 5173)
- *   --editor <cmd>     Editor command to open files (default: code)
- *   --home <path>      Home directory for ~ expansion (default: system homedir)
- *   --project <name>   Current project name for priority sorting (default: auto-detect from cwd)
- */
+import { Command, InvalidArgumentError } from 'commander'
 import { spawn } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const serverPath = path.join(__dirname, '..', 'build', 'index.js')
 
-// Parse command line arguments
-const args = process.argv.slice(2)
-let port = 5173
-let editor = ''
-let home = ''
-let project = ''
+const require = createRequire(import.meta.url)
+const { version } = require('../package.json') as { version: string }
 
-for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--port' && args[i + 1]) {
-    port = parseInt(args[i + 1], 10)
-    i++
-  } else if (args[i] === '--editor' && args[i + 1]) {
-    editor = args[i + 1]
-    i++
-  } else if (args[i] === '--home' && args[i + 1]) {
-    home = args[i + 1]
-    i++
-  } else if (args[i] === '--project' && args[i + 1]) {
-    project = args[i + 1]
-    i++
+function parsePort(value: string): number {
+  const port = Number.parseInt(value, 10)
+  if (Number.isNaN(port) || port < 1 || port > 65535) {
+    throw new InvalidArgumentError('Port must be a number between 1 and 65535.')
   }
+  return port
 }
+
+const program = new Command()
+  .name('claude-sessions-web')
+  .description('Web UI for Claude Code session management')
+  .version(version)
+  .option('-p, --port <number>', 'port to run the server on', parsePort, 5173)
+  .option('--editor <cmd>', 'editor command to open files')
+  .option('--home <path>', 'home directory for ~ expansion')
+  .option('--project <name>', 'current project name for priority sorting')
+  .option('--yolo', 'skip all safety checks')
+  .parse()
+
+const opts = program.opts<{
+  port: number
+  editor?: string
+  home?: string
+  project?: string
+  yolo?: boolean
+}>()
 
 // Build environment variables
 const serverEnv: Record<string, string> = {
   ...process.env,
-  PORT: String(port),
+  PORT: String(opts.port),
 } as Record<string, string>
 
-if (editor) {
-  serverEnv.CLAUDE_SESSIONS_EDITOR = editor
+if (opts.editor) {
+  serverEnv.CLAUDE_SESSIONS_EDITOR = opts.editor
 }
-if (home) {
-  serverEnv.CLAUDE_SESSIONS_HOME = home
+if (opts.home) {
+  serverEnv.CLAUDE_SESSIONS_HOME = opts.home
 }
-if (project) {
-  serverEnv.CLAUDE_SESSIONS_PROJECT = project
+if (opts.project) {
+  serverEnv.CLAUDE_SESSIONS_PROJECT = opts.project
 }
 
 // Start the server

@@ -4,8 +4,14 @@
 import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { getSessionsDir } from '../paths.js'
-import { isInvalidApiKeyMessage, parseJsonlLines, FileReadError, FileWriteError } from '../utils.js'
+import { getSessionsDir, folderNameToPath } from '../paths.js'
+import {
+  isInvalidApiKeyMessage,
+  parseJsonlLines,
+  FileReadError,
+  FileWriteError,
+  fileExists,
+} from '../utils.js'
 import { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from '../agents.js'
 import { sessionHasTodos, findOrphanTodos, deleteOrphanTodos } from '../todos.js'
 import { listProjects } from './projects.js'
@@ -13,6 +19,40 @@ import { listSessions, deleteSession } from './crud.js'
 import { listSessionsMeta } from './crud-streaming.js'
 import { filterSessionFiles } from './crud-helpers.js'
 import type { Message, CleanupPreview, ClearSessionsResult } from '../types.js'
+
+// Grace period for "folder missing on disk" before marking a project as stale.
+// Protects sessions arriving via cross-PC sync (e.g., syncthing) where the
+// decoded workspace path may legitimately not exist yet on the receiving host.
+const STALE_GRACE_PERIOD_DAYS = 30
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+const getMostRecentSessionMtime = async (projectPath: string): Promise<number> => {
+  const exists = await fileExists(projectPath)
+  if (!exists) return 0
+  const files = await fs.readdir(projectPath)
+  const sessionFiles = filterSessionFiles(files)
+  let mostRecent = 0
+  for (const file of sessionFiles) {
+    try {
+      const stat = await fs.stat(path.join(projectPath, file))
+      const mtime = stat.mtimeMs
+      if (mtime > mostRecent) mostRecent = mtime
+    } catch {
+      // ignore unreadable entries
+    }
+  }
+  return mostRecent
+}
+
+const detectStaleProject = async (encodedName: string, projectPath: string): Promise<boolean> => {
+  const decodedPath = await folderNameToPath(encodedName)
+  const folderMissing = !(await fileExists(decodedPath))
+  if (!folderMissing) return false
+  const recentMtime = await getMostRecentSessionMtime(projectPath)
+  if (recentMtime === 0) return true
+  const ageInDays = (Date.now() - recentMtime) / MS_PER_DAY
+  return ageInDays > STALE_GRACE_PERIOD_DAYS
+}
 
 // Remove invalid API key messages from a session, returns remaining message count
 const cleanInvalidMessages = (projectName: string, sessionId: string) =>
@@ -113,6 +153,12 @@ export const previewCleanup = (projectName?: string) =>
           // Count orphan agents
           const orphanAgents = yield* findOrphanAgents(project.name)
 
+          // Detect stale project (decoded workspace path missing on disk)
+          // with grace-period guard against cross-PC sync false positives.
+          const isStale = yield* Effect.tryPromise(() =>
+            detectStaleProject(project.name, project.path)
+          )
+
           return {
             project: project.name,
             emptySessions,
@@ -120,6 +166,7 @@ export const previewCleanup = (projectName?: string) =>
             emptyWithTodosCount,
             orphanAgentCount: orphanAgents.length,
             orphanTodoCount: 0, // Will set for first project only
+            isStale,
           } satisfies CleanupPreview
         })
       ),
@@ -201,6 +248,8 @@ export const clearSessions = (options: {
   clearOrphanAgents?: boolean
   clearOrphanTodos?: boolean
   deduplicateTitles?: boolean
+  clearStale?: boolean
+  staleProjects?: string[]
 }) =>
   Effect.gen(function* () {
     const {
@@ -211,6 +260,8 @@ export const clearSessions = (options: {
       clearOrphanAgents = true,
       clearOrphanTodos = false,
       deduplicateTitles = false,
+      clearStale = false,
+      staleProjects = [],
     } = options
     const projects = yield* listProjects
     const targetProjects = projectName ? projects.filter((p) => p.name === projectName) : projects
@@ -220,6 +271,7 @@ export const clearSessions = (options: {
     let deduplicatedRecordCount = 0
     let deletedOrphanAgentCount = 0
     let deletedOrphanTodoCount = 0
+    let deletedStaleProjectCount = 0
     const sessionsToDelete: { project: string; sessionId: string }[] = []
 
     // Step 1: Clean invalid API key messages from all sessions (if clearInvalid)
@@ -303,12 +355,39 @@ export const clearSessions = (options: {
       }
     }
 
+    // Step 7: Delete stale project directories wholesale (opt-in, destructive).
+    // GUARD: staleProjects entries must be single-component encoded names —
+    // fs.rm runs recursively on the resolved path.
+    if (clearStale && staleProjects.length > 0) {
+      const sessionsDir = path.resolve(getSessionsDir())
+      for (const encodedName of staleProjects) {
+        if (
+          encodedName.includes('..') ||
+          encodedName.includes('/') ||
+          encodedName.includes('\\') ||
+          path.isAbsolute(encodedName)
+        ) {
+          continue
+        }
+        const staleProjectPath = path.resolve(sessionsDir, encodedName)
+        if (!staleProjectPath.startsWith(sessionsDir + path.sep)) {
+          continue
+        }
+        yield* Effect.tryPromise({
+          try: () => fs.rm(staleProjectPath, { recursive: true, force: true }),
+          catch: (error) => new FileWriteError({ filePath: staleProjectPath, cause: error }),
+        })
+        deletedStaleProjectCount++
+      }
+    }
+
     return {
       success: true,
       deduplicatedRecordCount,
       deletedCount: deletedSessionCount,
       deletedOrphanAgentCount,
       deletedOrphanTodoCount,
+      deletedStaleProjectCount,
       removedMessageCount,
     } satisfies ClearSessionsResult
   })

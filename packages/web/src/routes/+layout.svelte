@@ -4,12 +4,29 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import type { Snippet } from 'svelte'
+  import { provideSessionContext } from '@claude-sessions/ui'
   import * as api from '$lib/api'
   import { appConfig } from '$lib/stores/config'
   import { initTheme, toggleTheme, effectiveTheme, themePreference } from '$lib/stores/theme'
   import { ConfirmModal, Toast } from '$lib/components'
 
   let { children }: { children: Snippet } = $props()
+
+  // Provide @claude-sessions/ui shared components with web-side adapters.
+  // The vscode-extension webview supplies a different provider built on
+  // postMessage RPC; the contract (SessionApi/SessionStorage) is the same.
+  provideSessionContext({
+    api: {
+      openFile: (filePath) => api.openFile(filePath),
+      checkFileExists: (filePath) => api.checkFileExists(filePath),
+    },
+    storage: {
+      get: (key) => (typeof window === 'undefined' ? null : localStorage.getItem(key)),
+      set: (key, value) => {
+        if (typeof window !== 'undefined') localStorage.setItem(key, value)
+      },
+    },
+  })
 
   // Check if we're on a session page for search context
   const isSessionPage = $derived(page.url.pathname.startsWith('/session/'))
@@ -240,6 +257,13 @@
         project: sessionInfo?.projectName,
       })
       searchResults = sortResultsWithCurrentSession(titleResults)
+
+      // Auto-navigate when exactly one session ID match is found
+      const idMatches = titleResults.filter((r) => r.matchType === 'sessionId')
+      if (idMatches.length === 1) {
+        selectSearchResult(idMatches[0])
+        return
+      }
     } catch (e) {
       console.error('Title search error:', e)
     } finally {
@@ -416,18 +440,28 @@
               >
                 <div class="flex items-center gap-2">
                   <span
-                    class="text-xs px-1.5 py-0.5 rounded {result.matchType === 'title'
-                      ? 'bg-gh-green/20 text-gh-green'
-                      : 'bg-gh-accent/20 text-gh-accent'}"
+                    class="text-xs px-1.5 py-0.5 rounded {result.matchType === 'sessionId'
+                      ? 'bg-gh-accent/20 text-gh-accent font-mono'
+                      : result.matchType === 'title'
+                        ? 'bg-gh-green/20 text-gh-green'
+                        : 'bg-gh-accent/20 text-gh-accent'}"
                   >
-                    {result.matchType === 'title' ? 'Title' : 'Content'}
+                    {result.matchType === 'sessionId'
+                      ? 'ID'
+                      : result.matchType === 'title'
+                        ? 'Title'
+                        : 'Content'}
                   </span>
                   <span class="text-xs text-gh-text-secondary truncate flex-shrink-0 max-w-[120px]"
                     >{formatProjectPath(result.projectName)}</span
                   >
                   <span class="text-sm font-medium truncate">{result.title}</span>
                 </div>
-                {#if result.snippet}
+                {#if result.matchType === 'sessionId'}
+                  <div class="text-xs text-gh-text-secondary mt-1 font-mono truncate">
+                    {result.sessionId}
+                  </div>
+                {:else if result.snippet}
                   <div class="text-xs text-gh-text-secondary mt-1 line-clamp-2">
                     {result.snippet}
                   </div>

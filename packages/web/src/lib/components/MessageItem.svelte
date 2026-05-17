@@ -11,8 +11,8 @@
     parseStopHookSummary,
     parseTurnDuration,
   } from '$lib/utils'
+  import { IdeTag } from '@claude-sessions/ui'
   import ExpandableContent from './ExpandableContent.svelte'
-  import IdeTag from './IdeTag.svelte'
   import TodoItem from './TodoItem.svelte'
   import TooltipButton from './TooltipButton.svelte'
 
@@ -21,11 +21,12 @@
     sessionId: string
     isFirst?: boolean
     onDelete: (msg: Message) => void
+    onEdit?: (msg: Message) => void
     onEditTitle?: (msg: Message) => void
     onSplit?: (msg: Message) => void
   }
 
-  let { msg, sessionId, isFirst = false, onDelete, onEditTitle, onSplit }: Props = $props()
+  let { msg, sessionId, isFirst = false, onDelete, onEdit, onEditTitle, onSplit }: Props = $props()
 
   // Data attribute for scroll targeting
   const msgId = $derived(msg.uuid ?? '')
@@ -45,6 +46,20 @@
     const first = m.content[0] as { type?: string } | undefined
     return first?.type === 'tool_result'
   })
+
+  // Assistant messages may carry tool_use, thinking, or other non-text blocks.
+  // Replacing content for those would silently drop structured data and break
+  // tool_use ↔ tool_result pairing, so block editing whenever any non-text block is present.
+  const hasNonTextBlocks = $derived.by(() => {
+    if (!isAssistant) return false
+    const m = msg.message as { content?: unknown } | undefined
+    if (!Array.isArray(m?.content)) return false
+    return m.content.some((b) => (b as { type?: string })?.type !== 'text')
+  })
+
+  const isEditable = $derived(
+    !!(msg.uuid && (isHuman || isAssistant) && !isToolResult && !hasNonTextBlocks && onEdit)
+  )
 
   // Parse file snapshot data
   const snapshotData = $derived.by(() => {
@@ -152,10 +167,9 @@
     const content = getMessageContent(msg)
     if (content.trim().length > 0) return true
 
-    // Warn for messages without content (unless it's thinking-only)
-    if (msg.type === 'user' || msg.type === 'human') {
-      const label = isToolResult ? 'Tool result' : 'User message'
-      console.warn(`${label} without content:`, $state.snapshot(msg))
+    // Warn for messages without content (exclude tool_result — empty content is normal)
+    if ((msg.type === 'user' || msg.type === 'human') && !isToolResult) {
+      console.warn('User message without content:', $state.snapshot(msg))
     }
     return false
   })
@@ -413,6 +427,15 @@
             title="Edit title"
           >
             ✏️
+          </TooltipButton>
+        {/if}
+        {#if isEditable}
+          <TooltipButton
+            class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gh-border text-xs"
+            onclick={() => onEdit!(msg)}
+            title="Edit message content"
+          >
+            📝
           </TooltipButton>
         {/if}
         {@render splitButton()}

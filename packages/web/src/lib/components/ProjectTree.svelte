@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Project, SessionMeta, SessionData } from '$lib/api'
+  import { untrack } from 'svelte'
   import { formatProjectName } from '$lib/utils'
   import {
     sortProjects,
@@ -153,10 +154,20 @@
   )
 
   // Expanded sessions state (for showing summaries, todos, agents sublist)
+  let expandedSessions = $state<Set<string>>(new Set())
+
   // Auto-expand selected session
-  let expandedSessions = $state<Set<string>>(
-    selectedSession ? new Set([selectedSession.id]) : new Set()
-  )
+  $effect(() => {
+    const id = selectedSession?.id
+    if (id) {
+      untrack(() => {
+        if (!expandedSessions.has(id)) {
+          expandedSessions.add(id)
+          expandedSessions = new Set(expandedSessions)
+        }
+      })
+    }
+  })
 
   const toggleSessionExpand = (e: Event, sessionId: string) => {
     e.stopPropagation()

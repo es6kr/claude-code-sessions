@@ -64,9 +64,9 @@ suite('Webview Test Suite', () => {
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
     // Get the extension
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    const extension = vscode.extensions.getExtension('es6kr.claude-sessions-vscode')
     if (!extension) {
-      assert.fail('Extension not found: es6kr.claude-sessions')
+      assert.fail('Extension not found: es6kr.claude-sessions-vscode')
     }
 
     // Activate extension if not already active
@@ -374,5 +374,72 @@ suite('Webview Test Suite', () => {
       200,
       `Frontend root path should respond with HTTP 200, got ${rootResult.statusCode}`
     )
+  })
+
+  test('Custom Editor activates for .jsonl files', async function () {
+    this.timeout(30000)
+
+    // Wait for VSCode to fully initialize
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    // Get the extension
+    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    if (!extension) {
+      assert.fail('Extension not found: es6kr.claude-sessions')
+    }
+
+    if (!extension.isActive) {
+      await extension.activate()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Find a real session JSONL on disk to drive the Custom Editor
+    const sessionInfo = findFirstSession()
+    if (!sessionInfo) {
+      console.log('No sessions found, skipping Custom Editor activation test')
+      return
+    }
+
+    const claudeDir = path.join(os.homedir(), '.claude', 'projects')
+    const jsonlPath = path.join(
+      claudeDir,
+      sessionInfo.projectName,
+      `${sessionInfo.sessionId}.jsonl`
+    )
+    const uri = vscode.Uri.file(jsonlPath)
+    console.log(`Opening ${jsonlPath} via Custom Editor`)
+
+    const initialTabCount = vscode.window.tabGroups.all.reduce(
+      (sum, group) => sum + group.tabs.length,
+      0
+    )
+
+    // Open the file with the Custom Editor view type registered by this extension
+    await vscode.commands.executeCommand('vscode.openWith', uri, 'claudeSessions.jsonlPreview')
+
+    // Wait for the Custom Editor tab to materialize
+    await new Promise((resolve) => setTimeout(resolve, 3000))
+
+    const newTabCount = vscode.window.tabGroups.all.reduce(
+      (sum, group) => sum + group.tabs.length,
+      0
+    )
+    assert.ok(
+      newTabCount > initialTabCount,
+      'A new tab should be opened after invoking vscode.openWith for the Custom Editor'
+    )
+
+    // Verify at least one tab is the Custom Editor with the expected view type
+    const allTabs = vscode.window.tabGroups.all.flatMap((group) => group.tabs)
+    const customEditorTab = allTabs.find(
+      (t) =>
+        t.input instanceof vscode.TabInputCustom &&
+        t.input.viewType === 'claudeSessions.jsonlPreview'
+    )
+    assert.ok(
+      customEditorTab,
+      'Custom Editor tab with viewType claudeSessions.jsonlPreview should be present'
+    )
+    console.log('Custom Editor activated for .jsonl successfully')
   })
 })

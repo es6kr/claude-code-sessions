@@ -106,16 +106,30 @@ describe('listBackupSessions', () => {
     expect(result[0].title).toBe('My Custom Title')
   })
 
-  it('falls back to summary when no custom-title exists', async () => {
+  it('uses the latest custom-title when multiple exist', async () => {
+    await fs.mkdir(path.join(tmpDir, '.bak'), { recursive: true })
+    const messages = [
+      { type: 'custom-title', customTitle: 'Old Title' },
+      makeMessage(),
+      { type: 'custom-title', customTitle: 'Latest Title' },
+    ]
+    await writeBackup(tmpDir, 'project-a', 'session-multi', messages)
+
+    const result = await Effect.runPromise(listBackupSessions())
+    expect(result[0].title).toBe('Latest Title')
+  })
+
+  it('ignores summary records for title extraction', async () => {
     await fs.mkdir(path.join(tmpDir, '.bak'), { recursive: true })
     const messages = [makeMessage(), { type: 'summary', summary: 'Session about testing' }]
     await writeBackup(tmpDir, 'project-a', 'session-sum', messages)
 
     const result = await Effect.runPromise(listBackupSessions())
-    expect(result[0].title).toBe('Session about testing')
+    // Summary is no longer used as title fallback — falls through to first user message or Untitled
+    expect(result[0].title).toBe('Untitled')
   })
 
-  it('falls back to first user message text when no title or summary', async () => {
+  it('falls back to first user message text when no custom-title', async () => {
     await fs.mkdir(path.join(tmpDir, '.bak'), { recursive: true })
     const messages = [
       {

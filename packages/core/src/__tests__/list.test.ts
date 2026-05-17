@@ -33,7 +33,7 @@ describe('listSessions - should include currentSummary and customTitle', () => {
     vi.clearAllMocks()
   })
 
-  it('should return currentSummary from the first summary message', async () => {
+  it('should not extract currentSummary from in-file summary records', async () => {
     const sessionId = 'session-with-summary'
 
     const messages = [
@@ -67,7 +67,8 @@ describe('listSessions - should include currentSummary and customTitle', () => {
 
     expect(sessions).toHaveLength(1)
     expect(sessions[0].id).toBe(sessionId)
-    expect(sessions[0].currentSummary).toBe('This is the current summary text')
+    // In-file summary records are no longer extracted as currentSummary
+    expect(sessions[0].currentSummary).toBeUndefined()
     expect(sessions[0].title).toBe('Hello world')
   })
 
@@ -99,7 +100,7 @@ describe('listSessions - should include currentSummary and customTitle', () => {
     expect(sessions[0].title).toBe('Original first message')
   })
 
-  it('should return both currentSummary and customTitle when both exist', async () => {
+  it('should ignore in-file summary when customTitle exists', async () => {
     const sessionId = 'session-with-both'
 
     const messages = [
@@ -130,7 +131,8 @@ describe('listSessions - should include currentSummary and customTitle', () => {
 
     expect(sessions).toHaveLength(1)
     expect(sessions[0].customTitle).toBe('Custom Title Here')
-    expect(sessions[0].currentSummary).toBe('Summary text here')
+    // In-file summary records are no longer extracted
+    expect(sessions[0].currentSummary).toBeUndefined()
     expect(sessions[0].title).toBe('First user message')
   })
 

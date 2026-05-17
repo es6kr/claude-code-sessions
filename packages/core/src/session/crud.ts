@@ -78,13 +78,6 @@ const readSessionMeta = (projectPath: string, file: string, projectName: string)
       O.getOrUndefined
     )
 
-    const currentSummary = pipe(
-      messages,
-      A.findFirst((m) => m.type === 'summary'),
-      O.map((m) => m.summary as string),
-      O.getOrUndefined
-    )
-
     // Only titles after the last user/assistant message count as current
     let customTitle: string | undefined
     let agentName: string | undefined
@@ -102,7 +95,6 @@ const readSessionMeta = (projectPath: string, file: string, projectName: string)
       title,
       agentName,
       customTitle,
-      currentSummary,
       userAssistantCount: userAssistantMessages.length,
       hasSummary,
       firstTimestamp: userAssistantMessages[0]?.timestamp,
@@ -197,6 +189,60 @@ export const restoreMessage = (
     // Insert message at the specified index (or at end if index is out of bounds)
     const insertIndex = Math.min(index, messages.length)
     messages.splice(insertIndex, 0, message)
+
+    const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
+
+    return { success: true }
+  })
+
+// Editable JSONL message types — others (summary, file-history-snapshot, etc.) are rejected
+const EDITABLE_MESSAGE_TYPES = new Set(['user', 'human', 'assistant'])
+
+// Update message content by UUID — replace the first text block while preserving
+// non-text blocks (tool_use, tool_result, thinking, image, ...). Append a new text
+// block if the message has no text. Reject non-editable message types up front.
+export const updateMessageContent = (
+  projectName: string,
+  sessionId: string,
+  messageUuid: string,
+  newText: string
+) =>
+  Effect.gen(function* () {
+    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
+    const messages = yield* readJsonlFile<Record<string, unknown>>(filePath, { strict: true })
+
+    const idx = messages.findIndex((m) => m.uuid === messageUuid)
+    if (idx === -1) {
+      return { success: false, error: 'Message not found' }
+    }
+
+    const msg = messages[idx]
+    const msgType = typeof msg.type === 'string' ? msg.type : ''
+    if (!EDITABLE_MESSAGE_TYPES.has(msgType)) {
+      return {
+        success: false,
+        error: `Message type '${msgType}' is not editable`,
+      }
+    }
+
+    const payload = (msg.message as Record<string, unknown>) ?? {}
+    const rawContent = payload.content
+    const blocks: Array<Record<string, unknown>> = Array.isArray(rawContent)
+      ? (rawContent as Array<Record<string, unknown>>).map((b) => ({ ...b }))
+      : []
+
+    const textIdx = blocks.findIndex((b) => b.type === 'text')
+    if (textIdx === -1) {
+      blocks.push({ type: 'text', text: newText })
+    } else {
+      blocks[textIdx] = { ...blocks[textIdx], type: 'text', text: newText }
+    }
+
+    messages[idx] = {
+      ...msg,
+      message: { ...payload, content: blocks },
+    }
 
     const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
     yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))

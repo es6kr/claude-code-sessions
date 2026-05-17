@@ -234,15 +234,17 @@ const loadSessionTreeDataInternal = (
             }
           }
 
-          return {
+          const info: AgentInfo = {
             id: agentId,
             name: agentName,
             messageCount: agentUserAssistant.length,
-          } satisfies AgentInfo
+          }
+          return info
         }).pipe(
           Effect.catchAll((error) => {
             log.debug(`Agent file not readable: ${agentId}`, error)
-            return Effect.succeed({ id: agentId, messageCount: 0 } satisfies AgentInfo)
+            const fallback: AgentInfo = { id: agentId, messageCount: 0 }
+            return Effect.succeed(fallback)
           })
         )
       },

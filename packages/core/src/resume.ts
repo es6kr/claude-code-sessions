@@ -2,7 +2,7 @@
  * Resume/start session functionality - Server-side only
  * This module uses child_process and should NOT be imported in browser environments
  */
-import { spawn } from 'node:child_process'
+import { execSync, spawn } from 'node:child_process'
 import type {
   OpenExternalTerminalOptions,
   ResumeSessionOptions,
@@ -52,19 +52,29 @@ end tell
       return { success: true, pid: child.pid }
     }
 
-    // Linux: try common terminal emulators
-    const terminals = ['gnome-terminal', 'konsole', 'xterm']
-    for (const term of terminals) {
+    // Linux: try common terminal emulators with command -v pre-check.
+    // spawn() ENOENT is async, so try/catch cannot catch missing binaries.
+    // Use execSync('command -v <term>') to verify the binary exists first.
+    const terminalConfigs: Array<{ bin: string; args: string[] }> = [
+      {
+        bin: 'gnome-terminal',
+        args: ['--working-directory', workingDir, '--', 'bash', '-c', command],
+      },
+      { bin: 'konsole', args: ['--workdir', workingDir, '-e', 'bash', '-c', command] },
+      { bin: 'xterm', args: ['-e', `cd "${workingDir}" && ${command}; exec $SHELL`] },
+    ]
+    for (const { bin, args } of terminalConfigs) {
       try {
-        const child = spawn(term, ['--', 'bash', '-c', `cd "${workingDir}" && ${command}`], {
-          detached: true,
-          stdio: 'ignore',
-        })
-        child.unref()
-        return { success: true, pid: child.pid }
+        execSync(`command -v ${bin}`, { stdio: 'ignore' })
       } catch {
         continue
       }
+      const child = spawn(bin, args, {
+        detached: true,
+        stdio: 'ignore',
+      })
+      child.unref()
+      return { success: true, pid: child.pid }
     }
 
     return { success: false, error: 'No supported terminal emulator found' }
@@ -133,20 +143,25 @@ end tell
       return { success: true, pid: child.pid }
     }
 
-    // Linux: try common terminal emulators
-    const terminals = ['gnome-terminal', 'konsole', 'xterm']
-    for (const term of terminals) {
+    // Linux: try common terminal emulators with command -v pre-check.
+    // spawn() ENOENT is async, so try/catch cannot catch missing binaries.
+    const openTermConfigs: Array<{ bin: string; args: string[] }> = [
+      { bin: 'gnome-terminal', args: ['--working-directory', cwd] },
+      { bin: 'konsole', args: ['--workdir', cwd] },
+      { bin: 'xterm', args: ['-e', `cd "${cwd}" && exec $SHELL`] },
+    ]
+    for (const { bin, args } of openTermConfigs) {
       try {
-        const args = term === 'gnome-terminal' ? ['--working-directory', cwd] : ['--workdir', cwd]
-        const child = spawn(term, args, {
-          detached: true,
-          stdio: 'ignore',
-        })
-        child.unref()
-        return { success: true, pid: child.pid }
+        execSync(`command -v ${bin}`, { stdio: 'ignore' })
       } catch {
         continue
       }
+      const child = spawn(bin, args, {
+        detached: true,
+        stdio: 'ignore',
+      })
+      child.unref()
+      return { success: true, pid: child.pid }
     }
 
     return { success: false, error: 'No supported terminal emulator found' }

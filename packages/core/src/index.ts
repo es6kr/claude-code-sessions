@@ -131,10 +131,12 @@ export {
   splitSession,
   previewCleanup,
   clearSessions,
+  searchBySessionId,
   searchSessions,
   loadSessionTreeData,
   loadProjectTreeData,
   getCachePath,
+  updateMessageContent,
   updateSessionSummary,
   repairChain,
 } from './session.js'
@@ -153,6 +155,21 @@ export {
 // Logger
 export type { Logger } from './logger.js'
 export { setLogger, getLogger, createLogger } from './logger.js'
+
+// Schema validation (Effect Schema)
+export {
+  SessionMessage,
+  validateMessage,
+  isAgentNameMessage,
+  isAssistantMessage,
+  isCustomTitleMessage,
+  isFileHistorySnapshotMessage,
+  isHumanMessage,
+  isProgressMessage,
+  isSystemMessage,
+  isSummaryMessage,
+  isUserMessage,
+} from './schemas/index.js'
 
 // Validation utilities
 export type {

@@ -13,7 +13,7 @@ vi.mock('../paths.js', async () => {
   }
 })
 
-import { deleteMessage, readSession, validateChain } from '../session.js'
+import { deleteMessage, readSession, updateMessageContent, validateChain } from '../session.js'
 import { getSessionsDir } from '../paths.js'
 
 describe('deleteMessage', () => {
@@ -351,5 +351,215 @@ describe('deleteMessage', () => {
     // parentUuid chain should be repaired: assistant-final -> user-1
     const finalAssistant = remainingMessages.find((m) => m.uuid === 'assistant-final')
     expect(finalAssistant?.parentUuid).toBe('user-1')
+  })
+})
+
+describe('updateMessageContent', () => {
+  let tempDir: string
+  let projectDir: string
+  const projectName = '-Users-test-update-content'
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-session-update-'))
+    projectDir = path.join(tempDir, projectName)
+    await fs.mkdir(projectDir, { recursive: true })
+    vi.mocked(getSessionsDir).mockReturnValue(tempDir)
+  })
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true })
+    vi.clearAllMocks()
+  })
+
+  const writeMessages = async (sessionId: string, messages: unknown[]) => {
+    const filePath = path.join(projectDir, `${sessionId}.jsonl`)
+    await fs.writeFile(filePath, messages.map((m) => JSON.stringify(m)).join('\n') + '\n')
+  }
+
+  it('should replace text in user message with single text content', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'user',
+        uuid: 'user-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Original' }] },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'user-1', 'Updated text')
+    )
+
+    expect(result.success).toBe(true)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(updated[0].message?.content).toEqual([{ type: 'text', text: 'Updated text' }])
+  })
+
+  it('should preserve non-text blocks (tool_use) when replacing text', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'assistant',
+        uuid: 'asst-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'Original explanation' },
+            { type: 'tool_use', id: 'tool-1', name: 'Read', input: { path: '/foo' } },
+          ],
+        },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'asst-1', 'New explanation')
+    )
+
+    expect(result.success).toBe(true)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    const content = updated[0].message?.content as Array<Record<string, unknown>>
+    expect(content).toHaveLength(2)
+    expect(content[0]).toEqual({ type: 'text', text: 'New explanation' })
+    expect(content[1]).toEqual({
+      type: 'tool_use',
+      id: 'tool-1',
+      name: 'Read',
+      input: { path: '/foo' },
+    })
+  })
+
+  it('should preserve order: replace first text but keep surrounding non-text blocks', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'assistant',
+        uuid: 'asst-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', id: 'tool-1', name: 'Read', input: {} },
+            { type: 'text', text: 'Original' },
+            { type: 'thinking', text: 'thinking...' },
+          ],
+        },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'asst-1', 'Updated')
+    )
+
+    expect(result.success).toBe(true)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    const content = updated[0].message?.content as Array<Record<string, unknown>>
+    expect(content).toHaveLength(3)
+    expect(content[0]).toEqual({ type: 'tool_use', id: 'tool-1', name: 'Read', input: {} })
+    expect(content[1]).toEqual({ type: 'text', text: 'Updated' })
+    expect(content[2]).toEqual({ type: 'thinking', text: 'thinking...' })
+  })
+
+  it('should append text block when message has no text content', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'assistant',
+        uuid: 'asst-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'tool-1', name: 'Read', input: {} }],
+        },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'asst-1', 'New text')
+    )
+
+    expect(result.success).toBe(true)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    const content = updated[0].message?.content as Array<Record<string, unknown>>
+    expect(content).toHaveLength(2)
+    expect(content[0]).toEqual({ type: 'tool_use', id: 'tool-1', name: 'Read', input: {} })
+    expect(content[1]).toEqual({ type: 'text', text: 'New text' })
+  })
+
+  it('should normalize string content to array on update', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'user',
+        uuid: 'user-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: { role: 'user', content: 'Plain string content' },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'user-1', 'Updated')
+    )
+
+    expect(result.success).toBe(true)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(updated[0].message?.content).toEqual([{ type: 'text', text: 'Updated' }])
+  })
+
+  it('should accept human-type messages', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'human',
+        uuid: 'human-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Hello' }] },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'human-1', 'Hi there')
+    )
+
+    expect(result.success).toBe(true)
+  })
+
+  it('should reject non-editable message types (summary)', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'summary',
+        uuid: 'sum-1',
+        summary: 'Session summary',
+        leafUuid: 'abc',
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'sum-1', 'Modified')
+    )
+
+    expect(result.success).toBe(false)
+    expect((result as { error?: string }).error).toBeDefined()
+  })
+
+  it('should return error when uuid not found', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'user',
+        uuid: 'user-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Hi' }] },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'nonexistent', 'New')
+    )
+
+    expect(result.success).toBe(false)
+    expect((result as { error?: string }).error).toBe('Message not found')
   })
 })

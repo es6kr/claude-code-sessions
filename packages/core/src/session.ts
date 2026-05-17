@@ -18,6 +18,7 @@ export {
   renameSession,
   moveSession,
   splitSession,
+  updateMessageContent,
   updateSessionSummary,
   repairChain,
   // Tree data
@@ -37,6 +38,7 @@ export {
   previewCleanup,
   clearSessions,
   // Search
+  searchBySessionId,
   searchSessions,
   // Files
   getSessionFiles,

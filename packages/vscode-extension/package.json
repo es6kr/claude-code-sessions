@@ -23,7 +23,9 @@
     "ai"
   ],
   "icon": "resources/marketplace.png",
-  "activationEvents": [],
+  "activationEvents": [
+    "onCustomEditor:claudeSessions.jsonlPreview"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
@@ -152,6 +154,18 @@
         "command": "claudeSessions.restartWebServer",
         "title": "Restart Web Server",
         "category": "Claude Sessions"
+      },
+      {
+        "command": "claudeSessions.openPreview",
+        "title": "Open Preview",
+        "category": "Claude Sessions",
+        "icon": "$(open-preview)"
+      },
+      {
+        "command": "claudeSessions.openPreviewToSide",
+        "title": "Open Preview to the Side",
+        "category": "Claude Sessions",
+        "icon": "$(open-preview)"
       }
     ],
     "keybindings": [
@@ -163,6 +177,35 @@
       }
     ],
     "menus": {
+      "editor/title": [
+        {
+          "command": "claudeSessions.openPreviewToSide",
+          "when": "resourceExtname == .jsonl",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "claudeSessions.openPreview",
+          "when": "resourceExtname == .jsonl",
+          "group": "navigation"
+        },
+        {
+          "command": "claudeSessions.openPreviewToSide",
+          "when": "resourceExtname == .jsonl",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "claudeSessions.openPreview",
+          "when": "resourceExtname == .jsonl"
+        },
+        {
+          "command": "claudeSessions.openPreviewToSide",
+          "when": "resourceExtname == .jsonl"
+        }
+      ],
       "view/title": [
         {
           "command": "claudeSessions.clearFilter",
@@ -313,6 +356,18 @@
         }
       ]
     },
+    "customEditors": [
+      {
+        "viewType": "claudeSessions.jsonlPreview",
+        "displayName": "Claude Session Preview",
+        "selector": [
+          {
+            "filenamePattern": "*.jsonl"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
     "configuration": {
       "title": "Claude Code Sessions",
       "properties": {
@@ -398,17 +453,24 @@
   },
   "scripts": {
     "vscode:prepublish": "pnpm build",
-    "build": "tsup",
+    "build": "pnpm build:extension && pnpm build:webview",
+    "build:extension": "tsup",
+    "build:webview": "pnpm exec vite build --config vite.webview.config.ts",
     "dev": "tsup --watch",
-    "package": "vsce package --no-dependencies",
     "lint": "eslint src",
-    "test": "tsc -p tsconfig.test.json && node ./out/test/runTest.js"
+    "package": "vsce package --no-dependencies",
+    "test": "tsc -p tsconfig.test.json && node ./out/test/runTest.js",
+    "typecheck": "tsc --noEmit && pnpm typecheck:webview",
+    "typecheck:webview": "svelte-check --workspace src/webview --threshold error"
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
-    "effect": "^3.21.1"
+    "effect": "^3.21.2"
   },
   "devDependencies": {
+    "@claude-sessions/ui": "workspace:^",
+    "@sveltejs/vite-plugin-svelte": "^6.2.4",
+    "@tailwindcss/vite": "^4.2.4",
     "@types/glob": "^9.0.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^25.6.0",
@@ -417,7 +479,11 @@
     "@vscode/vsce": "^3.9.1",
     "glob": "^13.0.6",
     "mocha": "^11.7.5",
+    "svelte": "^5.55.5",
+    "svelte-check": "^4.4.6",
+    "tailwindcss": "^4.2.4",
     "tsup": "^8.3.0",
-    "typescript": "^5.7.0"
+    "typescript": "^5.7.0",
+    "vite": "^7.3.2"
   }
 }
