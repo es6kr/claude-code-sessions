@@ -7,6 +7,9 @@ import * as path from 'node:path'
 import { getSessionsDir, folderNameToPath } from '../paths.js'
 import type { Project } from '../types.js'
 import { fileExists } from '../utils.js'
+import { createLogger } from '../logger.js'
+
+const log = createLogger('projects')
 
 // List all project directories
 export const listProjects = Effect.gen(function* () {
@@ -20,7 +23,7 @@ export const listProjects = Effect.gen(function* () {
 
   const entries = yield* Effect.tryPromise(() => fs.readdir(sessionsDir, { withFileTypes: true }))
 
-  const projects = yield* Effect.all(
+  const results = yield* Effect.all(
     entries
       .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
       .map((entry) =>
@@ -37,10 +40,19 @@ export const listProjects = Effect.gen(function* () {
             path: projectPath,
             sessionCount: sessionFiles.length,
           } satisfies Project
-        })
+        }).pipe(
+          // Guard against TOCTOU: an entry's folder may vanish between the top-level
+          // readdir and this per-entry readdir (cross-PC sync, manual deletion).
+          // A single ENOENT must not abort enumeration of healthy projects.
+          // See Issue #103.
+          Effect.catchAll((error) => {
+            log.debug(`listProjects: skipping unreadable project ${entry.name}`, error)
+            return Effect.succeed(null as Project | null)
+          })
+        )
       ),
     { concurrency: 10 }
   )
 
-  return projects
+  return results.filter((p): p is Project => p !== null)
 })

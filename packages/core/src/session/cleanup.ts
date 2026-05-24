@@ -18,7 +18,10 @@ import { listProjects } from './projects.js'
 import { listSessions, deleteSession } from './crud.js'
 import { listSessionsMeta } from './crud-streaming.js'
 import { filterSessionFiles } from './crud-helpers.js'
+import { createLogger } from '../logger.js'
 import type { Message, CleanupPreview, ClearSessionsResult } from '../types.js'
+
+const log = createLogger('cleanup')
 
 // Grace period for "folder missing on disk" before marking a project as stale.
 // Protects sessions arriving via cross-PC sync (e.g., syncthing) where the
@@ -29,7 +32,12 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000
 const getMostRecentSessionMtime = async (projectPath: string): Promise<number> => {
   const exists = await fileExists(projectPath)
   if (!exists) return 0
-  const files = await fs.readdir(projectPath)
+  // Guard against TOCTOU: project folder may vanish between fileExists and readdir
+  // (cross-PC sync, manual deletion, etc). See Issue #103.
+  const files = await fs.readdir(projectPath).catch((error) => {
+    log.debug(`getMostRecentSessionMtime: skipping unreadable project folder ${projectPath}`, error)
+    return [] as string[]
+  })
   const sessionFiles = filterSessionFiles(files)
   let mostRecent = 0
   for (const file of sessionFiles) {
@@ -278,7 +286,18 @@ export const clearSessions = (options: {
     if (clearInvalid) {
       for (const project of targetProjects) {
         const projectPath = path.join(getSessionsDir(), project.name)
-        const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+        // Guard against TOCTOU: project folder may vanish between listProjects and this readdir
+        // (cross-PC sync, manual deletion). One ENOENT must not abort cleanup of other projects.
+        // See Issue #103.
+        const files = yield* Effect.tryPromise(() => fs.readdir(projectPath)).pipe(
+          Effect.catchAll((error) => {
+            log.debug(
+              `Step 1 (clearInvalid): skipping missing project folder ${project.name}`,
+              error
+            )
+            return Effect.succeed([] as string[])
+          })
+        )
         const sessionFiles = filterSessionFiles(files)
 
         for (const file of sessionFiles) {
@@ -341,7 +360,16 @@ export const clearSessions = (options: {
     if (deduplicateTitles) {
       for (const project of targetProjects) {
         const projectPath = path.join(getSessionsDir(), project.name)
-        const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+        // Guard against TOCTOU: project folder may vanish mid-operation. See Issue #103.
+        const files = yield* Effect.tryPromise(() => fs.readdir(projectPath)).pipe(
+          Effect.catchAll((error) => {
+            log.debug(
+              `Step 6 (deduplicateTitles): skipping missing project folder ${project.name}`,
+              error
+            )
+            return Effect.succeed([] as string[])
+          })
+        )
         const sessionFiles = filterSessionFiles(files)
 
         for (const file of sessionFiles) {
