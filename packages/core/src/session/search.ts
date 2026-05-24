@@ -11,14 +11,14 @@ import { listSessions } from './crud.js'
 import type { Message, SearchResult, Project } from '../types.js'
 
 // Pure function: extract snippet around match
-const extractSnippet = (text: string, matchIndex: number, queryLength: number): string => {
+export const extractSnippet = (text: string, matchIndex: number, queryLength: number): string => {
   const start = Math.max(0, matchIndex - 50)
   const end = Math.min(text.length, matchIndex + queryLength + 50)
   return (start > 0 ? '...' : '') + text.slice(start, end).trim() + (end < text.length ? '...' : '')
 }
 
 // Pure function: find first matching message in session content
-const findContentMatch = (
+export const findContentMatch = (
   lines: string[],
   queryLower: string,
   filePath: string
