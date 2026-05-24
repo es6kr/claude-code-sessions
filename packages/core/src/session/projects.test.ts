@@ -117,5 +117,32 @@ describe('listProjects', () => {
       const names = projects.map((p) => p.name).sort()
       expect(names).toEqual([projOk1, projOk2].sort())
     })
+
+    it('T7: non-ENOENT readdir error (EACCES) PROPAGATES (does not silently skip)', async () => {
+      const projDenied = '-Users-test-listprojects-eacces'
+      const projOk = '-Users-test-listprojects-ok-eacces'
+      await fs.mkdir(path.join(tempDir, projDenied), { recursive: true })
+      await fs.mkdir(path.join(tempDir, projOk), { recursive: true })
+      await writeSession(tempDir, projDenied, 'd1')
+      await writeSession(tempDir, projOk, 'o1')
+
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      vi.mocked(fs.readdir).mockImplementation(((p: unknown, opts: unknown) => {
+        if (typeof p === 'string' && p.endsWith(projDenied)) {
+          const err = new Error(
+            `EACCES: permission denied, scandir '${p}'`
+          ) as NodeJS.ErrnoException
+          err.code = 'EACCES'
+          return Promise.reject(err)
+        }
+        return (actual.readdir as typeof fs.readdir)(
+          p as Parameters<typeof fs.readdir>[0],
+          opts as Parameters<typeof fs.readdir>[1]
+        )
+      }) as typeof fs.readdir)
+
+      // After narrow-catch fix: EACCES is NOT swallowed → listProjects fails loudly
+      await expect(Effect.runPromise(listProjects)).rejects.toThrow()
+    })
   })
 })

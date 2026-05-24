@@ -6,7 +6,7 @@ import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir, folderNameToPath } from '../paths.js'
 import type { Project } from '../types.js'
-import { fileExists } from '../utils.js'
+import { fileExists, isMissingFolderError } from '../utils.js'
 import { createLogger } from '../logger.js'
 
 const log = createLogger('projects')
@@ -29,7 +29,10 @@ export const listProjects = Effect.gen(function* () {
       .map((entry) =>
         Effect.gen(function* () {
           const projectPath = path.join(sessionsDir, entry.name)
-          const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+          const files = yield* Effect.tryPromise({
+            try: () => fs.readdir(projectPath),
+            catch: (error) => error as NodeJS.ErrnoException,
+          })
           // Exclude agent- files (subagent logs)
           const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
           const displayName = yield* Effect.tryPromise(() => folderNameToPath(entry.name))
@@ -43,10 +46,13 @@ export const listProjects = Effect.gen(function* () {
         }).pipe(
           // Guard against TOCTOU: an entry's folder may vanish between the top-level
           // readdir and this per-entry readdir (cross-PC sync, manual deletion).
-          // A single ENOENT must not abort enumeration of healthy projects.
-          // See Issue #103.
+          // Narrow to ENOENT/ENOTDIR so unrelated I/O failures (EACCES, EIO, etc.)
+          // still propagate. See Issue #103.
           Effect.catchAll((error) => {
-            log.debug(`listProjects: skipping unreadable project ${entry.name}`, error)
+            if (!isMissingFolderError(error)) {
+              return Effect.fail(error)
+            }
+            log.debug(`listProjects: skipping missing project ${entry.name}`, error)
             return Effect.succeed(null as Project | null)
           })
         )

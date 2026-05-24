@@ -28,6 +28,18 @@ export class FileWriteError extends Data.TaggedError('FileWriteError')<{
   readonly cause: unknown
 }> {}
 
+/**
+ * True when the error indicates a missing or invalid directory path
+ * (ENOENT, ENOTDIR). Used to narrow TOCTOU-race recovery so unrelated
+ * I/O failures (EACCES, EIO, EMFILE, EBUSY, etc.) still propagate.
+ *
+ * See Issue #103 + .claude/rules/async-io.md.
+ */
+export const isMissingFolderError = (error: unknown): boolean => {
+  const code = (error as NodeJS.ErrnoException | null | undefined)?.code
+  return code === 'ENOENT' || code === 'ENOTDIR'
+}
+
 // IDE tag pattern for removal
 const IDE_TAG_PATTERN = /<ide_[^>]*>[\s\S]*?<\/ide_[^>]*>/g
 
