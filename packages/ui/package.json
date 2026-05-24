@@ -14,11 +14,11 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json --threshold error"
   },
   "peerDependencies": {
-    "svelte": "^5.55.7"
+    "svelte": "^5.55.9"
   },
   "devDependencies": {
     "@claude-sessions/core": "workspace:^",
-    "svelte": "^5.55.7",
+    "svelte": "^5.55.9",
     "svelte-check": "^4.4.8",
     "typescript": "^5.9.3"
   }
