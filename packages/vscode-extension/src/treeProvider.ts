@@ -303,25 +303,35 @@ export class SessionTreeProvider
       .get<TitleDisplayMode>('titleDisplayMode', 'message')
     const locale = vscode.env.language
 
+    // Cap label length so the description (count · agentName · time) stays visible
+    // even for very long titles. Full title remains available in the tooltip.
+    // Native VSCode TreeView uses flex layout where label has flex:1 and shrinks
+    // before description — pre-truncating reverses that priority.
+    const LABEL_MAX = 40
+
     return sessions.map((s, index) => {
       const hasSubItems = sessionHasSubItems(s)
       const shouldExpand = !this.filterText && expandFirst && index === 0 && hasSubItems
 
       // Line 1: title (customTitle ?? title chain — agentName demoted)
-      const labelText = session.getDisplayTitle({
+      const fullLabel = session.getDisplayTitle({
         customTitle: s.customTitle,
         title: s.title,
         createdAt: s.createdAt,
         mode: titleMode,
         locale,
       })
+      const labelText =
+        fullLabel.length > LABEL_MAX ? fullLabel.slice(0, LABEL_MAX - 1) + '…' : fullLabel
 
       // Line 2 (rendered as TreeItem.description, muted text on the same row):
-      // agentName · {relativeTime} · 💬 {messageCount}
+      // agentName · {relativeTime}
+      // Note: messageCount is intentionally omitted here — SessionTreeItem's constructor
+      // already prefixes the description with `${count} · ...`, so passing it again would
+      // duplicate "121 · agentName · 2h ago · 💬 121"
       const descriptionText = session.getSecondaryInfo({
         agentName: s.agentName,
         updatedAt: s.updatedAt,
-        messageCount: s.messageCount,
         locale,
       })
 
