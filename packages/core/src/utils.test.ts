@@ -5,6 +5,7 @@ import {
   extractTitle,
   fileExists,
   getDisplayTitle,
+  getSecondaryInfo,
   maskHomePath,
   parseJsonlLines,
   readJsonlFile,
@@ -217,42 +218,103 @@ describe('getDisplayTitle', () => {
     expect(getDisplayTitle(undefined, title)).toBe('/session repair --dry-run')
   })
 
-  it('should prioritize customTitle > agentName > title', () => {
+  it('should prioritize customTitle > title', () => {
     expect(
       getDisplayTitle({
         customTitle: 'Custom',
-        agentName: 'Agent',
         title: 'Title',
       })
     ).toBe('Custom')
 
-    expect(
-      getDisplayTitle({
-        agentName: 'Agent',
-        title: 'Title',
-      })
-    ).toBe('Agent')
-
     expect(getDisplayTitle({ title: 'Title' })).toBe('Title')
   })
 
-  it('should ignore empty agentName and fall through to title', () => {
+  it('should ignore empty customTitle and fall through to title', () => {
     expect(
       getDisplayTitle({
-        agentName: '',
+        customTitle: '',
         title: 'Title',
       })
     ).toBe('Title')
   })
+})
 
-  it('should ignore empty customTitle and fall through to agentName', () => {
+describe('getSecondaryInfo', () => {
+  // Fixed reference instant for deterministic relative-time assertions
+  const NOW = new Date('2026-05-25T12:00:00.000Z').getTime()
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('returns empty string when no fields provided', () => {
+    expect(getSecondaryInfo({})).toBe('')
+  })
+
+  it('renders agentName alone', () => {
+    expect(getSecondaryInfo({ agentName: 'Researcher' })).toBe('Researcher')
+  })
+
+  it('renders relative time alone from ISO string', () => {
+    const fiveMinAgo = new Date(NOW - 5 * 60_000).toISOString()
+    expect(getSecondaryInfo({ updatedAt: fiveMinAgo })).toBe('5m ago')
+  })
+
+  it('renders relative time alone from Unix ms number', () => {
+    expect(getSecondaryInfo({ updatedAt: NOW - 3 * 3600_000 })).toBe('3h ago')
+  })
+
+  it('renders message count alone', () => {
+    expect(getSecondaryInfo({ messageCount: 42 })).toBe('💬 42')
+  })
+
+  it('joins all three parts with default separator " · "', () => {
+    const twoHoursAgo = new Date(NOW - 2 * 3600_000).toISOString()
     expect(
-      getDisplayTitle({
-        customTitle: '',
-        agentName: 'Agent',
-        title: 'Title',
+      getSecondaryInfo({
+        agentName: 'Coder',
+        updatedAt: twoHoursAgo,
+        messageCount: 121,
       })
-    ).toBe('Agent')
+    ).toBe('Coder · 2h ago · 💬 121')
+  })
+
+  it('skips agentName when empty string', () => {
+    expect(
+      getSecondaryInfo({
+        agentName: '',
+        messageCount: 7,
+      })
+    ).toBe('💬 7')
+  })
+
+  it('skips updatedAt when empty string', () => {
+    expect(
+      getSecondaryInfo({
+        agentName: 'Agent',
+        updatedAt: '',
+        messageCount: 1,
+      })
+    ).toBe('Agent · 💬 1')
+  })
+
+  it('treats messageCount=0 as a renderable value (not skipped)', () => {
+    expect(getSecondaryInfo({ messageCount: 0 })).toBe('💬 0')
+  })
+
+  it('supports a custom separator', () => {
+    expect(
+      getSecondaryInfo({
+        agentName: 'Agent',
+        messageCount: 5,
+        separator: ' | ',
+      })
+    ).toBe('Agent | 💬 5')
   })
 })
 

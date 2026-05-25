@@ -307,20 +307,26 @@ export class SessionTreeProvider
       const hasSubItems = sessionHasSubItems(s)
       const shouldExpand = !this.filterText && expandFirst && index === 0 && hasSubItems
 
-      const descriptionText =
-        titleMode === 'datetime' && !s.customTitle && !s.agentName
-          ? session.getDisplayTitle(undefined, s.title)
-          : undefined
+      // Line 1: title (customTitle ?? title chain — agentName demoted)
+      const labelText = session.getDisplayTitle({
+        customTitle: s.customTitle,
+        title: s.title,
+        createdAt: s.createdAt,
+        mode: titleMode,
+        locale,
+      })
+
+      // Line 2 (rendered as TreeItem.description, muted text on the same row):
+      // agentName · {relativeTime} · 💬 {messageCount}
+      const descriptionText = session.getSecondaryInfo({
+        agentName: s.agentName,
+        updatedAt: s.updatedAt,
+        messageCount: s.messageCount,
+        locale,
+      })
 
       return new SessionTreeItem(
-        session.getDisplayTitle({
-          agentName: s.agentName,
-          customTitle: s.customTitle,
-          title: s.title,
-          createdAt: s.createdAt,
-          mode: titleMode,
-          locale,
-        }),
+        labelText,
         hasSubItems
           ? shouldExpand
             ? vscode.TreeItemCollapsibleState.Expanded
@@ -335,7 +341,7 @@ export class SessionTreeProvider
         undefined, // agentId
         undefined, // itemIndex
         getSessionTooltip(s), // tooltip
-        descriptionText, // session description (first message in datetime mode)
+        descriptionText || undefined, // session description (secondary line; undefined when empty)
         dateGrouped, // pass through so session knows it's in grouped mode
         dateGrouped ? this.projectDisplayNames.get(s.projectName) : undefined
       )

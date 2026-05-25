@@ -4,6 +4,7 @@
   import {
     sortProjects,
     getDisplayTitle as coreGetDisplayTitle,
+    getSecondaryInfo as coreGetSecondaryInfo,
     getSessionTooltip,
     getTotalTodoCount,
     sessionHasSubItems,
@@ -84,15 +85,24 @@
     return projectSessionData.get(projectName)?.get(sessionId)
   }
 
-  // Get display title using core utility
+  // Get display title using core utility (customTitle ?? title chain — agentName demoted)
   const getDisplayTitle = (session: SessionMeta): string => {
     const data = getSessionData(session.projectName, session.id)
     return coreGetDisplayTitle({
-      agentName: data?.agentName,
       customTitle: data?.customTitle,
       title: session.title,
       createdAt: session.createdAt,
       mode: titleDisplayMode,
+    })
+  }
+
+  // Build line-2 metadata: agentName · {relativeTime} · 💬 {messageCount}
+  const getSecondaryInfo = (session: SessionMeta): string => {
+    const data = getSessionData(session.projectName, session.id)
+    return coreGetSecondaryInfo({
+      agentName: data?.agentName,
+      updatedAt: data?.updatedAt ?? session.updatedAt,
+      messageCount: session.messageCount,
     })
   }
 
@@ -289,10 +299,12 @@
                 {@const isDragging = draggedSession?.id === session.id}
                 {@const sessionInfo = getSessionInfo(session)}
                 {@const displayTitle = getDisplayTitle(session)}
+                {@const secondaryInfo = getSecondaryInfo(session)}
                 {@const data = getSessionData(session.projectName, session.id)}
-                {@const isTitleFallback = !data?.customTitle && !data?.agentName}
+                {@const isTitleFallback = !data?.customTitle}
                 {@const isExpanded = expandedSessions.has(session.id)}
                 {@const hasSubItems = hasSessionSubItems(session)}
+                {@const hasSideIcons = sessionInfo.agents > 0 || sessionInfo.todos > 0}
                 <li
                   class="relative border-t border-gh-border-subtle group {isSelected
                     ? 'bg-gh-accent/20 border-l-3 border-l-gh-accent'
@@ -301,7 +313,7 @@
                   ondragstart={(e) => handleDragStart(e, session)}
                   ondragend={handleDragEnd}
                 >
-                  <!-- Session Row -->
+                  <!-- Session Row (two-line: title + secondary metadata) -->
                   <div class="flex items-center">
                     {#if hasSubItems}
                       <button
@@ -322,34 +334,44 @@
                         class="w-full py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm"
                         onclick={() => onSelectSession(session)}
                       >
-                        <span
-                          class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap {isTitleFallback
-                            ? 'italic text-gh-text-secondary'
-                            : ''}"
-                        >
-                          <CommandTitle title={displayTitle} />
-                        </span>
-                        <span
-                          class="flex-shrink-0 flex items-center gap-2 text-xs text-gh-text-secondary"
-                        >
-                          <span class="flex items-center gap-0.5">
-                            <span>{TREE_ICONS.session.emoji}</span><span
-                              >{session.messageCount}</span
-                            >
+                        <span class="flex-1 min-w-0 flex flex-col gap-0.5">
+                          <!-- Line 1: title -->
+                          <span
+                            class="overflow-hidden text-ellipsis whitespace-nowrap {isTitleFallback
+                              ? 'italic text-gh-text-secondary'
+                              : ''}"
+                          >
+                            <CommandTitle title={displayTitle} />
                           </span>
-                          {#if sessionInfo.agents > 0}
-                            <span class="flex items-center gap-0.5">
-                              <span>{TREE_ICONS.agent.emoji}</span><span>{sessionInfo.agents}</span>
-                            </span>
-                          {/if}
-                          {#if sessionInfo.todos > 0}
-                            <span class="flex items-center gap-0.5">
-                              <span>{TREE_ICONS['todos-group'].emoji}</span><span
-                                >{sessionInfo.todos}</span
-                              >
+                          <!-- Line 2: secondary metadata (agentName · time · 💬 count) -->
+                          {#if secondaryInfo}
+                            <span
+                              class="overflow-hidden text-ellipsis whitespace-nowrap text-xs text-gh-text-secondary"
+                            >
+                              {secondaryInfo}
                             </span>
                           {/if}
                         </span>
+                        {#if hasSideIcons}
+                          <span
+                            class="flex-shrink-0 flex items-center gap-2 text-xs text-gh-text-secondary"
+                          >
+                            {#if sessionInfo.agents > 0}
+                              <span class="flex items-center gap-0.5">
+                                <span>{TREE_ICONS.agent.emoji}</span><span
+                                  >{sessionInfo.agents}</span
+                                >
+                              </span>
+                            {/if}
+                            {#if sessionInfo.todos > 0}
+                              <span class="flex items-center gap-0.5">
+                                <span>{TREE_ICONS['todos-group'].emoji}</span><span
+                                  >{sessionInfo.todos}</span
+                                >
+                              </span>
+                            {/if}
+                          </span>
+                        {/if}
                       </button>
                     </FloatingTooltip>
 

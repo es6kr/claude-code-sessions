@@ -268,7 +268,6 @@
     e.stopPropagation()
     const sessionData = projectSessionData.get(session.projectName)?.get(session.id)
     const currentTitle = getDisplayTitle({
-      agentName: sessionData?.agentName,
       customTitle: sessionData?.customTitle,
       title: session.title,
       maxLength: Infinity,
@@ -686,9 +685,6 @@
     {messages}
     {todos}
     {agents}
-    agentName={selectedSession
-      ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.agentName
-      : undefined}
     customTitle={selectedSession
       ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.customTitle
       : undefined}

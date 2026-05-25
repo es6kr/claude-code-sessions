@@ -147,7 +147,6 @@ export const isContinuationSummary = (msg: Message): boolean => {
  * Options for getDisplayTitle when using the options-based signature
  */
 export interface DisplayTitleOptions {
-  agentName?: string
   customTitle?: string
   title?: string
   createdAt?: string
@@ -161,8 +160,11 @@ export interface DisplayTitleOptions {
 
 /**
  * Get display title with fallback logic
- * Priority: customTitle > agentName > title/datetime > fallback
+ * Priority: customTitle > title/datetime > fallback
  * Also handles slash command format in title
+ *
+ * Note: agentName is no longer part of the title fallback chain. Use getSecondaryInfo()
+ * to render agentName + metadata as a secondary line on list items.
  *
  * Supports two call signatures:
  * - Positional: getDisplayTitle(customTitle, title, fallback?)
@@ -181,13 +183,11 @@ export function getDisplayTitle(
 ): string {
   let mode: TitleDisplayMode = 'message'
   let createdAt: string | undefined
-  let agentName: string | undefined
   let customTitle: string | undefined
   let locale: string | undefined
 
   if (typeof customTitleOrOptions === 'object' && customTitleOrOptions !== null) {
     const opts = customTitleOrOptions
-    agentName = opts.agentName
     customTitle = opts.customTitle
     title = opts.title
     createdAt = opts.createdAt
@@ -199,7 +199,6 @@ export function getDisplayTitle(
   }
 
   if (customTitle) return customTitle
-  if (agentName) return agentName
 
   if (mode === 'datetime' && createdAt) {
     return formatRelativeTime(createdAt, locale)
@@ -217,6 +216,39 @@ export function getDisplayTitle(
   }
 
   return fallback
+}
+
+/**
+ * Options for getSecondaryInfo — builds the secondary metadata line for session list items.
+ */
+export interface SecondaryInfoOptions {
+  agentName?: string
+  /** Last-modified timestamp (Unix ms or ISO string) for relative time formatting */
+  updatedAt?: number | string
+  messageCount?: number
+  locale?: string
+  /** Separator between parts. Default: ' · ' */
+  separator?: string
+}
+
+/**
+ * Build the secondary line for a session list item.
+ *
+ * Format: "{agentName} · {relativeTime} · 💬 {messageCount}"
+ * Missing parts are skipped. Returns an empty string when there is nothing to show.
+ *
+ * Used by web (true two-line layout) and the VSCode extension TreeView
+ * (rendered as TreeItem.description on the same row, muted text).
+ */
+export const getSecondaryInfo = (opts: SecondaryInfoOptions): string => {
+  const sep = opts.separator ?? ' · '
+  const parts: string[] = []
+  if (opts.agentName) parts.push(opts.agentName)
+  if (opts.updatedAt !== undefined && opts.updatedAt !== null && opts.updatedAt !== '') {
+    parts.push(formatRelativeTime(opts.updatedAt, opts.locale))
+  }
+  if (typeof opts.messageCount === 'number') parts.push(`💬 ${opts.messageCount}`)
+  return parts.join(sep)
 }
 
 // Helper to replace message content with extracted text

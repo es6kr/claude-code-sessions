@@ -16,7 +16,6 @@
   let toast = $state<string | null>(null)
   let toastDuration = $state(3000)
   let projectDisplayName = $state<string>('')
-  let agentName = $state<string | undefined>(undefined)
   let customTitle = $state<string | undefined>(undefined)
 
   // Modal states
@@ -78,8 +77,8 @@
   const projectName = $derived(decodeURIComponent(page.params.project ?? ''))
   const sessionId = $derived(decodeURIComponent(page.params.id ?? ''))
 
-  // Display title for page title
-  const displayTitle = $derived(customTitle ?? agentName ?? session?.title ?? 'Untitled')
+  // Display title for page title (customTitle ?? title chain — agentName demoted to secondary line in list items)
+  const displayTitle = $derived(customTitle ?? session?.title ?? 'Untitled')
 
   // Back URL
   const backUrl = $derived(`/#project=${encodeURIComponent(projectName)}`)
@@ -114,7 +113,6 @@
       const agentTodoItems = sessionData.todos?.agentTodos?.flatMap((a) => a.todos) ?? []
       todos = [...sessionTodos, ...agentTodoItems]
       agents = sessionData.agents ?? []
-      agentName = sessionData.agentName
       customTitle = sessionData.customTitle
     } catch (e) {
       error = String(e)
@@ -186,7 +184,6 @@
             // Refresh session metadata so title/summary reflects the new first message
             try {
               const sessionData = await api.getSessionTreeData(session!.projectName, session!.id)
-              agentName = sessionData.agentName
               customTitle = sessionData.customTitle
               agents = sessionData.agents ?? []
               const sessionTodos = sessionData.todos?.sessionTodos ?? []
@@ -213,7 +210,7 @@
     showInput(
       'Rename Session',
       'Session title:',
-      customTitle ?? agentName ?? session.title ?? '',
+      customTitle ?? session.title ?? '',
       async (newTitle) => {
         closeInput()
         const trimmed = newTitle.trim()
@@ -223,7 +220,6 @@
           // Refresh messages and metadata from server
           messages = await api.getSession(session!.projectName, session!.id)
           const sessionData = await api.getSessionTreeData(session!.projectName, session!.id)
-          agentName = sessionData.agentName
           customTitle = sessionData.customTitle
         } catch (e) {
           error = String(e)
@@ -316,7 +312,6 @@
       {messages}
       {agents}
       {todos}
-      {agentName}
       {customTitle}
       {projectDisplayName}
       {backUrl}
