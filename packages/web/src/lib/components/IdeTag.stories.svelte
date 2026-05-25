@@ -1,6 +1,8 @@
 <script module>
   import { defineMeta } from '@storybook/addon-svelte-csf'
-  import IdeTag from './IdeTag.svelte'
+  import { IdeTag, SessionContextProvider, createMockSessionContext } from '@claude-sessions/ui'
+
+  const mockCtx = createMockSessionContext()
 
   const { Story } = defineMeta({
     title: 'Components/IdeTag',
@@ -21,9 +23,13 @@
   args={{ tag: 'ide_opened_file', content: 'opened the file /src/lib/utils.ts' }}
 >
   {#snippet children(args)}
-    <div class="p-4 bg-gh-canvas text-gh-text">
-      <IdeTag {...args} />
-    </div>
+    <SessionContextProvider context={mockCtx}>
+      {#snippet children()}
+        <div class="p-4 bg-gh-canvas text-gh-text">
+          <IdeTag {...args} />
+        </div>
+      {/snippet}
+    </SessionContextProvider>
   {/snippet}
 </Story>
 
@@ -32,9 +38,13 @@
   args={{ tag: 'ide_opened_file', content: 'some content without a file path' }}
 >
   {#snippet children(args)}
-    <div class="p-4 bg-gh-canvas text-gh-text">
-      <IdeTag {...args} />
-    </div>
+    <SessionContextProvider context={mockCtx}>
+      {#snippet children()}
+        <div class="p-4 bg-gh-canvas text-gh-text">
+          <IdeTag {...args} />
+        </div>
+      {/snippet}
+    </SessionContextProvider>
   {/snippet}
 </Story>
 
@@ -46,9 +56,13 @@
   }}
 >
   {#snippet children(args)}
-    <div class="p-4 bg-gh-canvas text-gh-text">
-      <IdeTag {...args} />
-    </div>
+    <SessionContextProvider context={mockCtx}>
+      {#snippet children()}
+        <div class="p-4 bg-gh-canvas text-gh-text">
+          <IdeTag {...args} />
+        </div>
+      {/snippet}
+    </SessionContextProvider>
   {/snippet}
 </Story>
 
@@ -57,9 +71,13 @@
   args={{ tag: 'ide_selection', content: 'selected line 42 from /src/routes/+page.svelte' }}
 >
   {#snippet children(args)}
-    <div class="p-4 bg-gh-canvas text-gh-text">
-      <IdeTag {...args} />
-    </div>
+    <SessionContextProvider context={mockCtx}>
+      {#snippet children()}
+        <div class="p-4 bg-gh-canvas text-gh-text">
+          <IdeTag {...args} />
+        </div>
+      {/snippet}
+    </SessionContextProvider>
   {/snippet}
 </Story>
 
@@ -71,9 +89,13 @@
   }}
 >
   {#snippet children(args)}
-    <div class="p-4 bg-gh-canvas text-gh-text">
-      <IdeTag {...args} />
-    </div>
+    <SessionContextProvider context={mockCtx}>
+      {#snippet children()}
+        <div class="p-4 bg-gh-canvas text-gh-text">
+          <IdeTag {...args} />
+        </div>
+      {/snippet}
+    </SessionContextProvider>
   {/snippet}
 </Story>
 
@@ -82,9 +104,13 @@
   args={{ tag: 'ide_opened_file', content: '/packages/core/src/session.ts' }}
 >
   {#snippet children(args)}
-    <div class="p-4 bg-gh-canvas text-gh-text">
-      <IdeTag {...args} />
-    </div>
+    <SessionContextProvider context={mockCtx}>
+      {#snippet children()}
+        <div class="p-4 bg-gh-canvas text-gh-text">
+          <IdeTag {...args} />
+        </div>
+      {/snippet}
+    </SessionContextProvider>
   {/snippet}
 </Story>
 
@@ -94,9 +120,13 @@
   args={{ tag: 'ide_custom_tag', content: 'unexpected IDE tag content here' }}
 >
   {#snippet children(args)}
-    <div class="p-4 bg-gh-canvas text-gh-text">
-      <IdeTag {...args} />
-    </div>
+    <SessionContextProvider context={mockCtx}>
+      {#snippet children()}
+        <div class="p-4 bg-gh-canvas text-gh-text">
+          <IdeTag {...args} />
+        </div>
+      {/snippet}
+    </SessionContextProvider>
   {/snippet}
 </Story>
 
@@ -107,14 +137,18 @@
   }}
 >
   {#snippet children()}
-    <div class="p-4 bg-gh-canvas text-gh-text space-y-3">
-      <IdeTag tag="ide_opened_file" content="opened the file /src/lib/api.ts" />
-      <IdeTag
-        tag="ide_selection"
-        content="selected lines 5 to 15 from /src/lib/components/MessageItem.svelte"
-      />
-      <IdeTag tag="ide_selection" content="const x = computeHash(input)" />
-      <IdeTag tag="ide_unknown" content="some unrecognized tag content" />
-    </div>
+    <SessionContextProvider context={mockCtx}>
+      {#snippet children()}
+        <div class="p-4 bg-gh-canvas text-gh-text space-y-3">
+          <IdeTag tag="ide_opened_file" content="opened the file /src/lib/api.ts" />
+          <IdeTag
+            tag="ide_selection"
+            content="selected lines 5 to 15 from /src/lib/components/MessageItem.svelte"
+          />
+          <IdeTag tag="ide_selection" content="const x = computeHash(input)" />
+          <IdeTag tag="ide_unknown" content="some unrecognized tag content" />
+        </div>
+      {/snippet}
+    </SessionContextProvider>
   {/snippet}
 </Story>

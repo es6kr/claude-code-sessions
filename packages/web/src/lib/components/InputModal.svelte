@@ -27,6 +27,7 @@
 
   let inputValue = $state('')
   let inputRef: HTMLInputElement | undefined = $state()
+  const inputId = 'modal-input-' + Math.random().toString(36).slice(2, 9)
 
   $effect(() => {
     if (show) {
@@ -62,9 +63,10 @@
     >
       <h2 class="text-lg font-semibold mb-4">{title}</h2>
       {#if label}
-        <label class="block text-sm text-gh-text-secondary mb-2">{label}</label>
+        <label for={inputId} class="block text-sm text-gh-text-secondary mb-2">{label}</label>
       {/if}
       <input
+        id={inputId}
         bind:this={inputRef}
         bind:value={inputValue}
         type="text"

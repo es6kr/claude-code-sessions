@@ -11,8 +11,8 @@
     parseStopHookSummary,
     parseTurnDuration,
   } from '$lib/utils'
+  import { IdeTag } from '@claude-sessions/ui'
   import ExpandableContent from './ExpandableContent.svelte'
-  import IdeTag from './IdeTag.svelte'
   import TodoItem from './TodoItem.svelte'
   import TooltipButton from './TooltipButton.svelte'
 
@@ -167,10 +167,9 @@
     const content = getMessageContent(msg)
     if (content.trim().length > 0) return true
 
-    // Warn for messages without content (unless it's thinking-only)
-    if (msg.type === 'user' || msg.type === 'human') {
-      const label = isToolResult ? 'Tool result' : 'User message'
-      console.warn(`${label} without content:`, $state.snapshot(msg))
+    // Warn for messages without content (exclude tool_result — empty content is normal)
+    if ((msg.type === 'user' || msg.type === 'human') && !isToolResult) {
+      console.warn('User message without content:', $state.snapshot(msg))
     }
     return false
   })

@@ -4,15 +4,68 @@
 import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import { getSessionsDir } from '../paths.js'
-import { isInvalidApiKeyMessage, parseJsonlLines, FileReadError, FileWriteError } from '../utils.js'
+import { getSessionsDir, folderNameToPath } from '../paths.js'
+import {
+  isInvalidApiKeyMessage,
+  parseJsonlLines,
+  FileReadError,
+  FileWriteError,
+  fileExists,
+  isMissingFolderError,
+} from '../utils.js'
 import { findLinkedAgents, findOrphanAgents, deleteOrphanAgents } from '../agents.js'
 import { sessionHasTodos, findOrphanTodos, deleteOrphanTodos } from '../todos.js'
 import { listProjects } from './projects.js'
 import { listSessions, deleteSession } from './crud.js'
 import { listSessionsMeta } from './crud-streaming.js'
 import { filterSessionFiles } from './crud-helpers.js'
-import type { Message, CleanupPreview, ClearSessionsResult } from '../types.js'
+import { createLogger } from '../logger.js'
+import type { Message, CleanupPreview, ClearSessionsResult, SessionMeta } from '../types.js'
+
+const log = createLogger('cleanup')
+
+// Grace period for "folder missing on disk" before marking a project as stale.
+// Protects sessions arriving via cross-PC sync (e.g., syncthing) where the
+// decoded workspace path may legitimately not exist yet on the receiving host.
+const STALE_GRACE_PERIOD_DAYS = 30
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+const getMostRecentSessionMtime = async (projectPath: string): Promise<number> => {
+  const exists = await fileExists(projectPath)
+  if (!exists) return 0
+  // Guard against TOCTOU: project folder may vanish between fileExists and readdir
+  // (cross-PC sync, manual deletion, etc). Narrow to ENOENT/ENOTDIR so unrelated
+  // I/O failures (EACCES, EIO, EMFILE) still propagate. See Issue #103.
+  const files = await fs.readdir(projectPath).catch((error: NodeJS.ErrnoException) => {
+    if (!isMissingFolderError(error)) {
+      throw error
+    }
+    log.debug(`getMostRecentSessionMtime: skipping missing project folder ${projectPath}`, error)
+    return [] as string[]
+  })
+  const sessionFiles = filterSessionFiles(files)
+  let mostRecent = 0
+  for (const file of sessionFiles) {
+    try {
+      const stat = await fs.stat(path.join(projectPath, file))
+      const mtime = stat.mtimeMs
+      if (mtime > mostRecent) mostRecent = mtime
+    } catch {
+      // ignore unreadable entries
+    }
+  }
+  return mostRecent
+}
+
+const detectStaleProject = async (encodedName: string, projectPath: string): Promise<boolean> => {
+  const decodedPath = await folderNameToPath(encodedName)
+  const folderMissing = !(await fileExists(decodedPath))
+  if (!folderMissing) return false
+  const recentMtime = await getMostRecentSessionMtime(projectPath)
+  if (recentMtime === 0) return true
+  const ageInDays = (Date.now() - recentMtime) / MS_PER_DAY
+  return ageInDays > STALE_GRACE_PERIOD_DAYS
+}
 
 // Remove invalid API key messages from a session, returns remaining message count
 const cleanInvalidMessages = (projectName: string, sessionId: string) =>
@@ -113,6 +166,12 @@ export const previewCleanup = (projectName?: string) =>
           // Count orphan agents
           const orphanAgents = yield* findOrphanAgents(project.name)
 
+          // Detect stale project (decoded workspace path missing on disk)
+          // with grace-period guard against cross-PC sync false positives.
+          const isStale = yield* Effect.tryPromise(() =>
+            detectStaleProject(project.name, project.path)
+          )
+
           return {
             project: project.name,
             emptySessions,
@@ -120,6 +179,7 @@ export const previewCleanup = (projectName?: string) =>
             emptyWithTodosCount,
             orphanAgentCount: orphanAgents.length,
             orphanTodoCount: 0, // Will set for first project only
+            isStale,
           } satisfies CleanupPreview
         })
       ),
@@ -201,6 +261,8 @@ export const clearSessions = (options: {
   clearOrphanAgents?: boolean
   clearOrphanTodos?: boolean
   deduplicateTitles?: boolean
+  clearStale?: boolean
+  staleProjects?: string[]
 }) =>
   Effect.gen(function* () {
     const {
@@ -211,6 +273,8 @@ export const clearSessions = (options: {
       clearOrphanAgents = true,
       clearOrphanTodos = false,
       deduplicateTitles = false,
+      clearStale = false,
+      staleProjects = [],
     } = options
     const projects = yield* listProjects
     const targetProjects = projectName ? projects.filter((p) => p.name === projectName) : projects
@@ -220,13 +284,35 @@ export const clearSessions = (options: {
     let deduplicatedRecordCount = 0
     let deletedOrphanAgentCount = 0
     let deletedOrphanTodoCount = 0
+    let deletedStaleProjectCount = 0
     const sessionsToDelete: { project: string; sessionId: string }[] = []
+    // Track projects whose folder vanished mid-operation so the caller can
+    // surface a count rather than silently swallowing them. See Issue #103.
+    const skippedProjects = new Set<string>()
 
     // Step 1: Clean invalid API key messages from all sessions (if clearInvalid)
     if (clearInvalid) {
       for (const project of targetProjects) {
         const projectPath = path.join(getSessionsDir(), project.name)
-        const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+        // Guard against TOCTOU: project folder may vanish between listProjects and this readdir
+        // (cross-PC sync, manual deletion). Narrow to ENOENT/ENOTDIR so unrelated I/O failures
+        // (EACCES, EIO, EMFILE) still propagate. See Issue #103.
+        const files = yield* Effect.tryPromise({
+          try: () => fs.readdir(projectPath),
+          catch: (error) => error as NodeJS.ErrnoException,
+        }).pipe(
+          Effect.catchAll((error) => {
+            if (!isMissingFolderError(error)) {
+              return Effect.fail(error)
+            }
+            log.debug(
+              `Step 1 (clearInvalid): skipping missing project folder ${project.name}`,
+              error
+            )
+            skippedProjects.add(project.name)
+            return Effect.succeed([] as string[])
+          })
+        )
         const sessionFiles = filterSessionFiles(files)
 
         for (const file of sessionFiles) {
@@ -245,7 +331,18 @@ export const clearSessions = (options: {
     // Step 2: Also find originally empty sessions (if clearEmpty is true)
     if (clearEmpty) {
       for (const project of targetProjects) {
-        const sessions = yield* listSessions(project.name)
+        // Guard against TOCTOU: listSessions calls fs.readdir on the project folder.
+        // Narrow to ENOENT/ENOTDIR so other errors still abort. See Issue #103.
+        const sessions = yield* listSessions(project.name).pipe(
+          Effect.catchAll((error) => {
+            if (!isMissingFolderError(error)) {
+              return Effect.fail(error)
+            }
+            log.debug(`Step 2 (clearEmpty): skipping missing project folder ${project.name}`, error)
+            skippedProjects.add(project.name)
+            return Effect.succeed([] as SessionMeta[])
+          })
+        )
         for (const session of sessions) {
           if (session.messageCount === 0) {
             const alreadyMarked = sessionsToDelete.some(
@@ -274,7 +371,21 @@ export const clearSessions = (options: {
     // Step 4: Delete orphan agents if requested
     if (clearOrphanAgents) {
       for (const project of targetProjects) {
-        const result = yield* deleteOrphanAgents(project.name)
+        // Guard against TOCTOU: deleteOrphanAgents reads the project folder.
+        // Narrow to ENOENT/ENOTDIR. See Issue #103.
+        const result = yield* deleteOrphanAgents(project.name).pipe(
+          Effect.catchAll((error) => {
+            if (!isMissingFolderError(error)) {
+              return Effect.fail(error)
+            }
+            log.debug(
+              `Step 4 (clearOrphanAgents): skipping missing project folder ${project.name}`,
+              error
+            )
+            skippedProjects.add(project.name)
+            return Effect.succeed({ count: 0 })
+          })
+        )
         deletedOrphanAgentCount += result.count
       }
     }
@@ -289,7 +400,23 @@ export const clearSessions = (options: {
     if (deduplicateTitles) {
       for (const project of targetProjects) {
         const projectPath = path.join(getSessionsDir(), project.name)
-        const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+        // Guard against TOCTOU: narrow to ENOENT/ENOTDIR. See Issue #103.
+        const files = yield* Effect.tryPromise({
+          try: () => fs.readdir(projectPath),
+          catch: (error) => error as NodeJS.ErrnoException,
+        }).pipe(
+          Effect.catchAll((error) => {
+            if (!isMissingFolderError(error)) {
+              return Effect.fail(error)
+            }
+            log.debug(
+              `Step 6 (deduplicateTitles): skipping missing project folder ${project.name}`,
+              error
+            )
+            skippedProjects.add(project.name)
+            return Effect.succeed([] as string[])
+          })
+        )
         const sessionFiles = filterSessionFiles(files)
 
         for (const file of sessionFiles) {
@@ -303,12 +430,40 @@ export const clearSessions = (options: {
       }
     }
 
+    // Step 7: Delete stale project directories wholesale (opt-in, destructive).
+    // GUARD: staleProjects entries must be single-component encoded names —
+    // fs.rm runs recursively on the resolved path.
+    if (clearStale && staleProjects.length > 0) {
+      const sessionsDir = path.resolve(getSessionsDir())
+      for (const encodedName of staleProjects) {
+        if (
+          encodedName.includes('..') ||
+          encodedName.includes('/') ||
+          encodedName.includes('\\') ||
+          path.isAbsolute(encodedName)
+        ) {
+          continue
+        }
+        const staleProjectPath = path.resolve(sessionsDir, encodedName)
+        if (!staleProjectPath.startsWith(sessionsDir + path.sep)) {
+          continue
+        }
+        yield* Effect.tryPromise({
+          try: () => fs.rm(staleProjectPath, { recursive: true, force: true }),
+          catch: (error) => new FileWriteError({ filePath: staleProjectPath, cause: error }),
+        })
+        deletedStaleProjectCount++
+      }
+    }
+
     return {
       success: true,
       deduplicatedRecordCount,
       deletedCount: deletedSessionCount,
       deletedOrphanAgentCount,
       deletedOrphanTodoCount,
+      deletedStaleProjectCount,
       removedMessageCount,
+      skippedProjectCount: skippedProjects.size,
     } satisfies ClearSessionsResult
   })
