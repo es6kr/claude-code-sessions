@@ -245,7 +245,9 @@ export interface SecondaryInfoOptions {
 /**
  * Build the secondary line for a session list item.
  *
- * Format: "{agentName} · {relativeTime} · 💬 {messageCount}"
+ * Format: "{relativeTime} · 💬 {messageCount} · {agentName}"
+ * Order rationale: required-ish fields first (time + count usually exist),
+ * optional agentName last so it doesn't fragment the row when absent.
  * Missing parts are skipped. Returns an empty string when there is nothing to show.
  *
  * Used by web (true two-line layout) and the VSCode extension TreeView
@@ -254,11 +256,11 @@ export interface SecondaryInfoOptions {
 export const getSecondaryInfo = (opts: SecondaryInfoOptions): string => {
   const sep = opts.separator ?? ' · '
   const parts: string[] = []
-  if (opts.agentName) parts.push(opts.agentName)
   if (opts.updatedAt !== undefined && opts.updatedAt !== null && opts.updatedAt !== '') {
     parts.push(formatRelativeTime(opts.updatedAt, opts.locale))
   }
   if (typeof opts.messageCount === 'number') parts.push(`💬 ${opts.messageCount}`)
+  if (opts.agentName) parts.push(opts.agentName)
   return parts.join(sep)
 }
 

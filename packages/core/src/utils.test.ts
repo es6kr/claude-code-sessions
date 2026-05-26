@@ -273,7 +273,7 @@ describe('getSecondaryInfo', () => {
     expect(getSecondaryInfo({ messageCount: 42 })).toBe('💬 42')
   })
 
-  it('joins all three parts with default separator " · "', () => {
+  it('joins all three parts with default separator " · " — time, count, agentName order', () => {
     const twoHoursAgo = new Date(NOW - 2 * 3600_000).toISOString()
     expect(
       getSecondaryInfo({
@@ -281,7 +281,7 @@ describe('getSecondaryInfo', () => {
         updatedAt: twoHoursAgo,
         messageCount: 121,
       })
-    ).toBe('Coder · 2h ago · 💬 121')
+    ).toBe('2h ago · 💬 121 · Coder')
   })
 
   it('skips agentName when empty string', () => {
@@ -300,7 +300,7 @@ describe('getSecondaryInfo', () => {
         updatedAt: '',
         messageCount: 1,
       })
-    ).toBe('Agent · 💬 1')
+    ).toBe('💬 1 · Agent')
   })
 
   it('treats messageCount=0 as a renderable value (not skipped)', () => {
@@ -314,7 +314,7 @@ describe('getSecondaryInfo', () => {
         messageCount: 5,
         separator: ' | ',
       })
-    ).toBe('Agent | 💬 5')
+    ).toBe('💬 5 | Agent')
   })
 })
 
