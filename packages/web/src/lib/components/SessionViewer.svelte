@@ -71,7 +71,6 @@
     getDisplayTitle({
       customTitle,
       title: session?.title,
-      maxLength: 50,
     })
   )
 

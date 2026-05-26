@@ -162,7 +162,6 @@ export interface DisplayTitleOptions {
   customTitle?: string
   title?: string
   createdAt?: string
-  maxLength?: number
   fallback?: string
   /** 'message' = first user message (default), 'datetime' = relative date/time */
   mode?: TitleDisplayMode

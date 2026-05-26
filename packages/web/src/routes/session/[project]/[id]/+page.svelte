@@ -77,8 +77,9 @@
   const projectName = $derived(decodeURIComponent(page.params.project ?? ''))
   const sessionId = $derived(decodeURIComponent(page.params.id ?? ''))
 
-  // Display title for page title (customTitle ?? title chain — agentName demoted to secondary line in list items)
-  const displayTitle = $derived(customTitle ?? session?.title ?? 'Untitled')
+  // Display title for page title (customTitle ?? title chain — agentName demoted to secondary line in list items).
+  // Use truthy fallback so an empty-string customTitle does not produce a blank <title> tag.
+  const displayTitle = $derived(customTitle || session?.title || 'Untitled')
 
   // Back URL
   const backUrl = $derived(`/#project=${encodeURIComponent(projectName)}`)

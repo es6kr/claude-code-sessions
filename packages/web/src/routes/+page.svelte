@@ -270,7 +270,6 @@
     const currentTitle = getDisplayTitle({
       customTitle: sessionData?.customTitle,
       title: session.title,
-      maxLength: Infinity,
       fallback: '',
     })
 
