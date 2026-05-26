@@ -716,13 +716,13 @@ describe('sortSessions', () => {
     expect(result.map((s) => s.id)).toEqual(['c', 'b', 'a'])
   })
 
-  it('should use customTitle over currentSummary and title for title sort', () => {
+  it('should use customTitle over title for title sort', () => {
     const s1 = makeSession({ id: 's1', title: 'Zebra', customTitle: 'Aardvark' })
-    const s2 = makeSession({ id: 's2', title: 'Apple', currentSummary: 'Mango' })
+    const s2 = makeSession({ id: 's2', title: 'Mango' })
     const s3 = makeSession({ id: 's3', title: 'Banana' })
 
     const result = sortSessions([s1, s2, s3], { field: 'title', order: 'asc' })
-    // Aardvark (customTitle) < Banana (title) < Mango (currentSummary)
+    // Aardvark (customTitle) < Banana (title) < Mango (title)
     expect(result.map((s) => s.id)).toEqual(['s1', 's3', 's2'])
   })
 
@@ -781,19 +781,14 @@ describe('buildProjectTreeResult', () => {
     expect(result.sessions[0].id).toBe('good')
   })
 
-  it('should filter sessions with error in currentSummary', () => {
+  it('should not filter sessions by summary content (currentSummary removed)', () => {
     const sessions = [
       makeSession({ id: 'good', title: 'Valid' }),
-      makeSession({
-        id: 'bad-summary',
-        title: 'Valid',
-        currentSummary: 'API Error: timeout',
-      }),
+      makeSession({ id: 'also-good', title: 'Valid' }),
     ]
 
     const result = buildProjectTreeResult(project, sessions, sort)
-    expect(result.sessionCount).toBe(1)
-    expect(result.sessions[0].id).toBe('good')
+    expect(result.sessionCount).toBe(2)
   })
 
   it('should sort sessions according to sort options', () => {

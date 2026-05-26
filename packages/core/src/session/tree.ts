@@ -73,9 +73,9 @@ export const sortSessions = <T extends SessionTreeData>(
         break
       }
       case 'title': {
-        // Alphabetical by display title (customTitle > currentSummary > title)
-        const titleA = a.customTitle ?? a.currentSummary ?? a.title
-        const titleB = b.customTitle ?? b.currentSummary ?? b.title
+        // Alphabetical by display title (customTitle > title)
+        const titleA = a.customTitle ?? a.title
+        const titleB = b.customTitle ?? b.title
         comparison = titleA.localeCompare(titleB)
         break
       }
@@ -105,9 +105,9 @@ const loadSessionTreeDataInternal = (
     if (summariesByTargetSession) {
       // Project-wide loading: use pre-computed summaries targeting this session
       // Sort by timestamp ascending (oldest first), then by sourceFile descending (larger filename first)
-      // Official extension shows the OLDEST summary as currentSummary, and prefers larger filenames when timestamps match
+      // Matches the official extension's ordering for displaying the oldest summary first
       summaries = [...(summariesByTargetSession.get(sessionId) ?? [])].sort((a, b) => {
-        // 1. timestamp ascending (oldest first - official extension shows oldest as currentSummary)
+        // 1. timestamp ascending (oldest first)
         const timestampCmp = (a.timestamp ?? '').localeCompare(b.timestamp ?? '')
         if (timestampCmp !== 0) return timestampCmp
         // 2. sourceFile descending (larger filename first, e.g., b878041c > 355e3718)
@@ -162,7 +162,7 @@ const loadSessionTreeDataInternal = (
       )
     }
     // Sort by timestamp ascending (oldest first), then sourceFile descending
-    // Official extension shows the OLDEST summary as currentSummary
+    // Matches the official extension's ordering for displaying the oldest summary first
     summaries.sort((a, b) => {
       const timestampCmp = (a.timestamp ?? '').localeCompare(b.timestamp ?? '')
       if (timestampCmp !== 0) return timestampCmp
@@ -264,7 +264,6 @@ const loadSessionTreeDataInternal = (
       title,
       agentName,
       customTitle,
-      currentSummary: summaries[0]?.summary,
       messageCount:
         userAssistantMessages.length > 0
           ? userAssistantMessages.length
@@ -401,7 +400,6 @@ export const buildProjectTreeResult = (
   const filteredSessions = sortedSessions.filter((s) => {
     if (isErrorSessionTitle(s.title)) return false
     if (isErrorSessionTitle(s.customTitle)) return false
-    if (isErrorSessionTitle(s.currentSummary)) return false
     return true
   })
 
@@ -472,7 +470,6 @@ const updateSessionSummaries = (
   return {
     ...cached,
     summaries: newSummaries,
-    currentSummary: newSummaries[0]?.summary,
     sortTimestamp: newSortTimestamp,
   }
 }

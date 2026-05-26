@@ -159,12 +159,9 @@ export const isContinuationSummary = (msg: Message): boolean => {
  * Options for getDisplayTitle when using the options-based signature
  */
 export interface DisplayTitleOptions {
-  agentName?: string
   customTitle?: string
-  currentSummary?: string
   title?: string
   createdAt?: string
-  maxLength?: number
   fallback?: string
   /** 'message' = first user message (default), 'datetime' = relative date/time */
   mode?: TitleDisplayMode
@@ -174,42 +171,37 @@ export interface DisplayTitleOptions {
 
 /**
  * Get display title with fallback logic
- * Priority: customTitle > agentName > currentSummary (truncated) > title/datetime > fallback
+ * Priority: customTitle > title/datetime > fallback
  * Also handles slash command format in title
  *
+ * Note: agentName is no longer part of the title fallback chain. Use getSecondaryInfo()
+ * to render agentName + metadata as a secondary line on list items.
+ *
  * Supports two call signatures:
- * - Legacy: getDisplayTitle(customTitle, currentSummary, title, maxLength?, fallback?)
+ * - Positional: getDisplayTitle(customTitle, title, fallback?)
  * - Options: getDisplayTitle(options)
  */
 export function getDisplayTitle(options: DisplayTitleOptions): string
 export function getDisplayTitle(
   customTitle: string | undefined,
-  currentSummary: string | undefined,
   title: string | undefined,
-  maxLength?: number,
   fallback?: string
 ): string
 export function getDisplayTitle(
   customTitleOrOptions: string | undefined | DisplayTitleOptions,
-  currentSummary?: string | undefined,
   title?: string | undefined,
-  maxLength = 60,
   fallback = 'Untitled'
 ): string {
   let mode: TitleDisplayMode = 'message'
   let createdAt: string | undefined
-  let agentName: string | undefined
   let customTitle: string | undefined
   let locale: string | undefined
 
   if (typeof customTitleOrOptions === 'object' && customTitleOrOptions !== null) {
     const opts = customTitleOrOptions
-    agentName = opts.agentName
     customTitle = opts.customTitle
-    currentSummary = opts.currentSummary
     title = opts.title
     createdAt = opts.createdAt
-    maxLength = opts.maxLength ?? 60
     fallback = opts.fallback ?? 'Untitled'
     mode = opts.mode ?? 'message'
     locale = opts.locale
@@ -218,12 +210,6 @@ export function getDisplayTitle(
   }
 
   if (customTitle) return customTitle
-  if (agentName) return agentName
-  if (currentSummary) {
-    return currentSummary.length > maxLength
-      ? currentSummary.slice(0, maxLength - 3) + '...'
-      : currentSummary
-  }
 
   if (mode === 'datetime' && createdAt) {
     return formatRelativeTime(createdAt, locale)
@@ -241,6 +227,41 @@ export function getDisplayTitle(
   }
 
   return fallback
+}
+
+/**
+ * Options for getSecondaryInfo — builds the secondary metadata line for session list items.
+ */
+export interface SecondaryInfoOptions {
+  agentName?: string
+  /** Last-modified timestamp (Unix ms or ISO string) for relative time formatting */
+  updatedAt?: number | string
+  messageCount?: number
+  locale?: string
+  /** Separator between parts. Default: ' · ' */
+  separator?: string
+}
+
+/**
+ * Build the secondary line for a session list item.
+ *
+ * Format: "{relativeTime} · 💬 {messageCount} · {agentName}"
+ * Order rationale: required-ish fields first (time + count usually exist),
+ * optional agentName last so it doesn't fragment the row when absent.
+ * Missing parts are skipped. Returns an empty string when there is nothing to show.
+ *
+ * Used by web (true two-line layout) and the VSCode extension TreeView
+ * (rendered as TreeItem.description on the same row, muted text).
+ */
+export const getSecondaryInfo = (opts: SecondaryInfoOptions): string => {
+  const sep = opts.separator ?? ' · '
+  const parts: string[] = []
+  if (opts.updatedAt !== undefined && opts.updatedAt !== null && opts.updatedAt !== '') {
+    parts.push(formatRelativeTime(opts.updatedAt, opts.locale))
+  }
+  if (typeof opts.messageCount === 'number') parts.push(`💬 ${opts.messageCount}`)
+  if (opts.agentName) parts.push(opts.agentName)
+  return parts.join(sep)
 }
 
 // Helper to replace message content with extracted text
@@ -465,9 +486,9 @@ export const sessionHasSubItems = (data: {
  * Shows complementary information to the displayed title + session ID
  *
  * Logic:
- * - If customTitle is displayed → show currentSummary
- * - If currentSummary is displayed → show original title
- * - If title is displayed → show currentSummary
+ * - If customTitle is displayed → show agentName or title
+ * - If agentName is displayed → show title
+ * - If title is displayed → show title
  * - Always append session ID at the end
  */
 export const getSessionTooltip = (session: {
@@ -475,21 +496,18 @@ export const getSessionTooltip = (session: {
   title?: string
   agentName?: string
   customTitle?: string
-  currentSummary?: string
   createdAt?: string
   updatedAt?: string
 }): string => {
-  const { id, title, agentName, customTitle, currentSummary, createdAt, updatedAt } = session
+  const { id, title, agentName, customTitle, createdAt, updatedAt } = session
   let text: string
   // Show complementary info: if a title override is displayed, show the next fallback
-  if (customTitle && (agentName || currentSummary)) {
-    text = agentName || currentSummary!
-  } else if (agentName && currentSummary) {
-    text = currentSummary
-  } else if (currentSummary && title && title !== 'Untitled') {
+  if (customTitle && agentName) {
+    text = agentName
+  } else if (customTitle && title && title !== 'Untitled') {
     text = title
-  } else if (currentSummary) {
-    text = currentSummary
+  } else if (agentName && title && title !== 'Untitled') {
+    text = title
   } else {
     text = title ?? 'No title'
   }

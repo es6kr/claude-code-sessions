@@ -69,6 +69,8 @@ export {
   parseCommandMessage,
   getDisplayTitle,
   type DisplayTitleOptions,
+  getSecondaryInfo,
+  type SecondaryInfoOptions,
   maskHomePath,
   getDisplaySortTimestamp,
   getSessionSortTimestamp,

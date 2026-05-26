@@ -279,13 +279,7 @@ export class SessionTreeProvider
     }
     return sessions.filter((s) => {
       // Search across all available text: title, custom title, all summaries
-      const texts = [
-        s.title,
-        s.agentName,
-        s.customTitle,
-        s.currentSummary,
-        ...s.summaries.map((sum) => sum.summary),
-      ]
+      const texts = [s.title, s.agentName, s.customTitle, ...s.summaries.map((sum) => sum.summary)]
       return texts.some((t) => t && t.toLowerCase().includes(this.filterText))
     })
   }
@@ -309,25 +303,40 @@ export class SessionTreeProvider
       .get<TitleDisplayMode>('titleDisplayMode', 'message')
     const locale = vscode.env.language
 
+    // Cap label length so the description (count · agentName · time) stays visible
+    // even for very long titles. Full title remains available in the tooltip.
+    // Native VSCode TreeView uses flex layout where label has flex:1 and shrinks
+    // before description — pre-truncating reverses that priority.
+    const LABEL_MAX = 40
+
     return sessions.map((s, index) => {
       const hasSubItems = sessionHasSubItems(s)
       const shouldExpand = !this.filterText && expandFirst && index === 0 && hasSubItems
 
-      const descriptionText =
-        titleMode === 'datetime' && !s.customTitle && !s.agentName && !s.currentSummary
-          ? session.getDisplayTitle(undefined, undefined, s.title)
-          : undefined
+      // Line 1: title (customTitle ?? title chain — agentName demoted)
+      const fullLabel = session.getDisplayTitle({
+        customTitle: s.customTitle,
+        title: s.title,
+        createdAt: s.createdAt,
+        mode: titleMode,
+        locale,
+      })
+      const labelText =
+        fullLabel.length > LABEL_MAX ? fullLabel.slice(0, LABEL_MAX - 1) + '…' : fullLabel
+
+      // Line 2 (rendered as TreeItem.description, muted text on the same row):
+      // agentName · {relativeTime}
+      // Note: messageCount is intentionally omitted here — SessionTreeItem's constructor
+      // already prefixes the description with `${count} · ...`, so passing it again would
+      // duplicate "121 · agentName · 2h ago · 💬 121"
+      const descriptionText = session.getSecondaryInfo({
+        agentName: s.agentName,
+        updatedAt: s.updatedAt,
+        locale,
+      })
 
       return new SessionTreeItem(
-        session.getDisplayTitle({
-          agentName: s.agentName,
-          customTitle: s.customTitle,
-          currentSummary: s.currentSummary,
-          title: s.title,
-          createdAt: s.createdAt,
-          mode: titleMode,
-          locale,
-        }),
+        labelText,
         hasSubItems
           ? shouldExpand
             ? vscode.TreeItemCollapsibleState.Expanded
@@ -342,7 +351,7 @@ export class SessionTreeProvider
         undefined, // agentId
         undefined, // itemIndex
         getSessionTooltip(s), // tooltip
-        descriptionText, // session description (first message in datetime mode)
+        descriptionText || undefined, // session description (secondary line; undefined when empty)
         dateGrouped, // pass through so session knows it's in grouped mode
         dateGrouped ? this.projectDisplayNames.get(s.projectName) : undefined
       )

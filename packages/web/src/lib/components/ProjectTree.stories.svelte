@@ -33,7 +33,6 @@
       messageCount: 42,
       createdAt: '2026-01-15T09:00:00Z',
       updatedAt: '2026-01-15T11:30:00Z',
-      currentSummary: 'Implemented OAuth2 authentication with Google and GitHub providers',
       summaries: [
         {
           summary: 'Implemented OAuth2 authentication with Google and GitHub providers',
@@ -82,7 +81,6 @@
       messageCount: 25,
       createdAt: '2026-01-12T08:00:00Z',
       updatedAt: '2026-01-12T12:00:00Z',
-      currentSummary: 'Implemented token bucket rate limiter with Redis backend',
       summaries: [
         {
           summary: 'Implemented token bucket rate limiter with Redis backend',
@@ -108,17 +106,7 @@
 
   // Derive SessionMeta[] from canonical fixtures
   const mockSessions = canonicalSessions.map(
-    ({
-      id,
-      projectName,
-      title,
-      messageCount,
-      createdAt,
-      updatedAt,
-      customTitle,
-      agentName,
-      currentSummary,
-    }) => ({
+    ({ id, projectName, title, messageCount, createdAt, updatedAt, customTitle, agentName }) => ({
       id,
       projectName,
       title,
@@ -127,7 +115,6 @@
       updatedAt,
       ...(customTitle && { customTitle }),
       ...(agentName && { agentName }),
-      ...(currentSummary && { currentSummary }),
     })
   )
 

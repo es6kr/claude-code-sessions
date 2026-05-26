@@ -19,7 +19,6 @@ export interface SessionNode {
   agents: string[] // Agent file names
   todos: string[] // Todo file names
   summaries: SummaryInfo[] // Summary messages from session
-  currentSummary?: SummaryInfo // Current (first) summary for quick access
   messages?: Message[] // Loaded messages (lazy)
 }
 
@@ -127,6 +126,5 @@ export const createSessionNode = (meta: SessionMeta): SessionNode => ({
   agents: [],
   todos: [],
   summaries: [],
-  currentSummary: undefined,
   messages: undefined,
 })
