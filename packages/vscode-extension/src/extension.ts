@@ -5,6 +5,7 @@ import { openExternalTerminal, resumeSession, startClaude } from '@claude-sessio
 import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { outputChannel } from './output'
+import { SESSION_EDITOR_VIEW_TYPE, SessionEditorProvider } from './sessionEditorProvider'
 
 let webServerProcess: ChildProcess | null = null
 
@@ -143,7 +144,6 @@ async function ensureWebServer({
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: true,
       detached: process.platform !== 'win32',
-      env: { ...process.env, PORT: String(port) },
     })
 
     webServerProcess = child
@@ -278,6 +278,47 @@ export function activate(context: vscode.ExtensionContext) {
     canSelectMany: true,
     dragAndDropController: treeProvider,
   })
+
+  // Custom Editor for *.jsonl preview. `priority: "option"` keeps this opt-in
+  // so the existing simpleBrowser flow remains the default.
+  context.subscriptions.push(
+    vscode.window.registerCustomEditorProvider(
+      SESSION_EDITOR_VIEW_TYPE,
+      new SessionEditorProvider(context.extensionUri),
+      {
+        webviewOptions: { retainContextWhenHidden: true },
+        supportsMultipleEditorsPerDocument: false,
+      }
+    )
+  )
+
+  const resolvePreviewTarget = (arg: unknown): vscode.Uri | undefined => {
+    if (arg instanceof vscode.Uri) return arg
+    const active = vscode.window.activeTextEditor?.document.uri
+    if (active?.fsPath.endsWith('.jsonl')) return active
+    return undefined
+  }
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand('claudeSessions.openPreview', async (arg?: unknown) => {
+      const uri = resolvePreviewTarget(arg)
+      if (!uri) {
+        vscode.window.showWarningMessage('Open a .jsonl file first to preview it.')
+        return
+      }
+      await vscode.commands.executeCommand('vscode.openWith', uri, SESSION_EDITOR_VIEW_TYPE)
+    }),
+    vscode.commands.registerCommand('claudeSessions.openPreviewToSide', async (arg?: unknown) => {
+      const uri = resolvePreviewTarget(arg)
+      if (!uri) {
+        vscode.window.showWarningMessage('Open a .jsonl file first to preview it.')
+        return
+      }
+      await vscode.commands.executeCommand('vscode.openWith', uri, SESSION_EDITOR_VIEW_TYPE, {
+        viewColumn: vscode.ViewColumn.Beside,
+      })
+    })
+  )
 
   // Register commands
   context.subscriptions.push(
@@ -597,10 +638,8 @@ export function activate(context: vscode.ExtensionContext) {
 
       const totalEmpty = preview.reduce((sum, p) => sum + p.emptySessions.length, 0)
       const totalInvalid = preview.reduce((sum, p) => sum + p.invalidSessions.length, 0)
-      const staleProjects = preview.filter((p) => p.isStale).map((p) => p.project)
-      const totalStale = staleProjects.length
 
-      if (totalEmpty === 0 && totalInvalid === 0 && totalStale === 0) {
+      if (totalEmpty === 0 && totalInvalid === 0) {
         vscode.window.showInformationMessage('No sessions to clean up')
         return
       }
@@ -608,7 +647,6 @@ export function activate(context: vscode.ExtensionContext) {
       const parts: string[] = []
       if (totalEmpty > 0) parts.push(`${totalEmpty} empty sessions`)
       if (totalInvalid > 0) parts.push(`${totalInvalid} invalid sessions`)
-      if (totalStale > 0) parts.push(`${totalStale} stale projects (directory gone)`)
 
       const confirm = await vscode.window.showWarningMessage(
         `Clean up ${parts.join(', ')}?`,
@@ -619,19 +657,11 @@ export function activate(context: vscode.ExtensionContext) {
       if (confirm === 'Clean Up') {
         const result = await vscode.window.withProgress(
           { location: vscode.ProgressLocation.Notification, title: 'Cleaning up sessions...' },
-          () =>
-            Effect.runPromise(
-              session.clearSessions({
-                clearStale: totalStale > 0,
-                staleProjects,
-              })
-            )
+          () => Effect.runPromise(session.clearSessions({}))
         )
         treeProvider.refresh()
         const msgs: string[] = []
         if (result.deletedCount > 0) msgs.push(`${result.deletedCount} sessions`)
-        if (result.deletedStaleProjectCount)
-          msgs.push(`${result.deletedStaleProjectCount} stale projects`)
         vscode.window.showInformationMessage(
           msgs.length > 0 ? `Cleaned up ${msgs.join(', ')}` : 'Cleanup complete'
         )
@@ -707,6 +737,13 @@ export function activate(context: vscode.ExtensionContext) {
       }
     ),
 
+    // GUARD: the official anthropic.claude-code extension does not watch session
+    // files and exposes no refresh action — users rely on this command (sidebar
+    // header $(debug-restart)) to pick up new sessions. commands.test.ts pins it.
+    vscode.commands.registerCommand('claudeSessions.restartExtensionHost', async () => {
+      await vscode.commands.executeCommand('workbench.action.restartExtensionHost')
+    }),
+
     vscode.commands.registerCommand('claudeSessions.restartWebServer', async () => {
       await killWebServer()
       try {
@@ -777,7 +814,7 @@ export function activate(context: vscode.ExtensionContext) {
               },
             ],
             {
-              placeHolder: 'Where to open terminal?',
+              placeHolder: 'Where to open the terminal?',
               title: 'Open Terminal Here',
             }
           )
@@ -797,10 +834,10 @@ export function activate(context: vscode.ExtensionContext) {
 
           if (result.success) {
             vscode.window.showInformationMessage(
-              `Terminal opened in external terminal (PID: ${result.pid})`
+              `Terminal opened in external window (PID: ${result.pid})`
             )
           } else {
-            vscode.window.showErrorMessage(`Failed to open external terminal: ${result.error}`)
+            vscode.window.showErrorMessage(`Failed to open terminal: ${result.error}`)
           }
         }
       }

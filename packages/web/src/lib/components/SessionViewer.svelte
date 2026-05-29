@@ -29,9 +29,7 @@
     messages: Message[]
     todos?: TodoItem[]
     agents?: AgentInfo[]
-    agentName?: string
     customTitle?: string
-    currentSummary?: string
     projectDisplayName?: string
     backUrl?: string // If provided, shows back button header
     onDeleteMessage?: (msg: Message) => void // Called after actual deletion
@@ -53,9 +51,7 @@
     messages,
     todos = [],
     agents = [],
-    agentName,
     customTitle,
-    currentSummary,
     backUrl,
     onDeleteMessage,
     onMessagesChange,
@@ -73,11 +69,8 @@
 
   const displayTitle = $derived(
     getDisplayTitle({
-      agentName,
       customTitle,
-      currentSummary,
       title: session?.title,
-      maxLength: 50,
     })
   )
 

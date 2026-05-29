@@ -148,8 +148,6 @@ export interface SessionMeta {
   agentName?: string
   /** User-set custom title */
   customTitle?: string
-  /** Current (first) summary text for display */
-  currentSummary?: string
   messageCount: number
   createdAt?: string
   updatedAt?: string
@@ -310,6 +308,13 @@ export interface ClearSessionsResult {
   deletedOrphanTodoCount?: number
   deletedStaleProjectCount?: number
   removedMessageCount?: number
+  /**
+   * Projects skipped during cleanup because their folder vanished mid-operation
+   * (ENOENT/ENOTDIR on a per-project readdir or operation). Counted unique
+   * per project name so a folder skipped across multiple steps counts once.
+   * See Issue #103.
+   */
+  skippedProjectCount?: number
 }
 
 /** Preview of sessions that would be cleaned up */
@@ -399,8 +404,6 @@ export interface SessionTreeData {
   agentName?: string
   /** User-set custom title */
   customTitle?: string
-  /** Current (first) summary text for display/tooltip */
-  currentSummary?: string
   messageCount: number
   createdAt?: string
   updatedAt?: string

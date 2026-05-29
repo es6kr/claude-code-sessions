@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 
+/* Scan shared @claude-sessions/ui components so their classes survive purging. */
+@source "../../ui/src/**/*.{svelte,ts}";
+
 /* GitHub Dark theme custom colors */
 @theme {
   --color-gh-bg: #0d1117;

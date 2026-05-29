@@ -47,7 +47,6 @@ describe('buildSessionMeta', () => {
       title: 'My Session',
       agentName: undefined,
       customTitle: undefined,
-      currentSummary: undefined,
       messageCount: 10,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-02T00:00:00.000Z',
@@ -79,14 +78,12 @@ describe('buildSessionMeta', () => {
       title: 'Title',
       agentName: 'My Agent',
       customTitle: 'Custom Title',
-      currentSummary: 'Summary text',
       userAssistantCount: 5,
       hasSummary: false,
     })
 
     expect(meta.agentName).toBe('My Agent')
     expect(meta.customTitle).toBe('Custom Title')
-    expect(meta.currentSummary).toBe('Summary text')
   })
 
   it('should count summary-only sessions as 1 message', () => {

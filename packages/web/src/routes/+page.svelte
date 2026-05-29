@@ -273,11 +273,8 @@
     e.stopPropagation()
     const sessionData = projectSessionData.get(session.projectName)?.get(session.id)
     const currentTitle = getDisplayTitle({
-      agentName: sessionData?.agentName,
       customTitle: sessionData?.customTitle,
-      currentSummary: sessionData?.currentSummary,
       title: session.title,
-      maxLength: Infinity,
       fallback: '',
     })
 
@@ -297,7 +294,6 @@
           if (sessionData) {
             sessionData.agentName = trimmed || undefined
             sessionData.customTitle = trimmed || undefined
-            if (trimmed) sessionData.currentSummary = trimmed
             if (sessionData.summaries.length > 0) {
               sessionData.summaries[0] = { ...sessionData.summaries[0], summary: newTitle }
             } else {
@@ -710,14 +706,8 @@
     {messages}
     {todos}
     {agents}
-    agentName={selectedSession
-      ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.agentName
-      : undefined}
     customTitle={selectedSession
       ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.customTitle
-      : undefined}
-    currentSummary={selectedSession
-      ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.currentSummary
       : undefined}
     onMessagesChange={(newMessages) => (messages = newMessages)}
     onRefresh={async () => {

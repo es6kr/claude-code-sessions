@@ -25,8 +25,18 @@ if [ "$has_code_push" = false ]; then
   exit 0
 fi
 
+# run_quiet: silent on success, full output on failure
+run_quiet() {
+  out=$("$@" 2>&1)
+  status=$?
+  if [ $status -ne 0 ]; then
+    echo "$out"
+  fi
+  return $status
+}
+
 # Install dependencies (only for non-deletion pushes)
-pnpm install --frozen-lockfile
+run_quiet pnpm install --frozen-lockfile --reporter=silent || exit 1
 
 # Get the current branch
 current_branch=$(git rev-parse --abbrev-ref HEAD)
@@ -46,12 +56,12 @@ while read local_ref local_sha remote_ref remote_sha; do
     if echo "$tag_name" | grep -q "^vscode-v"; then
       echo "📦 VSCode tag detected: $tag_name"
       echo "Running VSCode extension tests only..."
-      pnpm --filter claude-sessions test
+      run_quiet pnpm --filter claude-sessions -s test
       exit $?
     elif echo "$tag_name" | grep -q "^v"; then
       echo "📦 Version tag detected: $tag_name"
       echo "Running core/mcp/web tests (excluding VSCode)..."
-      pnpm test:core && pnpm test:mcp && pnpm test:web
+      run_quiet pnpm -s test:core && run_quiet pnpm -s test:mcp && run_quiet pnpm -s test:web
       exit $?
     fi
   fi
@@ -61,14 +71,14 @@ while read local_ref local_sha remote_ref remote_sha; do
   if [ "$remote_branch" = "main" ]; then
     if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
       echo "🔍 Pushing to main: running full CI with act..."
-      pnpm test:act
+      run_quiet pnpm test:act
     else
       echo "⚠️  Docker not available, falling back to build, typecheck and tests..."
-      pnpm build && pnpm typecheck && pnpm test
+      run_quiet pnpm -s build && run_quiet pnpm -s typecheck && run_quiet pnpm -s test
     fi
   else
     echo "🧪 Pushing to $remote_branch: running build, typecheck and tests..."
-    pnpm build && pnpm typecheck && pnpm test
+    run_quiet pnpm -s build && run_quiet pnpm -s typecheck && run_quiet pnpm -s test
   fi
   exit $?
 done <<EOF

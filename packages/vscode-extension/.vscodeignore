@@ -12,3 +12,4 @@ src/**
 tsconfig.json
 tsconfig.test.json
 tsup.config.ts
+vite.webview.config.ts

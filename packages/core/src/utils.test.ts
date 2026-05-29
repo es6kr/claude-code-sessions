@@ -5,6 +5,7 @@ import {
   extractTitle,
   fileExists,
   getDisplayTitle,
+  getSecondaryInfo,
   maskHomePath,
   parseJsonlLines,
   readJsonlFile,
@@ -188,82 +189,132 @@ describe('cleanupSplitFirstMessage', () => {
 })
 
 describe('getDisplayTitle', () => {
-  it('should truncate currentSummary when exceeds maxLength', () => {
-    const longSummary = 'A'.repeat(70) // 70 chars
-    const result = getDisplayTitle(undefined, longSummary, 'Title')
-    expect(result).toBe('A'.repeat(57) + '...')
-    expect(result.length).toBe(60)
+  it('should return title when only title is provided', () => {
+    expect(getDisplayTitle(undefined, 'My Title')).toBe('My Title')
   })
 
-  it('should use custom maxLength for truncation', () => {
-    const summary = 'A'.repeat(60) // 60 chars
-    // With maxLength=50, should truncate at 47+...=50
-    const result = getDisplayTitle(undefined, summary, undefined, 50)
-    expect(result).toBe('A'.repeat(47) + '...')
-    expect(result.length).toBe(50)
+  it('should return fallback when nothing is provided', () => {
+    expect(getDisplayTitle(undefined, undefined)).toBe('Untitled')
   })
 
-  it('should not truncate currentSummary when exactly at maxLength', () => {
-    const summary = 'A'.repeat(60) // Exactly 60 chars
-    const result = getDisplayTitle(undefined, summary, undefined, 60)
-    expect(result).toBe(summary)
+  it('should use custom fallback when provided via options', () => {
+    expect(getDisplayTitle({ fallback: 'Empty Session' })).toBe('Empty Session')
   })
 
   it('should skip empty string values', () => {
-    // Empty string is falsy, so it should fall through to next option
-    expect(getDisplayTitle('', 'Summary', 'Title')).toBe('Summary')
-    expect(getDisplayTitle('', '', 'Title')).toBe('Title')
-    expect(getDisplayTitle('', '', '')).toBe('Untitled')
+    expect(getDisplayTitle('', 'Title')).toBe('Title')
+    expect(getDisplayTitle('', '')).toBe('Untitled')
   })
 
   it('should not parse command tags from embedded JSON in title', () => {
     const title =
       'Fix display title parsing\n\n{"message":{"content":"<command-name>/session</command-name>\\n<command-args>repair</command-args>"}}'
-    expect(getDisplayTitle(undefined, undefined, title)).toBe('Fix display title parsing')
+    expect(getDisplayTitle(undefined, title)).toBe('Fix display title parsing')
   })
 
   it('should parse command from first paragraph of title', () => {
     const title =
       '<command-message>session</command-message>\n<command-name>/session</command-name>\n<command-args>  repair --dry-run</command-args>'
-    expect(getDisplayTitle(undefined, undefined, title)).toBe('/session repair --dry-run')
+    expect(getDisplayTitle(undefined, title)).toBe('/session repair --dry-run')
   })
 
-  it('should prioritize customTitle > agentName > currentSummary > title', () => {
+  it('should prioritize customTitle > title', () => {
     expect(
       getDisplayTitle({
         customTitle: 'Custom',
-        agentName: 'Agent',
-        currentSummary: 'Summary',
         title: 'Title',
       })
     ).toBe('Custom')
 
-    expect(
-      getDisplayTitle({
-        agentName: 'Agent',
-        currentSummary: 'Summary',
-        title: 'Title',
-      })
-    ).toBe('Agent')
-
-    expect(
-      getDisplayTitle({
-        currentSummary: 'Summary',
-        title: 'Title',
-      })
-    ).toBe('Summary')
-
     expect(getDisplayTitle({ title: 'Title' })).toBe('Title')
   })
 
-  it('should ignore empty agentName', () => {
+  it('should ignore empty customTitle and fall through to title', () => {
     expect(
       getDisplayTitle({
-        agentName: '',
-        currentSummary: 'Summary',
+        customTitle: '',
         title: 'Title',
       })
-    ).toBe('Summary')
+    ).toBe('Title')
+  })
+})
+
+describe('getSecondaryInfo', () => {
+  // Fixed reference instant for deterministic relative-time assertions
+  const NOW = new Date('2026-05-25T12:00:00.000Z').getTime()
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('returns empty string when no fields provided', () => {
+    expect(getSecondaryInfo({})).toBe('')
+  })
+
+  it('renders agentName alone', () => {
+    expect(getSecondaryInfo({ agentName: 'Researcher' })).toBe('Researcher')
+  })
+
+  it('renders relative time alone from ISO string', () => {
+    const fiveMinAgo = new Date(NOW - 5 * 60_000).toISOString()
+    expect(getSecondaryInfo({ updatedAt: fiveMinAgo })).toBe('5m ago')
+  })
+
+  it('renders relative time alone from Unix ms number', () => {
+    expect(getSecondaryInfo({ updatedAt: NOW - 3 * 3600_000 })).toBe('3h ago')
+  })
+
+  it('renders message count alone', () => {
+    expect(getSecondaryInfo({ messageCount: 42 })).toBe('💬 42')
+  })
+
+  it('joins all three parts with default separator " · " — time, count, agentName order', () => {
+    const twoHoursAgo = new Date(NOW - 2 * 3600_000).toISOString()
+    expect(
+      getSecondaryInfo({
+        agentName: 'Coder',
+        updatedAt: twoHoursAgo,
+        messageCount: 121,
+      })
+    ).toBe('2h ago · 💬 121 · Coder')
+  })
+
+  it('skips agentName when empty string', () => {
+    expect(
+      getSecondaryInfo({
+        agentName: '',
+        messageCount: 7,
+      })
+    ).toBe('💬 7')
+  })
+
+  it('skips updatedAt when empty string', () => {
+    expect(
+      getSecondaryInfo({
+        agentName: 'Agent',
+        updatedAt: '',
+        messageCount: 1,
+      })
+    ).toBe('💬 1 · Agent')
+  })
+
+  it('treats messageCount=0 as a renderable value (not skipped)', () => {
+    expect(getSecondaryInfo({ messageCount: 0 })).toBe('💬 0')
+  })
+
+  it('supports a custom separator', () => {
+    expect(
+      getSecondaryInfo({
+        agentName: 'Agent',
+        messageCount: 5,
+        separator: ' | ',
+      })
+    ).toBe('💬 5 | Agent')
   })
 })
 
