@@ -54,23 +54,32 @@ test.describe('ProjectTree — folder-grouped view', () => {
 
   test('persists view mode selection in localStorage', async ({ page }) => {
     const toggle = page.getByTestId('view-mode-toggle')
+    const initial = await toggle.getAttribute('data-view-mode')
     await toggle.click()
+    await expect(toggle).not.toHaveAttribute('data-view-mode', initial!)
     const afterClick = await toggle.getAttribute('data-view-mode')
 
     await page.reload()
     await page.waitForSelector('aside h2:has-text("Projects")')
+    // Re-hydrate before reading the restored attribute (see beforeEach for context).
+    await page.waitForLoadState('networkidle')
 
-    const restored = await page.getByTestId('view-mode-toggle').getAttribute('data-view-mode')
+    const restoredToggle = page.getByTestId('view-mode-toggle')
+    await expect(restoredToggle).toHaveAttribute('data-view-mode', afterClick!)
+    const restored = await restoredToggle.getAttribute('data-view-mode')
     expect(restored).toBe(afterClick)
   })
 
   test('switches to flat mode and renders a flat project list', async ({ page }) => {
     const toggle = page.getByTestId('view-mode-toggle')
-    // Click until we land on flat mode.
+    // Click until we land on flat mode. Wait for each click to settle before
+    // reading the next value so the cycle isn't ahead of the DOM update.
     for (let i = 0; i < 3; i++) {
       const current = await toggle.getAttribute('data-view-mode')
       if (current === 'flat') break
+      const before = current
       await toggle.click()
+      await expect(toggle).not.toHaveAttribute('data-view-mode', before!)
     }
     await expect(toggle).toHaveAttribute('data-view-mode', 'flat')
 
