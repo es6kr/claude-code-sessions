@@ -176,11 +176,12 @@ describe('groupProjects', () => {
     ]
     const result = groupProjects(projects)
 
-    // Two distinct top-level chains: '~' (-> github.com/es6kr group) and 'opt' (-> projects group).
+    // Two distinct top-level chains: '~' (-> github.com/es6kr group) and '/opt' (-> projects group).
+    // Absolute paths preserve their leading '/' as part of the root segment.
     expect(result).toHaveLength(2)
     const names = result.filter(isGroup).map((g) => g.name)
     expect(names).toContain('~/ghq/github.com/es6kr')
-    expect(names).toContain('opt/projects')
+    expect(names).toContain('/opt/projects')
   })
 
   it('preserves leading "~" as the root segment', () => {
@@ -254,5 +255,99 @@ describe('groupProjects', () => {
     const xGroup = top.children.find((n): n is ProjectGroup => isGroup(n) && n.displayName === 'x')
     expect(xGroup).toBeDefined()
     expect(xGroup!.totalSessions).toBe(10)
+  })
+
+  describe('absolute root segments (e.g. /mnt/c WSL paths)', () => {
+    it('preserves the leading "/" as part of the root segment for /mnt-style paths (group)', () => {
+      const projects = [mkProject('/mnt/c/Users/foo/app-a'), mkProject('/mnt/c/Users/foo/app-b')]
+      const result = groupProjects(projects)
+      expect(result).toHaveLength(1)
+      const group = result[0] as ProjectGroup
+      expect(isGroup(group)).toBe(true)
+      // Root segment must be "/mnt", not "mnt" — distinguishes absolute mount path
+      // from a relative "mnt" directory.
+      expect(group.name.startsWith('/mnt/')).toBe(true)
+      expect(group.name).toBe('/mnt/c/Users/foo')
+    })
+
+    it('preserves the leading "/" when emitting a single auto-flattened leaf', () => {
+      const projects = [mkProject('/mnt/c/Users/foo/only-app')]
+      const result = groupProjects(projects)
+      expect(result).toHaveLength(1)
+      const leaf = result[0] as ProjectLeaf
+      expect(isLeaf(leaf)).toBe(true)
+      expect(leaf.collapsedPath).toBe('/mnt/c/Users/foo/only-app')
+    })
+
+    it('treats "/mnt" root separately from a relative "mnt" segment', () => {
+      const projects = [
+        mkProject('/mnt/c/Users/foo/app-a'),
+        mkProject('/mnt/c/Users/foo/app-b'),
+        mkProject('relative/mnt/other/app-c'),
+        mkProject('relative/mnt/other/app-d'),
+      ]
+      const result = groupProjects(projects)
+      // Two distinct roots, NOT merged under a shared "mnt" group.
+      const groupRoots = result.filter(isGroup).map((g) => g.name)
+      const hasAbsoluteMnt = groupRoots.some((n) => n.startsWith('/mnt/'))
+      const hasRelativeMnt = groupRoots.some((n) => !n.startsWith('/') && n.includes('mnt'))
+      expect(hasAbsoluteMnt).toBe(true)
+      expect(hasRelativeMnt).toBe(true)
+      // No single merged group whose name is just "mnt" or "mnt/c" without the leading slash.
+      expect(groupRoots).not.toContain('mnt')
+      expect(groupRoots).not.toContain('mnt/c')
+    })
+  })
+
+  describe('Windows-style C:/Users/<username> root on non-Windows OS', () => {
+    it('keeps "C:/Users/<username>" as a visible root group when walk-down would otherwise stop at "ghq"', () => {
+      const projects = [
+        // Two C:/Users/foo/ghq/... siblings that branch at "ghq" (github.com vs local).
+        // Current walk-down stops at "ghq" → displayName "ghq" alone, indistinguishable
+        // from a host OS's "~/ghq" group.
+        mkProject('C:/Users/foo/ghq/github.com/org/repo-a'),
+        mkProject('C:/Users/foo/ghq/local/myapp'),
+      ]
+      const result = groupProjects(projects)
+      expect(result).toHaveLength(1)
+      const top = result[0] as ProjectGroup
+      expect(isGroup(top)).toBe(true)
+      // "ghq" must NOT become the displayed top-level group name.
+      // The Windows-home segment must be preserved analogous to how '~' is.
+      expect(top.displayName).not.toBe('ghq')
+      // Root must include the Windows-home prefix.
+      expect(top.name.startsWith('C:/Users/foo')).toBe(true)
+      // Stronger expectation: root is exactly the Windows-home — descendants live underneath.
+      expect(top.name).toBe('C:/Users/foo')
+    })
+
+    it('keeps Windows-home paths separate from host-OS "~/ghq" paths even when both contain "ghq"', () => {
+      const projects = [
+        mkProject('~/ghq/github.com/org/host-a'),
+        mkProject('~/ghq/github.com/org/host-b'),
+        mkProject('C:/Users/foo/ghq/github.com/org/win-a'),
+        mkProject('C:/Users/foo/ghq/github.com/org/win-b'),
+      ]
+      const result = groupProjects(projects)
+      // Two distinct top-level roots: "~" tree and "C:/Users/foo" tree.
+      // The two "ghq" subtrees must NOT merge into a shared top-level "ghq" group.
+      expect(result).toHaveLength(2)
+      const roots = result.filter(isGroup).map((g) => g.name)
+      const hasHostHome = roots.some((n) => n.startsWith('~'))
+      const hasWinHome = roots.some((n) => n.startsWith('C:/Users/foo'))
+      expect(hasHostHome).toBe(true)
+      expect(hasWinHome).toBe(true)
+      // No root should be just "ghq" on its own.
+      expect(roots).not.toContain('ghq')
+    })
+
+    it('preserves the full Windows path when a single C:/Users/<u>/... leaf is auto-flattened', () => {
+      const projects = [mkProject('C:/Users/foo/ghq/github.com/org/only-repo')]
+      const result = groupProjects(projects)
+      expect(result).toHaveLength(1)
+      const leaf = result[0] as ProjectLeaf
+      expect(isLeaf(leaf)).toBe(true)
+      expect(leaf.collapsedPath).toBe('C:/Users/foo/ghq/github.com/org/only-repo')
+    })
   })
 })

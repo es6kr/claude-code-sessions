@@ -76,10 +76,23 @@ interface TrieNode {
 }
 
 /**
- * Split a project displayName into path segments while preserving the leading "~" marker.
+ * Split a project displayName into path segments while preserving root markers.
  *
+ * Root segment preservation:
+ * - Leading "~" stays as a dedicated root segment (e.g. "~/ghq/x" → ["~", "ghq", "x"]).
+ * - Leading "/" is fused into the first segment so absolute paths remain visually
+ *   distinguishable from relative ones (e.g. "/mnt/c/Users/x" → ["/mnt", "c", "Users", "x"];
+ *   without this, "/mnt/c/..." and "mnt/c/..." would collide in the trie root).
+ * - On non-Windows OS, Windows-style home roots "<DriveLetter>:/Users/<username>" are fused
+ *   into a single root segment so foreign Windows data anchors at the Windows home rather
+ *   than letting downstream segments (e.g. "ghq") rise to the top level and become
+ *   indistinguishable from the host OS's own "~/ghq" group.
+ *
+ * Examples:
  * - "~/ghq/github.com/es6kr/skills" → ["~", "ghq", "github.com", "es6kr", "skills"]
- * - "/Users/david/projects/app"     → ["Users", "david", "projects", "app"]
+ * - "/mnt/c/Users/x/app"            → ["/mnt", "c", "Users", "x", "app"]
+ * - "/opt/projects/svc"             → ["/opt", "projects", "svc"]
+ * - "C:/Users/foo/ghq/x" (non-Win)  → ["C:/Users/foo", "ghq", "x"]
  * - "github.com/es6kr/skills"       → ["github.com", "es6kr", "skills"]
  */
 const splitDisplayName = (displayName: string): string[] => {
@@ -87,7 +100,27 @@ const splitDisplayName = (displayName: string): string[] => {
   if (displayName.startsWith('~/')) {
     return ['~', ...displayName.slice(2).split('/').filter(Boolean)]
   }
-  return displayName.replace(/^\//, '').split('/').filter(Boolean)
+
+  // Non-Windows host: fuse foreign Windows-home "<X>:/Users/<username>" into one root
+  // segment so the Windows-home boundary survives the trie's single-child walk-down.
+  if (process.platform !== 'win32') {
+    const winHomeMatch = displayName.match(/^([A-Za-z]:\/Users\/[^/]+)(?:\/(.*))?$/)
+    if (winHomeMatch) {
+      const root = winHomeMatch[1]
+      const rest = winHomeMatch[2]
+      if (!rest) return [root]
+      return [root, ...rest.split('/').filter(Boolean)]
+    }
+  }
+
+  // Absolute path: keep the leading "/" as part of the root segment.
+  if (displayName.startsWith('/')) {
+    const parts = displayName.split('/').filter(Boolean)
+    if (parts.length === 0) return []
+    return ['/' + parts[0], ...parts.slice(1)]
+  }
+
+  return displayName.split('/').filter(Boolean)
 }
 
 const countLeaves = (node: TrieNode): number => {
@@ -119,6 +152,9 @@ const isAncestorPath = (path: string, target: string): boolean => {
   if (!path) return true
   return target === path || target.startsWith(path + '/')
 }
+
+/** True when `p` is a Windows-style home root segment like "C:/Users/<username>". */
+const isWindowsHomeRoot = (p: string): boolean => /^[A-Za-z]:\/Users\/[^/]+$/.test(p)
 
 /**
  * Sort tree-level children: ancestors of the current project first;
@@ -229,9 +265,12 @@ export const groupProjects = (
       }
 
       // Walk down single-child intermediate nodes (no project attached) to find the branching point.
+      // The walk-down stops at a Windows-home boundary ("<DriveLetter>:/Users/<username>")
+      // so foreign Windows data anchors at its own home rather than letting descendants
+      // (e.g. "ghq") rise to a top-level label indistinguishable from the host's "~/ghq".
       let walkPath = childPath
       let walkNode = child
-      while (walkNode.children.size === 1 && !walkNode.project) {
+      while (walkNode.children.size === 1 && !walkNode.project && !isWindowsHomeRoot(walkPath)) {
         const [nextKey, nextChild] = walkNode.children.entries().next().value as [string, TrieNode]
         walkPath = `${walkPath}/${nextKey}`
         walkNode = nextChild
