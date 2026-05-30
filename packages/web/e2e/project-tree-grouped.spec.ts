@@ -13,6 +13,10 @@ test.describe('ProjectTree — folder-grouped view', () => {
     })
     await page.reload()
     await page.waitForSelector('aside h2:has-text("Projects")')
+    // Wait for SvelteKit to finish hydrating the page so the toggle button has
+    // its click handler attached. waitForSelector matches SSR'd content which
+    // exists before hydration; clicking too early would silently no-op on CI.
+    await page.waitForLoadState('networkidle')
   })
 
   test('renders the view-mode toggle button', async ({ page }) => {
@@ -27,18 +31,25 @@ test.describe('ProjectTree — folder-grouped view', () => {
     const initial = await toggle.getAttribute('data-view-mode')
     expect(initial).not.toBeNull()
 
+    // Svelte 5 flushes reactive updates in a microtask after the click handler runs.
+    // `toggle.click()` resolves before that microtask, so a plain sync `getAttribute`
+    // read may observe the pre-update value. Use Playwright's auto-retrying
+    // `toHaveAttribute` (or its negation) to wait for the attribute to settle.
     await toggle.click()
+    await expect(toggle).not.toHaveAttribute('data-view-mode', initial!)
     const second = await toggle.getAttribute('data-view-mode')
-    expect(second).not.toBe(initial)
 
     await toggle.click()
+    await expect(toggle).not.toHaveAttribute('data-view-mode', second!)
     const third = await toggle.getAttribute('data-view-mode')
-    expect(third).not.toBe(second)
 
     // Cycle returns to original after three clicks (3-state toggle).
     await toggle.click()
+    await expect(toggle).toHaveAttribute('data-view-mode', initial!)
     const fourth = await toggle.getAttribute('data-view-mode')
     expect(fourth).toBe(initial)
+    // Sanity: three intermediate values are all distinct.
+    expect(new Set([initial, second, third]).size).toBe(3)
   })
 
   test('persists view mode selection in localStorage', async ({ page }) => {
