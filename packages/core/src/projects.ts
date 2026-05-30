@@ -101,16 +101,17 @@ const splitDisplayName = (displayName: string): string[] => {
     return ['~', ...displayName.slice(2).split('/').filter(Boolean)]
   }
 
-  // Non-Windows host: fuse foreign Windows-home "<X>:/Users/<username>" into one root
-  // segment so the Windows-home boundary survives the trie's single-child walk-down.
-  if (process.platform !== 'win32') {
-    const winHomeMatch = displayName.match(/^([A-Za-z]:\/Users\/[^/]+)(?:\/(.*))?$/)
-    if (winHomeMatch) {
-      const root = winHomeMatch[1]
-      const rest = winHomeMatch[2]
-      if (!rest) return [root]
-      return [root, ...rest.split('/').filter(Boolean)]
-    }
+  // Windows-style home root: fuse "<X>:/Users/<username>" into one root segment so the
+  // Windows-home boundary survives the trie's single-child walk-down. Applied in all
+  // environments (no process.platform check) to keep behavior identical between SSR and
+  // CSR — otherwise the browser bundle would throw "process is not defined" and hydration
+  // would diverge from the server-rendered output.
+  const winHomeMatch = displayName.match(/^([A-Za-z]:\/Users\/[^/]+)(?:\/(.*))?$/)
+  if (winHomeMatch) {
+    const root = winHomeMatch[1]
+    const rest = winHomeMatch[2]
+    if (!rest) return [root]
+    return [root, ...rest.split('/').filter(Boolean)]
   }
 
   // Absolute path: keep the leading "/" as part of the root segment.
