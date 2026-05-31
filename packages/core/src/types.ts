@@ -162,6 +162,43 @@ export interface Project {
   lastModified?: number // newest session file mtime (epoch ms)
 }
 
+/**
+ * Hierarchical group node containing nested project groups or leaf projects.
+ * Used by groupProjects() to build a tree from flat Project[] by splitting displayName on '/'.
+ */
+export interface ProjectGroup {
+  kind: 'group'
+  /** Full path prefix, e.g., "~/ghq/github.com/es6kr" */
+  name: string
+  /** Last segment for label display, e.g., "es6kr" */
+  displayName: string
+  /** Mixed group and leaf descendants */
+  children: ProjectTreeNode[]
+  /** Sum of sessionCount across all descendant projects */
+  totalSessions: number
+  /** Depth in the tree (root children = 0) */
+  depth: number
+}
+
+/**
+ * Leaf wrapper around Project for tree walking.
+ * collapsedPath holds the effective display path when single-child chains were flattened
+ * (e.g., "~/ghq/github.com/example-org/example-repo" when example-org has only one repo).
+ */
+export interface ProjectLeaf {
+  kind: 'project'
+  project: Project
+  depth: number
+  /** Full display path including any collapsed single-child prefix segments */
+  collapsedPath: string
+}
+
+/** Tree node (group or leaf) for hierarchical project rendering */
+export type ProjectTreeNode = ProjectGroup | ProjectLeaf
+
+/** View mode for project tree rendering (flat list, date-grouped, or folder-grouped) */
+export type ProjectViewMode = 'flat' | 'date-group' | 'folder-group'
+
 // ============================================================================
 // Todo Types
 // ============================================================================

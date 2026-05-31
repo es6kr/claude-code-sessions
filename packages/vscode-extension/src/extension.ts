@@ -249,6 +249,28 @@ async function resolveProjectCwd(projectName: string): Promise<string> {
 export function activate(context: vscode.ExtensionContext) {
   const treeProvider = new SessionTreeProvider()
 
+  // Restore the configured view mode (flat / date-group / folder-group).
+  const initialViewMode = vscode.workspace
+    .getConfiguration('claudeSessions')
+    .get<'flat' | 'date-group' | 'folder-group'>('viewMode', 'flat')
+  if (initialViewMode !== 'flat') {
+    treeProvider.setViewMode(initialViewMode)
+  }
+
+  // React to configuration changes so the tree stays in sync with the setting.
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((event) => {
+      if (event.affectsConfiguration('claudeSessions.viewMode')) {
+        const next = vscode.workspace
+          .getConfiguration('claudeSessions')
+          .get<'flat' | 'date-group' | 'folder-group'>('viewMode', 'flat')
+        treeProvider.setViewMode(next)
+      } else if (event.affectsConfiguration('claudeSessions.minGroupSize')) {
+        treeProvider.refresh()
+      }
+    })
+  )
+
   // Register tree view with drag and drop support
   const treeView = vscode.window.createTreeView('claudeSessions', {
     treeDataProvider: treeProvider,
@@ -588,10 +610,38 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
-    vscode.commands.registerCommand('claudeSessions.toggleGroupByDate', () => {
-      const current = treeProvider.getGroupByDate()
-      treeProvider.setGroupByDate(!current)
-      vscode.window.showInformationMessage(`Date grouping ${!current ? 'enabled' : 'disabled'}`)
+    vscode.commands.registerCommand('claudeSessions.groupBy', async () => {
+      type ViewMode = 'flat' | 'date-group' | 'folder-group'
+      const groupOptions: Array<{ label: string; description: string; mode: ViewMode }> = [
+        {
+          label: '$(list-flat) No Grouping',
+          description: 'Show all projects as a flat list',
+          mode: 'flat',
+        },
+        {
+          label: '$(calendar) Group by Date',
+          description: 'Group sessions by last-updated date',
+          mode: 'date-group',
+        },
+        {
+          label: '$(folder-library) Group by Folder',
+          description: 'Group projects by repository path segments',
+          mode: 'folder-group',
+        },
+      ]
+
+      const currentMode = treeProvider.getViewMode()
+      const selected = await vscode.window.showQuickPick(
+        groupOptions.map((opt) => ({ ...opt, picked: opt.mode === currentMode })),
+        {
+          placeHolder: 'Select grouping mode',
+          title: 'Group Sessions',
+        }
+      )
+
+      if (selected) {
+        treeProvider.setViewMode(selected.mode)
+      }
     }),
 
     vscode.commands.registerCommand('claudeSessions.cleanup', async () => {

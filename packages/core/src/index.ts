@@ -43,6 +43,10 @@ export type {
   SessionSortOrder,
   SessionSortOptions,
   TitleDisplayMode,
+  ProjectGroup,
+  ProjectLeaf,
+  ProjectTreeNode,
+  ProjectViewMode,
 } from './types.js'
 
 // Path utilities
@@ -58,7 +62,7 @@ export {
 } from './paths.js'
 
 // Project utilities
-export { sortProjects } from './projects.js'
+export { sortProjects, groupProjects, type GroupProjectsOptions } from './projects.js'
 
 // Message utilities
 export {
