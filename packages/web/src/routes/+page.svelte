@@ -5,9 +5,14 @@
   import type { Project, SessionMeta, SessionData, Message, TodoItem, AgentInfo } from '$lib/api'
   import { ConfirmModal, InputModal, ProjectTree, SessionViewer, Toast } from '$lib/components'
   import { getDisplayTitle } from '$lib/utils'
-  import { appConfig } from '$lib/stores/config'
+  import { appConfig, viewMode, expandedGroups } from '$lib/stores/config'
   import { deleteMessageWithChainRepair } from '@claude-sessions/core'
-  import type { SessionSortField, SessionSortOrder, TitleDisplayMode } from '@claude-sessions/core'
+  import type {
+    SessionSortField,
+    SessionSortOrder,
+    TitleDisplayMode,
+    ProjectViewMode,
+  } from '@claude-sessions/core'
 
   // State
   let projects = $state<Project[]>([])
@@ -268,11 +273,8 @@
     e.stopPropagation()
     const sessionData = projectSessionData.get(session.projectName)?.get(session.id)
     const currentTitle = getDisplayTitle({
-      agentName: sessionData?.agentName,
       customTitle: sessionData?.customTitle,
-      currentSummary: sessionData?.currentSummary,
       title: session.title,
-      maxLength: Infinity,
       fallback: '',
     })
 
@@ -292,7 +294,6 @@
           if (sessionData) {
             sessionData.agentName = trimmed || undefined
             sessionData.customTitle = trimmed || undefined
-            if (trimmed) sessionData.currentSummary = trimmed
             if (sessionData.summaries.length > 0) {
               sessionData.summaries[0] = { ...sessionData.summaries[0], summary: newTitle }
             } else {
@@ -638,6 +639,19 @@
     }
   }
 
+  const handleViewModeChange = (mode: ProjectViewMode) => {
+    viewMode.set(mode)
+  }
+
+  const handleToggleGroup = (name: string) => {
+    expandedGroups.update((set) => {
+      const next = new Set(set)
+      if (next.has(name)) next.delete(name)
+      else next.add(name)
+      return next
+    })
+  }
+
   // Restore sort options from localStorage
   const restoreSortOptions = () => {
     if (!browser) return
@@ -672,7 +686,11 @@
     {sortField}
     {sortOrder}
     {titleDisplayMode}
+    viewMode={$viewMode}
+    expandedGroups={$expandedGroups}
     onToggleProject={toggleProject}
+    onToggleGroup={handleToggleGroup}
+    onViewModeChange={handleViewModeChange}
     onSelectSession={selectSession}
     onCompressSession={handleCompressSession}
     onDeleteSession={handleDeleteSession}
@@ -688,14 +706,8 @@
     {messages}
     {todos}
     {agents}
-    agentName={selectedSession
-      ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.agentName
-      : undefined}
     customTitle={selectedSession
       ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.customTitle
-      : undefined}
-    currentSummary={selectedSession
-      ? projectSessionData.get(selectedSession.projectName)?.get(selectedSession.id)?.currentSummary
       : undefined}
     onMessagesChange={(newMessages) => (messages = newMessages)}
     onRefresh={async () => {

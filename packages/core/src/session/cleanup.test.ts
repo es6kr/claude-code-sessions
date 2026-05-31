@@ -4,6 +4,16 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { Effect } from 'effect'
 
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const readdirMock = vi.fn(actual.readdir)
+  return {
+    ...actual,
+    readdir: readdirMock,
+    default: { ...actual, readdir: readdirMock },
+  }
+})
+
 vi.mock('../paths.js', async () => {
   const actual = await vi.importActual('../paths.js')
   return {
@@ -63,6 +73,10 @@ describe('clearSessions', () => {
   const projectName = '-Users-test-project'
 
   beforeEach(async () => {
+    // Restore readdir to the real implementation; individual tests may override.
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+    vi.mocked(fs.readdir).mockImplementation(actual.readdir as typeof fs.readdir)
+
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cleanup-test-'))
     await fs.mkdir(path.join(tempDir, projectName), { recursive: true })
     vi.mocked(getSessionsDir).mockReturnValue(tempDir)
@@ -580,6 +594,228 @@ describe('clearSessions', () => {
         .catch(() => false)
       expect(nestedStillExists).toBe(true)
       expect(result.deletedStaleProjectCount ?? 0).toBe(0)
+    })
+  })
+
+  // Issue #103 — Guard readdir against missing project folders (TOCTOU).
+  // Encoded project folders can disappear between listProjects and any
+  // subsequent per-project readdir (cross-PC sync, manual deletion, etc).
+  // Without catchAll, one ENOENT aborts the entire Effect.all run.
+  describe('readdir TOCTOU safety (Issue #103)', () => {
+    function makeEnoent(p: string): NodeJS.ErrnoException {
+      const err = new Error(
+        `ENOENT: no such file or directory, scandir '${p}'`
+      ) as NodeJS.ErrnoException
+      err.code = 'ENOENT'
+      return err
+    }
+
+    it('T1: clearSessions Step 1 skips a project whose folder vanishes before readdir', async () => {
+      const projA = '-Users-test-toctou-step1-A'
+      const projB = '-Users-test-toctou-step1-B'
+      await fs.mkdir(path.join(tempDir, projA), { recursive: true })
+      await fs.mkdir(path.join(tempDir, projB), { recursive: true })
+      await writeSession(tempDir, projA, 'a1', [makeInvalidMessage({ uuid: 'a1' })])
+      await writeSession(tempDir, projB, 'b1', [makeInvalidMessage({ uuid: 'b1' })])
+
+      // Override readdir to throw ENOENT only for projA, simulating mid-operation deletion.
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      vi.mocked(fs.readdir).mockImplementation(((p: unknown, opts: unknown) => {
+        if (typeof p === 'string' && p.endsWith(projA)) {
+          return Promise.reject(makeEnoent(p))
+        }
+        return (actual.readdir as typeof fs.readdir)(
+          p as Parameters<typeof fs.readdir>[0],
+          opts as Parameters<typeof fs.readdir>[1]
+        )
+      }) as typeof fs.readdir)
+
+      // After fix: projA silently skipped, projB processed normally.
+      const result = await Effect.runPromise(
+        clearSessions({ clearInvalid: true, clearEmpty: false, clearOrphanAgents: false })
+      )
+
+      expect(result.removedMessageCount).toBeGreaterThan(0)
+    })
+
+    it('T2: clearSessions Step 6 skips a project whose folder vanishes between Step 1 and Step 6', async () => {
+      const projA = '-Users-test-toctou-step6-vanish'
+      const projB = '-Users-test-toctou-step6-keep'
+      await fs.mkdir(path.join(tempDir, projA), { recursive: true })
+      await fs.mkdir(path.join(tempDir, projB), { recursive: true })
+      await writeSession(tempDir, projA, 'a1', [makeMessage({ uuid: 'a1' })])
+      await writeSession(tempDir, projB, 'b1', [makeMessage({ uuid: 'b1' })])
+
+      // First readdir(projA) succeeds (Step 1 cleanInvalid), subsequent calls fail (Step 6 dedup).
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      let projACallCount = 0
+      vi.mocked(fs.readdir).mockImplementation(((p: unknown, opts: unknown) => {
+        if (typeof p === 'string' && p.endsWith(projA)) {
+          projACallCount++
+          if (projACallCount > 1) {
+            return Promise.reject(makeEnoent(p))
+          }
+        }
+        return (actual.readdir as typeof fs.readdir)(
+          p as Parameters<typeof fs.readdir>[0],
+          opts as Parameters<typeof fs.readdir>[1]
+        )
+      }) as typeof fs.readdir)
+
+      // After fix: Step 6 catches ENOENT on projA, completes normally.
+      await expect(
+        Effect.runPromise(
+          clearSessions({
+            clearInvalid: true,
+            clearEmpty: false,
+            clearOrphanAgents: false,
+            deduplicateTitles: true,
+          })
+        )
+      ).resolves.toBeDefined()
+    })
+
+    // T3 (getMostRecentSessionMtime readdir failure) was investigated but proved
+    // unreliable as a unit test because previewCleanup's chain calls readdir on the
+    // same projectPath through multiple unwrapped sites (crud-streaming, crud, agents,
+    // todos). The fix itself (narrow `.catch` on cleanup.ts:37) is one line and
+    // covered by code review. Broader readdir hardening across the previewCleanup
+    // chain is tracked as a follow-up — see PR description "Follow-up" section.
+
+    it('T6: non-ENOENT readdir error (EACCES) PROPAGATES from Step 1 (does not silently skip)', async () => {
+      const projA = '-Users-test-eacces-step1'
+      await fs.mkdir(path.join(tempDir, projA), { recursive: true })
+      await writeSession(tempDir, projA, 'a1', [makeInvalidMessage({ uuid: 'a1' })])
+
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      vi.mocked(fs.readdir).mockImplementation(((p: unknown, opts: unknown) => {
+        if (typeof p === 'string' && p.endsWith(projA)) {
+          const err = new Error(
+            `EACCES: permission denied, scandir '${p}'`
+          ) as NodeJS.ErrnoException
+          err.code = 'EACCES'
+          return Promise.reject(err)
+        }
+        return (actual.readdir as typeof fs.readdir)(
+          p as Parameters<typeof fs.readdir>[0],
+          opts as Parameters<typeof fs.readdir>[1]
+        )
+      }) as typeof fs.readdir)
+
+      // After narrow-catch fix: EACCES is NOT swallowed → clearSessions fails loudly
+      await expect(
+        Effect.runPromise(
+          clearSessions({ clearInvalid: true, clearEmpty: false, clearOrphanAgents: false })
+        )
+      ).rejects.toThrow()
+    })
+
+    it('T8: clearSessions Step 2 (listSessions) skips a project whose folder vanishes', async () => {
+      const projA = '-Users-test-toctou-step2-vanish'
+      const projB = '-Users-test-toctou-step2-keep'
+      await fs.mkdir(path.join(tempDir, projA), { recursive: true })
+      await fs.mkdir(path.join(tempDir, projB), { recursive: true })
+      // projB has an empty session so clearEmpty has something to do
+      await writeSession(tempDir, projB, 'b-empty', [])
+
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      vi.mocked(fs.readdir).mockImplementation(((p: unknown, opts: unknown) => {
+        if (typeof p === 'string' && p.endsWith(projA)) {
+          return Promise.reject(makeEnoent(p))
+        }
+        return (actual.readdir as typeof fs.readdir)(
+          p as Parameters<typeof fs.readdir>[0],
+          opts as Parameters<typeof fs.readdir>[1]
+        )
+      }) as typeof fs.readdir)
+
+      // After fix: projA Step 2 catchAll → projB processed normally
+      await expect(
+        Effect.runPromise(
+          clearSessions({
+            clearInvalid: false,
+            clearEmpty: true,
+            clearOrphanAgents: false,
+          })
+        )
+      ).resolves.toBeDefined()
+    })
+
+    it('T9: clearSessions Step 4 (deleteOrphanAgents) skips a project whose folder vanishes', async () => {
+      const projA = '-Users-test-toctou-step4-vanish'
+      const projB = '-Users-test-toctou-step4-keep'
+      await fs.mkdir(path.join(tempDir, projA), { recursive: true })
+      await fs.mkdir(path.join(tempDir, projB), { recursive: true })
+      await writeSession(tempDir, projB, 'b1', [makeMessage({ uuid: 'b1' })])
+
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      vi.mocked(fs.readdir).mockImplementation(((p: unknown, opts: unknown) => {
+        if (typeof p === 'string' && p.endsWith(projA)) {
+          return Promise.reject(makeEnoent(p))
+        }
+        return (actual.readdir as typeof fs.readdir)(
+          p as Parameters<typeof fs.readdir>[0],
+          opts as Parameters<typeof fs.readdir>[1]
+        )
+      }) as typeof fs.readdir)
+
+      // After fix: projA Step 4 catchAll → projB completes
+      await expect(
+        Effect.runPromise(
+          clearSessions({
+            clearInvalid: false,
+            clearEmpty: false,
+            clearOrphanAgents: true,
+          })
+        )
+      ).resolves.toBeDefined()
+    })
+
+    it('T10: clearSessions reports skippedProjectCount (unique per project across steps)', async () => {
+      const projA = '-Users-test-skipped-A'
+      const projB = '-Users-test-skipped-B'
+      const projC = '-Users-test-skipped-C-healthy'
+      await fs.mkdir(path.join(tempDir, projA), { recursive: true })
+      await fs.mkdir(path.join(tempDir, projB), { recursive: true })
+      await fs.mkdir(path.join(tempDir, projC), { recursive: true })
+      await writeSession(tempDir, projC, 'c1', [makeMessage({ uuid: 'c1' })])
+
+      // Strategy: let listProjects's per-entry readdir succeed (so projA/B reach
+      // targetProjects), then fail Step 1 + Step 6 readdir(projA/B) to trigger
+      // cleanup.ts's skippedProjects tracking. Use call-count per path: first
+      // call per project succeeds (listProjects), subsequent fail.
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      const callsPerProject: Record<string, number> = { [projA]: 0, [projB]: 0 }
+      vi.mocked(fs.readdir).mockImplementation(((p: unknown, opts: unknown) => {
+        if (typeof p === 'string') {
+          for (const key of [projA, projB]) {
+            if (p.endsWith(key)) {
+              callsPerProject[key]++
+              // 1st call = listProjects per-entry (success); 2nd+ = Step 1/6 (fail)
+              if (callsPerProject[key] > 1) {
+                return Promise.reject(makeEnoent(p))
+              }
+            }
+          }
+        }
+        return (actual.readdir as typeof fs.readdir)(
+          p as Parameters<typeof fs.readdir>[0],
+          opts as Parameters<typeof fs.readdir>[1]
+        )
+      }) as typeof fs.readdir)
+
+      const result = await Effect.runPromise(
+        clearSessions({
+          clearInvalid: true,
+          clearEmpty: false,
+          clearOrphanAgents: false,
+          deduplicateTitles: true,
+        })
+      )
+
+      // Both projA + projB are skipped across Step 1 + Step 6.
+      // skippedProjectCount must be 2 (unique), not 4 (steps × projects).
+      expect(result.skippedProjectCount).toBe(2)
     })
   })
 })

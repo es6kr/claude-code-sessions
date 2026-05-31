@@ -376,6 +376,93 @@ suite('Webview Test Suite', () => {
     )
   })
 
+  test('Session page responds with HTTP 200', async function () {
+    if (process.env.CI) {
+      console.log('Skipping session page test in CI environment')
+      this.skip()
+      return
+    }
+
+    this.timeout(60000)
+
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    if (!extension) {
+      assert.fail('Extension not found: es6kr.claude-sessions')
+    }
+
+    if (!extension.isActive) {
+      await extension.activate()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    // Use local build instead of npx to test current source
+    const webBuildPath = path.resolve(__dirname, '../../../../web/dist/cli.js')
+    if (fs.existsSync(webBuildPath)) {
+      const config = vscode.workspace.getConfiguration('claudeSessions')
+      await config.update('webServerPath', webBuildPath, vscode.ConfigurationTarget.Global)
+      console.log(`Using local web build: ${webBuildPath}`)
+    }
+
+    // Resolve a real session from disk so the server can render the page
+    const sessionInfo = findFirstSession()
+    if (!sessionInfo) {
+      console.log('No sessions found in ~/.claude/projects, skipping')
+      this.skip()
+      return
+    }
+
+    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    console.log('restartWebServer executed, polling for server readiness...')
+
+    const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
+
+    // Wait for /api/version first (server is ready)
+    const maxRetries = 10
+    const retryInterval = 1000
+    for (let i = 0; i < maxRetries; i++) {
+      try {
+        const result = await new Promise<{ statusCode: number }>((resolve, reject) => {
+          const req = http.get(`http://localhost:${port}/api/version`, (res) => {
+            res.resume()
+            res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
+          })
+          req.on('error', reject)
+          req.setTimeout(3000, () => {
+            req.destroy()
+            reject(new Error('timeout'))
+          })
+        })
+        if (result.statusCode === 200) break
+      } catch {
+        console.log(`Retry ${i + 1}/${maxRetries}: server not ready yet`)
+        await new Promise((resolve) => setTimeout(resolve, retryInterval))
+      }
+    }
+
+    // Now fetch the session page that the VSCode webview actually loads
+    const sessionPath = `/session/${encodeURIComponent(sessionInfo.projectName)}/${encodeURIComponent(sessionInfo.sessionId)}`
+    const sessionResult = await new Promise<{ statusCode: number }>((resolve, reject) => {
+      const req = http.get(`http://localhost:${port}${sessionPath}`, (res) => {
+        res.resume()
+        res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
+      })
+      req.on('error', reject)
+      req.setTimeout(5000, () => {
+        req.destroy()
+        reject(new Error('Session page request timeout'))
+      })
+    })
+
+    console.log(`Web server ${sessionPath} responded with status: ${sessionResult.statusCode}`)
+    assert.strictEqual(
+      sessionResult.statusCode,
+      200,
+      `Session page should respond with HTTP 200, got ${sessionResult.statusCode}`
+    )
+  })
+
   test('Custom Editor activates for .jsonl files', async function () {
     this.timeout(30000)
 

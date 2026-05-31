@@ -16,7 +16,6 @@ export const buildSessionMeta = (
     title?: string
     agentName?: string
     customTitle?: string
-    currentSummary?: string
     userAssistantCount: number
     hasSummary: boolean
     firstTimestamp?: string
@@ -29,7 +28,6 @@ export const buildSessionMeta = (
     fields.title ?? (fields.hasSummary ? '[Summary Only]' : `Session ${sessionId.slice(0, 8)}`),
   agentName: fields.agentName,
   customTitle: fields.customTitle,
-  currentSummary: fields.currentSummary,
   messageCount:
     fields.userAssistantCount > 0 ? fields.userAssistantCount : fields.hasSummary ? 1 : 0,
   createdAt: fields.firstTimestamp,

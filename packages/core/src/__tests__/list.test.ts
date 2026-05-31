@@ -16,7 +16,7 @@ vi.mock('../paths.js', async () => {
 import { listSessions } from '../session.js'
 import { getSessionsDir } from '../paths.js'
 
-describe('listSessions - should include currentSummary and customTitle', () => {
+describe('listSessions - should include customTitle and agentName', () => {
   let tempDir: string
   let projectDir: string
   const projectName = '-Users-test-listsessions'
@@ -33,7 +33,7 @@ describe('listSessions - should include currentSummary and customTitle', () => {
     vi.clearAllMocks()
   })
 
-  it('should not extract currentSummary from in-file summary records', async () => {
+  it('should not surface in-file summary records as session title', async () => {
     const sessionId = 'session-with-summary'
 
     const messages = [
@@ -67,8 +67,6 @@ describe('listSessions - should include currentSummary and customTitle', () => {
 
     expect(sessions).toHaveLength(1)
     expect(sessions[0].id).toBe(sessionId)
-    // In-file summary records are no longer extracted as currentSummary
-    expect(sessions[0].currentSummary).toBeUndefined()
     expect(sessions[0].title).toBe('Hello world')
   })
 
@@ -131,8 +129,6 @@ describe('listSessions - should include currentSummary and customTitle', () => {
 
     expect(sessions).toHaveLength(1)
     expect(sessions[0].customTitle).toBe('Custom Title Here')
-    // In-file summary records are no longer extracted
-    expect(sessions[0].currentSummary).toBeUndefined()
     expect(sessions[0].title).toBe('First user message')
   })
 
@@ -218,7 +214,7 @@ describe('listSessions - should include currentSummary and customTitle', () => {
     expect(result[2].id).toBe('oldest-session')
   })
 
-  it('should return undefined for currentSummary and customTitle when not present', async () => {
+  it('should return undefined for customTitle and agentName when not present', async () => {
     const sessionId = 'session-without-extras'
 
     const messages = [
@@ -238,8 +234,8 @@ describe('listSessions - should include currentSummary and customTitle', () => {
     const sessions = await Effect.runPromise(listSessions(projectName))
 
     expect(sessions).toHaveLength(1)
-    expect(sessions[0].currentSummary).toBeUndefined()
     expect(sessions[0].customTitle).toBeUndefined()
+    expect(sessions[0].agentName).toBeUndefined()
     expect(sessions[0].title).toBe('Just a plain session')
   })
 })

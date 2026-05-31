@@ -13,6 +13,7 @@
  */
 export type TreeItemType =
   | 'project'
+  | 'project-group'
   | 'date-group'
   | 'session'
   | 'summaries-group'
@@ -51,6 +52,7 @@ interface TodoIconDef extends IconDef {
  */
 export const TREE_ICONS = {
   project: { codicon: 'folder', emoji: '📁' },
+  'project-group': { codicon: 'folder-library', emoji: '🗂️' },
   'date-group': { codicon: 'calendar', emoji: '📅' },
   session: { codicon: 'comment-discussion', emoji: '💬' },
   'summaries-group': { codicon: 'history', emoji: '📝' },

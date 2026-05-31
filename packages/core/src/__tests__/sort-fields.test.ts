@@ -13,7 +13,6 @@ type TestSession = {
   messageCount: number
   title: string
   customTitle?: string
-  currentSummary?: string
   sortTimestamp: number
   projectName: string
   agents: AgentInfo[]
@@ -48,7 +47,6 @@ describe('Session sorting by different fields', () => {
         id: 'session-alpha',
         title: 'Alpha feature implementation',
         customTitle: undefined,
-        currentSummary: 'Implementing alpha feature',
         messageCount: 50,
         createdAt: '2026-01-10T00:00:00.000Z',
         updatedAt: '2026-01-15T12:00:00.000Z',
@@ -64,7 +62,6 @@ describe('Session sorting by different fields', () => {
         id: 'session-beta',
         title: 'Beta bug fixes',
         customTitle: 'Critical Beta Fixes',
-        currentSummary: 'Fixing beta bugs',
         messageCount: 20,
         createdAt: '2026-01-15T00:00:00.000Z',
         updatedAt: '2026-01-18T08:00:00.000Z',
@@ -80,7 +77,6 @@ describe('Session sorting by different fields', () => {
         id: 'session-gamma',
         title: 'Gamma refactoring',
         customTitle: undefined,
-        currentSummary: undefined,
         messageCount: 100,
         createdAt: '2026-01-05T00:00:00.000Z',
         updatedAt: '2026-01-19T10:00:00.000Z',
@@ -207,31 +203,30 @@ describe('Session sorting by different fields', () => {
       const sessions = createDummySessions()
       const sorted = sortSessions(sessions, { field: 'title', order: 'asc' })
 
-      // Display titles (customTitle > currentSummary > title):
-      // - Alpha: "Implementing alpha feature" (currentSummary)
+      // Display titles (customTitle > title):
+      // - Alpha: "Alpha feature implementation" (title, no customTitle)
       // - Beta: "Critical Beta Fixes" (customTitle takes priority)
-      // - Gamma: "Gamma refactoring" (title, no customTitle/currentSummary)
-      expect(sorted[0].id).toBe('session-beta') // "Critical..."
-      expect(sorted[1].id).toBe('session-gamma') // "Gamma..."
-      expect(sorted[2].id).toBe('session-alpha') // "Implementing..."
+      // - Gamma: "Gamma refactoring" (title, no customTitle)
+      expect(sorted[0].id).toBe('session-alpha') // "Alpha..."
+      expect(sorted[1].id).toBe('session-beta') // "Critical..."
+      expect(sorted[2].id).toBe('session-gamma') // "Gamma..."
     })
 
     it('should sort alphabetically by display title (desc)', () => {
       const sessions = createDummySessions()
       const sorted = sortSessions(sessions, { field: 'title', order: 'desc' })
 
-      expect(sorted[0].id).toBe('session-alpha') // "Implementing..." (I > G > C)
-      expect(sorted[1].id).toBe('session-gamma') // "Gamma..."
-      expect(sorted[2].id).toBe('session-beta') // "Critical..."
+      expect(sorted[0].id).toBe('session-gamma') // "Gamma..."
+      expect(sorted[1].id).toBe('session-beta') // "Critical..."
+      expect(sorted[2].id).toBe('session-alpha') // "Alpha..."
     })
 
-    it('should use customTitle over currentSummary over title', () => {
+    it('should use customTitle over title', () => {
       const baseSessions = [
         {
           id: 'with-custom',
-          title: 'Original title',
+          title: 'Zzz Original title',
           customTitle: 'AAA Custom',
-          currentSummary: 'BBB Summary',
           messageCount: 1,
           summaries: [] as SummaryInfo[],
           projectName: 'test-project',
@@ -239,26 +234,24 @@ describe('Session sorting by different fields', () => {
           todos: emptyTodos('with-custom'),
         },
         {
-          id: 'with-summary',
-          title: 'Original title 2',
+          id: 'title-only-c',
+          title: 'CCC Title only',
           customTitle: undefined,
-          currentSummary: 'CCC Summary',
           messageCount: 1,
           summaries: [] as SummaryInfo[],
           projectName: 'test-project',
           agents: [],
-          todos: emptyTodos('with-summary'),
+          todos: emptyTodos('title-only-c'),
         },
         {
-          id: 'title-only',
+          id: 'title-only-d',
           title: 'DDD Title only',
           customTitle: undefined,
-          currentSummary: undefined,
           messageCount: 1,
           summaries: [] as SummaryInfo[],
           projectName: 'test-project',
           agents: [],
-          todos: emptyTodos('title-only'),
+          todos: emptyTodos('title-only-d'),
         },
       ]
 
@@ -270,8 +263,8 @@ describe('Session sorting by different fields', () => {
       const sorted = sortSessions(sessions, { field: 'title', order: 'asc' })
 
       expect(sorted[0].id).toBe('with-custom') // AAA Custom
-      expect(sorted[1].id).toBe('with-summary') // CCC Summary
-      expect(sorted[2].id).toBe('title-only') // DDD Title only
+      expect(sorted[1].id).toBe('title-only-c') // CCC Title only
+      expect(sorted[2].id).toBe('title-only-d') // DDD Title only
     })
   })
 })
@@ -363,7 +356,6 @@ describe('buildProjectTreeResult remaps sortTimestamp to match sort field', () =
   const makeSession = (overrides: Partial<TestSession> & { id: string }): TestSession => ({
     title: 'Test',
     customTitle: undefined,
-    currentSummary: undefined,
     messageCount: 1,
     summaries: [],
     projectName: 'test',
