@@ -131,18 +131,8 @@
         "icon": "$(sort-precedence)"
       },
       {
-        "command": "claudeSessions.toggleGroupByDate",
-        "title": "Toggle Group by Date",
-        "icon": "$(calendar)"
-      },
-      {
-        "command": "claudeSessions.toggleGroupByFolder",
-        "title": "Toggle Group by Folder",
-        "icon": "$(folder-library)"
-      },
-      {
-        "command": "claudeSessions.cycleViewMode",
-        "title": "Cycle View Mode (Flat / Date / Folder)",
+        "command": "claudeSessions.groupBy",
+        "title": "Group Sessions",
         "icon": "$(list-tree)"
       },
       {
@@ -233,12 +223,7 @@
           "group": "navigation@2"
         },
         {
-          "command": "claudeSessions.toggleGroupByDate",
-          "when": "view == claudeSessions",
-          "group": "navigation@3"
-        },
-        {
-          "command": "claudeSessions.toggleGroupByFolder",
+          "command": "claudeSessions.groupBy",
           "when": "view == claudeSessions",
           "group": "navigation@3"
         },
@@ -435,7 +420,7 @@
             "Group sessions across all projects by date",
             "Group projects hierarchically by folder path"
           ],
-          "description": "How to render the project tree. Mutually exclusive with date-group/folder-group toggles."
+          "description": "How to render the project tree."
         },
         "claudeSessions.minGroupSize": {
           "type": "number",

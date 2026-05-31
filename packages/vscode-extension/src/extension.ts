@@ -610,24 +610,38 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
-    vscode.commands.registerCommand('claudeSessions.toggleGroupByDate', () => {
-      const current = treeProvider.getGroupByDate()
-      treeProvider.setViewMode(current ? 'flat' : 'date-group')
-      vscode.window.showInformationMessage(`Date grouping ${!current ? 'enabled' : 'disabled'}`)
-    }),
+    vscode.commands.registerCommand('claudeSessions.groupBy', async () => {
+      type ViewMode = 'flat' | 'date-group' | 'folder-group'
+      const groupOptions: Array<{ label: string; description: string; mode: ViewMode }> = [
+        {
+          label: '$(list-flat) No Grouping',
+          description: 'Show all projects as a flat list',
+          mode: 'flat',
+        },
+        {
+          label: '$(calendar) Group by Date',
+          description: 'Group sessions by last-updated date',
+          mode: 'date-group',
+        },
+        {
+          label: '$(folder-library) Group by Folder',
+          description: 'Group projects by repository path segments',
+          mode: 'folder-group',
+        },
+      ]
 
-    vscode.commands.registerCommand('claudeSessions.toggleGroupByFolder', () => {
-      const current = treeProvider.getGroupByFolder()
-      treeProvider.setViewMode(current ? 'flat' : 'folder-group')
-      vscode.window.showInformationMessage(`Folder grouping ${!current ? 'enabled' : 'disabled'}`)
-    }),
+      const currentMode = treeProvider.getViewMode()
+      const selected = await vscode.window.showQuickPick(
+        groupOptions.map((opt) => ({ ...opt, picked: opt.mode === currentMode })),
+        {
+          placeHolder: 'Select grouping mode',
+          title: 'Group Sessions',
+        }
+      )
 
-    vscode.commands.registerCommand('claudeSessions.cycleViewMode', () => {
-      const current = treeProvider.getViewMode()
-      const next =
-        current === 'flat' ? 'folder-group' : current === 'folder-group' ? 'date-group' : 'flat'
-      treeProvider.setViewMode(next)
-      vscode.window.showInformationMessage(`View mode: ${next}`)
+      if (selected) {
+        treeProvider.setViewMode(selected.mode)
+      }
     }),
 
     vscode.commands.registerCommand('claudeSessions.cleanup', async () => {
