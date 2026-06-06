@@ -652,8 +652,10 @@ export function activate(context: vscode.ExtensionContext) {
 
       const totalEmpty = preview.reduce((sum, p) => sum + p.emptySessions.length, 0)
       const totalInvalid = preview.reduce((sum, p) => sum + p.invalidSessions.length, 0)
+      const staleProjectNames = preview.filter((p) => p.isStale).map((p) => p.project)
+      const totalStale = staleProjectNames.length
 
-      if (totalEmpty === 0 && totalInvalid === 0) {
+      if (totalEmpty === 0 && totalInvalid === 0 && totalStale === 0) {
         vscode.window.showInformationMessage('No sessions to clean up')
         return
       }
@@ -662,24 +664,60 @@ export function activate(context: vscode.ExtensionContext) {
       if (totalEmpty > 0) parts.push(`${totalEmpty} empty sessions`)
       if (totalInvalid > 0) parts.push(`${totalInvalid} invalid sessions`)
 
+      // Stale-project deletion is destructive (removes the entire encoded project
+      // directory) so it is strictly opt-in via a separate confirmation button.
+      // Default `Clean Up` only clears empty/invalid sessions — matching the
+      // safety-first design from Discussion #100. The 30-day mtime grace period
+      // is enforced in core (`detectStaleProject`) so a freshly synced project
+      // is never classified as stale here.
+      const staleNote =
+        totalStale > 0
+          ? `\n\n${totalStale} stale project${totalStale === 1 ? '' : 's'} also detected ` +
+            `(workspace folder missing for >30 days). Use "Clean Up + Delete Stale" ` +
+            `to also remove their session directories. This is irreversible.`
+          : ''
+
+      const baseMessage =
+        parts.length > 0
+          ? `Clean up ${parts.join(', ')}?${staleNote}`
+          : `${totalStale} stale project${totalStale === 1 ? '' : 's'} detected ` +
+            `(workspace folder missing for >30 days). Delete their session directories? ` +
+            `This is irreversible.`
+
+      const buttons: string[] = []
+      if (parts.length > 0) buttons.push('Clean Up')
+      if (totalStale > 0) buttons.push('Clean Up + Delete Stale')
+
       const confirm = await vscode.window.showWarningMessage(
-        `Clean up ${parts.join(', ')}?`,
+        baseMessage,
         { modal: true },
-        'Clean Up'
+        ...buttons
       )
 
-      if (confirm === 'Clean Up') {
-        const result = await vscode.window.withProgress(
-          { location: vscode.ProgressLocation.Notification, title: 'Cleaning up sessions...' },
-          () => Effect.runPromise(session.clearSessions({}))
-        )
-        treeProvider.refresh()
-        const msgs: string[] = []
-        if (result.deletedCount > 0) msgs.push(`${result.deletedCount} sessions`)
-        vscode.window.showInformationMessage(
-          msgs.length > 0 ? `Cleaned up ${msgs.join(', ')}` : 'Cleanup complete'
-        )
+      if (confirm !== 'Clean Up' && confirm !== 'Clean Up + Delete Stale') {
+        return
       }
+
+      const includeStale = confirm === 'Clean Up + Delete Stale'
+      const result = await vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: 'Cleaning up sessions...' },
+        () =>
+          Effect.runPromise(
+            session.clearSessions(
+              includeStale ? { clearStale: true, staleProjects: staleProjectNames } : {}
+            )
+          )
+      )
+      treeProvider.refresh()
+      const msgs: string[] = []
+      if (result.deletedCount > 0) msgs.push(`${result.deletedCount} sessions`)
+      if ((result.deletedStaleProjectCount ?? 0) > 0) {
+        const n = result.deletedStaleProjectCount as number
+        msgs.push(`${n} stale project${n === 1 ? '' : 's'}`)
+      }
+      vscode.window.showInformationMessage(
+        msgs.length > 0 ? `Cleaned up ${msgs.join(', ')}` : 'Cleanup complete'
+      )
     }),
 
     vscode.commands.registerCommand(
