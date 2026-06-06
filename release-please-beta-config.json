@@ -1,0 +1,21 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "release-type": "node",
+  "include-v-in-tag": true,
+  "include-component-in-tag": false,
+  "separate-pull-requests": false,
+  "plugins": [
+    {
+      "type": "linked-versions",
+      "groupName": "claude-sessions-npm-beta",
+      "components": ["core", "ui", "web", "mcp"]
+    },
+    "node-workspace"
+  ],
+  "packages": {
+    "packages/core": { "component": "core", "prerelease": true, "prerelease-type": "beta" },
+    "packages/ui": { "component": "ui", "prerelease": true, "prerelease-type": "beta" },
+    "packages/web": { "component": "web", "prerelease": true, "prerelease-type": "beta" },
+    "packages/mcp": { "component": "mcp", "prerelease": true, "prerelease-type": "beta" }
+  }
+}

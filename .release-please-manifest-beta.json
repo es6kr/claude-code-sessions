@@ -1,0 +1,6 @@
+{
+  "packages/core": "0.4.10-beta.2",
+  "packages/ui": "0.4.10-beta.2",
+  "packages/web": "0.4.10-beta.2",
+  "packages/mcp": "0.4.10-beta.2"
+}
