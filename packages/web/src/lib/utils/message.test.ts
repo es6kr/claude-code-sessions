@@ -114,6 +114,46 @@ describe('getMessageCategory', () => {
     const msg = makeMsg({ type: 'assistant', message: { content: 'plain string' } })
     expect(getMessageCategory(msg)).toBe('assistant')
   })
+
+  // Regression: Content can be string | ContentItem | ContentItem[]; previously the
+  // categorizer only inspected the array form. See #123.
+
+  it('should categorize user message with single tool_result ContentItem as tool_result', () => {
+    const msg = makeMsg({
+      type: 'user',
+      message: { content: { type: 'tool_result', tool_use_id: 'id', content: 'r' } },
+    })
+    expect(getMessageCategory(msg)).toBe('tool_result')
+  })
+
+  it('should categorize assistant with single tool_use ContentItem as tool_use', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: { content: { type: 'tool_use', id: 'tu1', name: 'Read', input: {} } },
+    })
+    expect(getMessageCategory(msg)).toBe('tool_use')
+  })
+
+  it('should categorize assistant with single thinking ContentItem as thinking', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: { content: { type: 'thinking', thinking: 'hmm' } },
+    })
+    expect(getMessageCategory(msg)).toBe('thinking')
+  })
+
+  it('should categorize assistant with single text ContentItem as assistant', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: { content: { type: 'text', text: 'Hi' } },
+    })
+    expect(getMessageCategory(msg)).toBe('assistant')
+  })
+
+  it('should categorize user with string content as user (no tool_result inferred)', () => {
+    const msg = makeMsg({ type: 'user', message: { content: 'plain string' } })
+    expect(getMessageCategory(msg)).toBe('user')
+  })
 })
 
 describe('ALL_MESSAGE_CATEGORIES', () => {

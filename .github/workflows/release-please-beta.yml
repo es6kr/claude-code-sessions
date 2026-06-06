@@ -17,3 +17,4 @@ jobs:
           config-file: release-please-beta-config.json
           manifest-file: .release-please-manifest-beta.json
           target-branch: beta
+          versioning-strategy: prerelease
