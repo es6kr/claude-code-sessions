@@ -1,0 +1,20 @@
+name: release-please (vscode-extension beta)
+
+on:
+  push:
+    branches: [ovsx-beta]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please-vscode-beta:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: release-please-vscode-beta-config.json
+          manifest-file: .release-please-manifest-vscode-beta.json
+          target-branch: ovsx-beta
+          versioning-strategy: prerelease

@@ -27,20 +27,71 @@ ALWAYS use `notify_user` (or `AskUserQuestion`) to get explicit confirmation BEF
 - **VSIX/NPM Publishing**: Any action that results in a new public artifact version.
 - **Workflow Changes**: Modifying CI/CD pipelines or branch protection rules.
 
-### Version Management
+### Version Management & Release Flow
 
-Always use `npm version` command for version bumps:
+Stable releases for **npm group** (core/ui/web/mcp) and **vscode-extension** are managed by
+[release-please](https://github.com/googleapis/release-please). Beta releases follow three
+parallel paths — each on a dedicated branch so the npm beta cycle and the vscode-extension
+beta cycle never block each other:
+
+| Track                   | Branch      | Mechanism                                     | Result                                                                                     |
+| ----------------------- | ----------- | --------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| npm stable              | `main`      | release-please Release PR → merge             | tag `v<X.Y.Z>` → `publish-npm.yml` publishes                                               |
+| vscode-extension stable | `main`      | release-please Release PR → merge             | tag `vscode-v<X.Y.Z>` → `release-vscode.yml` publishes (Marketplace + Open VSX)            |
+| npm beta                | `beta`      | release-please-beta Release PR → merge        | tag `v<X.Y.Z>-beta.<N>` → npm publish with `--tag beta`                                    |
+| vscode-extension beta   | `ovsx-beta` | release-please-vscode-beta Release PR → merge | tag `vscode-v<X.Y.Z>-beta.<N>` → `release-vscode.yml` publishes (Open VSX only, name swap) |
+
+#### `ovsx-beta` branch — vscode-extension beta only
+
+The dedicated `ovsx-beta` branch isolates vscode-extension beta releases from the npm beta
+cycle. The flow:
+
+1. Land a `feat(vscode):` / `fix(vscode):` commit on `ovsx-beta` (either direct, via PR, or via sync from `main`).
+2. `release-please-vscode-beta.yml` opens a Release PR titled `chore(vscode): release vscode-extension beta <X.Y.Z>-beta.<N>`.
+3. Merge the Release PR → release-please creates tag `vscode-v<X.Y.Z>-beta.<N>`.
+4. `release-vscode.yml` detects the `-beta.` suffix in the tag, swaps the package name to `claude-sessions-vscode`, skips the Marketplace publish, and publishes only to Open VSX.
+
+Branch-source-matrix rule: `vscode-v<X.Y.Z>-beta.<N>` tags **MUST** come from `ovsx-beta`.
+Tagging from `main` would publish a beta with the production package name, polluting the
+production Marketplace listing.
+
+#### Promotion: beta branches → `main`
+
+When a beta cycle stabilizes, merge the relevant beta branch into `main` (fast-forward
+preferred; merge-commit acceptable). **Do not rebase a beta branch onto `main`** — rewriting
+commit hashes confuses release-please's release-marker tracking.
 
 ```bash
-# Patch version (0.1.5 -> 0.1.6)
-pnpm version patch
-
-# Minor version (0.1.5 -> 0.2.0)
-pnpm version minor
-
-# Specific version
-pnpm version 0.2.0
+git checkout main
+git merge --ff-only beta         # npm group promotion
+git merge --ff-only ovsx-beta    # vscode-extension promotion
+git push origin main
 ```
+
+After the promotion, sync `main → <beta branch>` for any subsequent hotfix to keep the beta
+branch ahead.
+
+#### Manual emergency bumps (rare)
+
+Direct `pnpm version` remains available for hotfixes that bypass release-please:
+
+```bash
+pnpm version patch       # 0.5.0 -> 0.5.1 across npm group
+git tag v0.5.1
+git push origin v0.5.1
+```
+
+`publish-npm.yml`'s tag-override step rewrites all 4 npm package.json from the tag, so manual
+tagging works even if package.json files are out of sync.
+
+#### Conventional Commits drive the bump type
+
+| Type                                               | Bump    |
+| -------------------------------------------------- | ------- |
+| `feat`                                             | minor   |
+| `fix`, `perf`                                      | patch   |
+| `BREAKING CHANGE` (or `!` suffix)                  | major   |
+| `chore`, `docs`, `test`, `refactor`, `style`, `ci` | no bump |
 
 ### Web UI Testing
 
