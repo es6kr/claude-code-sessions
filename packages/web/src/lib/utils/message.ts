@@ -2,8 +2,27 @@
  * Message content utilities
  */
 
-import type { Content, Message } from '$lib/api'
+import type { Content, ContentItem, Message } from '$lib/api'
 import { maskHomePath } from '$lib/stores/config'
+
+/**
+ * Normalize Content into a uniform ContentItem array for inspection.
+ *
+ * Content can be a string, a single ContentItem, or an array of ContentItems
+ * (see api.ts). Categorization logic must look at the items inside, so each
+ * shape is normalized to the array form here.
+ *
+ * - `string` -> `[{ type: 'text', text }]`
+ * - single `ContentItem` -> `[item]`
+ * - `ContentItem[]` -> pass through
+ */
+export const normalizeContent = (content: Content): ContentItem[] => {
+  if (typeof content === 'string') {
+    return [{ type: 'text', text: content } as ContentItem]
+  }
+  if (Array.isArray(content)) return content
+  return [content]
+}
 
 export type MessageCategory =
   | 'assistant'
@@ -24,6 +43,11 @@ const METADATA_TYPES = new Set([
   'queue-operation',
 ])
 
+type CategoryContentItem = ContentItem & {
+  text?: string
+  thinking?: string
+}
+
 export const getMessageCategory = (msg: Message): MessageCategory => {
   if (METADATA_TYPES.has(msg.type)) return 'metadata'
   if (msg.type === 'progress') return 'progress'
@@ -32,20 +56,21 @@ export const getMessageCategory = (msg: Message): MessageCategory => {
   if (msg.type === 'human') return 'user'
 
   if (msg.type === 'user') {
-    const m = msg.message as { content?: unknown[] } | undefined
-    if (Array.isArray(m?.content)) {
-      const first = m.content[0] as { type?: string } | undefined
-      if (first?.type === 'tool_result') return 'tool_result'
+    const m = msg.message as { content?: Content } | undefined
+    if (m?.content) {
+      const items = normalizeContent(m.content)
+      if (items[0]?.type === 'tool_result') return 'tool_result'
     }
     return 'user'
   }
 
   if (msg.type === 'assistant') {
-    const m = msg.message as { content?: Array<Record<string, unknown>> } | undefined
-    if (Array.isArray(m?.content)) {
-      if (m.content.some((c) => c?.type === 'tool_use')) return 'tool_use'
-      const hasText = m.content.some((c) => c?.type === 'text' && (c?.text as string)?.trim())
-      if (!hasText && m.content.some((c) => c?.type === 'thinking')) return 'thinking'
+    const m = msg.message as { content?: Content } | undefined
+    if (m?.content) {
+      const items = normalizeContent(m.content) as CategoryContentItem[]
+      if (items.some((c) => c?.type === 'tool_use')) return 'tool_use'
+      const hasText = items.some((c) => c?.type === 'text' && c?.text?.trim())
+      if (!hasText && items.some((c) => c?.type === 'thinking')) return 'thinking'
     }
     return 'assistant'
   }
