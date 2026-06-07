@@ -32,7 +32,7 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "effect": "^3.21.2"
+    "effect": "^3.21.3"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
