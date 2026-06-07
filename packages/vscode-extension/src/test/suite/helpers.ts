@@ -1,4 +1,13 @@
 import * as vscode from 'vscode'
+import * as fs from 'fs'
+import * as path from 'path'
+
+// Resolve extension ID dynamically from package.json so the same helpers work
+// on production (`es6kr.claude-sessions`) and ovsx-beta (`es6kr.claude-sessions-vscode`).
+const extensionPkg = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf-8')
+) as { publisher: string; name: string }
+const EXTENSION_ID = `${extensionPkg.publisher}.${extensionPkg.name}`
 
 /**
  * Ensure extension is loaded and activated.
@@ -10,7 +19,7 @@ export async function ensureExtensionActive(
   ctx.timeout(30000)
   await new Promise((resolve) => setTimeout(resolve, 2000))
 
-  const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+  const extension = vscode.extensions.getExtension(EXTENSION_ID)
   if (!extension) {
     ctx.skip()
     // unreachable after skip, but satisfies TS return type

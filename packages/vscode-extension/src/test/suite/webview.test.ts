@@ -5,6 +5,15 @@ import * as http from 'http'
 import * as path from 'path'
 import * as os from 'os'
 
+// Resolve extension ID dynamically from package.json so the same tests work
+// on production (`es6kr.claude-sessions`) and ovsx-beta (`es6kr.claude-sessions-vscode`).
+// __dirname at runtime is .../packages/vscode-extension/out/test/suite,
+// so the package.json sits three levels up.
+const extensionPkg = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '..', '..', '..', 'package.json'), 'utf-8')
+) as { publisher: string; name: string }
+const EXTENSION_ID = `${extensionPkg.publisher}.${extensionPkg.name}`
+
 // Find Claude sessions directly from filesystem
 function findFirstSession(): { projectName: string; sessionId: string } | null {
   const claudeDir = path.join(os.homedir(), '.claude', 'projects')
@@ -64,9 +73,9 @@ suite('Webview Test Suite', () => {
     await new Promise((resolve) => setTimeout(resolve, 1000))
 
     // Get the extension
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions-vscode')
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)
     if (!extension) {
-      assert.fail('Extension not found: es6kr.claude-sessions-vscode')
+      assert.fail(`Extension not found: ${EXTENSION_ID}`)
     }
 
     // Activate extension if not already active
@@ -103,9 +112,9 @@ suite('Webview Test Suite', () => {
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     // Get the extension
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)
     if (!extension) {
-      assert.fail('Extension not found: es6kr.claude-sessions')
+      assert.fail(`Extension not found: ${EXTENSION_ID}`)
     }
 
     // Activate extension if not already active
@@ -163,9 +172,9 @@ suite('Webview Test Suite', () => {
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     // Get the extension
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)
     if (!extension) {
-      assert.fail('Extension not found: es6kr.claude-sessions')
+      assert.fail(`Extension not found: ${EXTENSION_ID}`)
     }
 
     // Activate extension if not already active
@@ -204,9 +213,9 @@ suite('Webview Test Suite', () => {
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     // Get the extension
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)
     if (!extension) {
-      assert.fail('Extension not found: es6kr.claude-sessions')
+      assert.fail(`Extension not found: ${EXTENSION_ID}`)
     }
 
     // Activate extension if not already active
@@ -238,9 +247,9 @@ suite('Webview Test Suite', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)
     if (!extension) {
-      assert.fail('Extension not found: es6kr.claude-sessions')
+      assert.fail(`Extension not found: ${EXTENSION_ID}`)
     }
 
     if (!extension.isActive) {
@@ -308,9 +317,9 @@ suite('Webview Test Suite', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)
     if (!extension) {
-      assert.fail('Extension not found: es6kr.claude-sessions')
+      assert.fail(`Extension not found: ${EXTENSION_ID}`)
     }
 
     if (!extension.isActive) {
@@ -387,9 +396,9 @@ suite('Webview Test Suite', () => {
 
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)
     if (!extension) {
-      assert.fail('Extension not found: es6kr.claude-sessions')
+      assert.fail(`Extension not found: ${EXTENSION_ID}`)
     }
 
     if (!extension.isActive) {
@@ -470,9 +479,9 @@ suite('Webview Test Suite', () => {
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     // Get the extension
-    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    const extension = vscode.extensions.getExtension(EXTENSION_ID)
     if (!extension) {
-      assert.fail('Extension not found: es6kr.claude-sessions')
+      assert.fail(`Extension not found: ${EXTENSION_ID}`)
     }
 
     if (!extension.isActive) {
