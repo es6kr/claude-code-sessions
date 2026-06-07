@@ -57,8 +57,19 @@ jobs:
           mv /tmp/pkg.json packages/vscode-extension/package.json
           echo "Patched packages/vscode-extension/package.json version: $(jq -r .version packages/vscode-extension/package.json)"
 
+      # PAT (not GITHUB_TOKEN) is required so that tag/commit pushes from
+      # release-please trigger downstream workflows (e.g. release-vscode on
+      # `vscode-v*` tag push). GitHub does not trigger workflows when a tag
+      # is pushed with GITHUB_TOKEN (infinite-loop protection).
+      #
+      # skip-github-release: true delegates GitHub Release creation to the
+      # release-vscode workflow on tag push, preventing duplicate releases
+      # that would otherwise collide with action-gh-release (HTTP 422
+      # already_exists on finalize). Verified 2026-06-07 with vscode-v0.4.9-beta.4.
       - uses: googleapis/release-please-action@v4
         with:
           config-file: release-please-vscode-beta-config.json
           manifest-file: .release-please-manifest-vscode-beta.json
           target-branch: ovsx-beta
+          skip-github-release: true
+          token: ${{ secrets.RELEASE_PLEASE_PAT }}
