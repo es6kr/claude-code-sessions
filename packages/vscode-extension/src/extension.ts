@@ -783,25 +783,60 @@ export function activate(context: vscode.ExtensionContext) {
             return
           }
 
+          // Defensive activation: getExtension returns the Extension object even
+          // when it is installed-but-disabled (isActive === false). Without this
+          // step the URI dispatch below silently fails because no UriHandler is
+          // registered until activation. (PR #172 Internal Code Review #2.)
+          if (!claudeExt.isActive) {
+            try {
+              await claudeExt.activate()
+            } catch (err) {
+              void vscode.window.showErrorMessage(
+                `Failed to activate Claude Code extension: ${err instanceof Error ? err.message : String(err)}`
+              )
+              return
+            }
+          }
+
           // Cross-workspace warning (Issue 1, option C1 conservative default):
           // anthropic.claude-code resolves sessions against the active workspace
           // cwd, so sessions from other working directories will not open.
-          const currentWs = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
-          if (currentWs && cwd && currentWs !== cwd) {
+          // Iterate ALL workspaceFolders + normalize paths (lowercase + forward
+          // slashes) — matches openOrRevealFolder's pattern; without this the
+          // check produces false-positive warnings on multi-root workspaces and
+          // on Windows case-mismatched drive letters. (PR #172 Internal Code
+          // Review #1 + CodeRabbit inline.)
+          const normalizePath = (p: string) => p.toLowerCase().replace(/\\/g, '/')
+          const folders = vscode.workspace.workspaceFolders ?? []
+          const sessionCwdNorm = cwd ? normalizePath(cwd) : ''
+          const matchesAnyFolder = folders.some(
+            (f) => normalizePath(f.uri.fsPath) === sessionCwdNorm
+          )
+          if (folders.length > 0 && cwd && !matchesAnyFolder) {
+            const firstFolder = folders[0]?.uri.fsPath ?? ''
             const proceed = await vscode.window.showWarningMessage(
-              `Session belongs to "${cwd}". The Claude Code extension only resumes sessions for the current workspace ("${currentWs}").`,
+              `Session belongs to "${cwd}". The Claude Code extension only resumes sessions for an open workspace folder (currently "${firstFolder}"${folders.length > 1 ? ` and ${folders.length - 1} more` : ''}).`,
               'Open Anyway',
               'Cancel'
             )
             if (proceed !== 'Open Anyway') return
           }
 
+          // Dispatch in-process via vscode.open instead of vscode.env.openExternal:
+          // openExternal resolves true when the URI is handed off to the OS URI
+          // resolver — it does NOT confirm that anthropic.claude-code's
+          // UriHandler.handleUri ran successfully. vscode.open routes inside the
+          // IDE and surfaces failures synchronously, giving a usable error path.
+          // (PR #172 Internal Code Review #3.)
           const uri = vscode.Uri.parse(
             `vscode://anthropic.claude-code/open?session=${encodeURIComponent(sessionId)}`
           )
-          const opened = await vscode.env.openExternal(uri)
-          if (!opened) {
-            void vscode.window.showErrorMessage('Failed to open session in Claude Code extension.')
+          try {
+            await vscode.commands.executeCommand('vscode.open', uri)
+          } catch (err) {
+            void vscode.window.showErrorMessage(
+              `Failed to open session in Claude Code extension: ${err instanceof Error ? err.message : String(err)}`
+            )
           }
         }
       }
