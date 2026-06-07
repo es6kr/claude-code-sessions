@@ -1,7 +1,7 @@
 {
   "name": "@claude-sessions/ui",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.4.10",
+  "private": false,
   "type": "module",
   "exports": {
     ".": "./src/lib/index.ts",
@@ -14,11 +14,11 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json --threshold error"
   },
   "peerDependencies": {
-    "svelte": "^5.55.9"
+    "svelte": "^5.56.0"
   },
   "devDependencies": {
     "@claude-sessions/core": "workspace:^",
-    "svelte": "^5.55.9",
+    "svelte": "^5.56.0",
     "svelte-check": "^4.4.8",
     "typescript": "^5.9.3"
   }

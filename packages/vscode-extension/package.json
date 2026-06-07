@@ -500,7 +500,7 @@
     "@vscode/vsce": "^3.9.1",
     "glob": "^13.0.6",
     "mocha": "^11.7.6",
-    "svelte": "^5.55.9",
+    "svelte": "^5.56.0",
     "svelte-check": "^4.4.8",
     "tailwindcss": "^4.3.0",
     "tsup": "^8.3.0",

@@ -7,13 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       package:
-        description: 'Package to publish (core, web, mcp, or all)'
+        description: 'Package to publish (core, ui, web, mcp, or all)'
         required: true
         default: 'all'
         type: choice
         options:
           - all
           - core
+          - ui
           - mcp
           - web
 
@@ -70,6 +71,11 @@ jobs:
           npm pkg set version="$VERSION"
           cd ../..
 
+          # Update ui package.json
+          cd packages/ui
+          npm pkg set version="$VERSION"
+          cd ../..
+
           # Update web package.json
           cd packages/web
           npm pkg set version="$VERSION"
@@ -87,15 +93,24 @@ jobs:
         id: versions
         run: |
           CORE_VERSION=$(node -p "require('./packages/core/package.json').version")
+          UI_VERSION=$(node -p "require('./packages/ui/package.json').version")
           WEB_VERSION=$(node -p "require('./packages/web/package.json').version")
           MCP_VERSION=$(node -p "require('./packages/mcp/package.json').version")
           echo "core=$CORE_VERSION" >> $GITHUB_OUTPUT
+          echo "ui=$UI_VERSION" >> $GITHUB_OUTPUT
           echo "web=$WEB_VERSION" >> $GITHUB_OUTPUT
           echo "mcp=$MCP_VERSION" >> $GITHUB_OUTPUT
 
       - name: Publish @claude-sessions/core
         if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'core' || github.event_name == 'push' }}
         working-directory: packages/core
+        run: pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish @claude-sessions/ui
+        if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'ui' || github.event_name == 'push' }}
+        working-directory: packages/ui
         run: pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
@@ -147,6 +162,9 @@ jobs:
           fi
           if [[ "${{ github.event.inputs.package }}" == "all" || "${{ github.event.inputs.package }}" == "core" || "${{ github.event_name }}" == "push" ]]; then
             echo "- @claude-sessions/core@${{ steps.versions.outputs.core }}" >> $GITHUB_STEP_SUMMARY
+          fi
+          if [[ "${{ github.event.inputs.package }}" == "all" || "${{ github.event.inputs.package }}" == "ui" || "${{ github.event_name }}" == "push" ]]; then
+            echo "- @claude-sessions/ui@${{ steps.versions.outputs.ui }}" >> $GITHUB_STEP_SUMMARY
           fi
           if [[ "${{ github.event.inputs.package }}" == "all" || "${{ github.event.inputs.package }}" == "web" || "${{ github.event_name }}" == "push" ]]; then
             echo "- @claude-sessions/web@${{ steps.versions.outputs.web }}" >> $GITHUB_STEP_SUMMARY
