@@ -457,12 +457,13 @@
         "claudeSessions.defaultTerminalMode": {
           "type": "string",
           "enum": [
+            "anthropic",
             "ask",
             "external",
             "internal"
           ],
           "default": "ask",
-          "description": "Default terminal mode when resuming sessions: 'ask' shows a picker, 'internal' uses the integrated terminal, 'external' uses the system terminal"
+          "description": "Default mode when resuming sessions: 'ask' shows a picker, 'internal' uses the integrated terminal, 'external' uses the system terminal, 'anthropic' opens the session inside the official Claude Code extension (anthropic.claude-code)"
         },
         "claudeSessions.webServerPath": {
           "type": "string",

@@ -33,4 +33,18 @@ suite('Command Registration Suite', () => {
       'claudeSessions.openPreviewToSide must be registered for the editor title preview action'
     )
   })
+
+  // GUARD: claudeSessions.resumeSession is the single entry point for resuming
+  // sessions (3-way picker: internal terminal / external terminal / Claude Code
+  // extension). Discussion #159 — M2 integrated picker. If this command is lost
+  // in a squash merge, all three "open session" paths break with "command not
+  // found" at click time.
+  test('claudeSessions.resumeSession command is registered', async function () {
+    await ensureExtensionActive(this)
+    const commands = await vscode.commands.getCommands(true)
+    assert.ok(
+      commands.includes('claudeSessions.resumeSession'),
+      'claudeSessions.resumeSession must be registered — the 3-way picker (internal/external/anthropic) for discussion #159 depends on it'
+    )
+  })
 })

@@ -695,9 +695,13 @@ export function activate(context: vscode.ExtensionContext) {
         // Get project path for cwd (needed for all modes)
         const cwd = await resolveProjectCwd(item.projectName)
 
-        // Determine terminal mode: skip picker if pre-configured
-        let mode: 'internal' | 'external'
-        if (defaultTerminalMode === 'internal' || defaultTerminalMode === 'external') {
+        // Determine resume mode: skip picker if pre-configured
+        let mode: 'internal' | 'external' | 'anthropic'
+        if (
+          defaultTerminalMode === 'internal' ||
+          defaultTerminalMode === 'external' ||
+          defaultTerminalMode === 'anthropic'
+        ) {
           mode = defaultTerminalMode
         } else {
           const choice = await vscode.window.showQuickPick(
@@ -711,6 +715,11 @@ export function activate(context: vscode.ExtensionContext) {
                 label: '$(link-external) External Terminal',
                 description: 'Open in system default terminal',
                 mode: 'external' as const,
+              },
+              {
+                label: '$(window) Claude Code Extension',
+                description: 'Open inside the official anthropic.claude-code webview tab',
+                mode: 'anthropic' as const,
               },
             ],
             {
@@ -731,7 +740,7 @@ export function activate(context: vscode.ExtensionContext) {
           })
           terminal.show()
           terminal.sendText(cliCommand)
-        } else {
+        } else if (mode === 'external') {
           // External: spawn detached process
           const extraArgs = cliFlags ? cliFlags.split(/\s+/).filter(Boolean) : []
           const result = resumeSession({
@@ -746,6 +755,53 @@ export function activate(context: vscode.ExtensionContext) {
             )
           } else {
             vscode.window.showErrorMessage(`Failed to resume session: ${result.error}`)
+          }
+        } else {
+          // anthropic: open inside the official Claude Code extension webview tab
+          // via its registered URI handler:
+          //   vscode://anthropic.claude-code/open?session=<sessionId>
+          // Addresses discussion #159 (option M2 — 3-way integrated picker).
+          const sessionId = String(item.sessionId ?? '')
+          if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+            void vscode.window.showErrorMessage('Invalid session id; cannot resume session.')
+            return
+          }
+
+          const claudeExt = vscode.extensions.getExtension('anthropic.claude-code')
+          if (!claudeExt) {
+            const installChoice = await vscode.window.showWarningMessage(
+              'Claude Code extension (anthropic.claude-code) is not installed.',
+              'Install',
+              'Cancel'
+            )
+            if (installChoice === 'Install') {
+              await vscode.commands.executeCommand(
+                'workbench.extensions.installExtension',
+                'anthropic.claude-code'
+              )
+            }
+            return
+          }
+
+          // Cross-workspace warning (Issue 1, option C1 conservative default):
+          // anthropic.claude-code resolves sessions against the active workspace
+          // cwd, so sessions from other working directories will not open.
+          const currentWs = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath
+          if (currentWs && cwd && currentWs !== cwd) {
+            const proceed = await vscode.window.showWarningMessage(
+              `Session belongs to "${cwd}". The Claude Code extension only resumes sessions for the current workspace ("${currentWs}").`,
+              'Open Anyway',
+              'Cancel'
+            )
+            if (proceed !== 'Open Anyway') return
+          }
+
+          const uri = vscode.Uri.parse(
+            `vscode://anthropic.claude-code/open?session=${encodeURIComponent(sessionId)}`
+          )
+          const opened = await vscode.env.openExternal(uri)
+          if (!opened) {
+            void vscode.window.showErrorMessage('Failed to open session in Claude Code extension.')
           }
         }
       }
