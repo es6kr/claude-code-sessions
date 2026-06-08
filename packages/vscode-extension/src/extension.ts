@@ -826,10 +826,8 @@ export function activate(context: vscode.ExtensionContext) {
           // routes `vscode://<extension-id>/...` URIs through the registered
           // UriHandler. vscode.commands.executeCommand('vscode.open', uri)
           // resolves the URI as a file path (EntryNotFound) and does NOT
-          // trigger the extension's UriHandler. PoC branch feat/resume-in-extension
-          // verified this end-to-end; Internal Review #3's `vscode.open`
-          // suggestion was incorrect and reverted after runtime verification
-          // (EntryNotFound observed in Antigravity console 2026-06-08).
+          // trigger the extension's UriHandler. The PoC branch
+          // feat/resume-in-extension verified this end-to-end.
           const uri = vscode.Uri.parse(
             `vscode://anthropic.claude-code/open?session=${encodeURIComponent(sessionId)}`
           )
