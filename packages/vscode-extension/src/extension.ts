@@ -6,6 +6,7 @@ import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { outputChannel } from './output'
 import { SESSION_EDITOR_VIEW_TYPE, SessionEditorProvider } from './sessionEditorProvider'
+import { decideResume, type ResumeMode } from './lib/crossWorkspace'
 
 let webServerProcess: ChildProcess | null = null
 
@@ -695,38 +696,64 @@ export function activate(context: vscode.ExtensionContext) {
         // Get project path for cwd (needed for all modes)
         const cwd = await resolveProjectCwd(item.projectName)
 
-        // Determine resume mode: skip picker if pre-configured
-        let mode: 'internal' | 'external' | 'anthropic'
-        if (
-          defaultTerminalMode === 'internal' ||
-          defaultTerminalMode === 'external' ||
-          defaultTerminalMode === 'anthropic'
-        ) {
-          mode = defaultTerminalMode
+        // Single source of truth for picker options — reused by the primary
+        // 3-way picker AND the cross-workspace fallback 2-way picker so the
+        // labels/descriptions stay in sync without duplication.
+        const INTERNAL_OPTION = {
+          label: '$(terminal) Internal Terminal',
+          description: 'Open in VSCode integrated terminal',
+          mode: 'internal' as const,
+        }
+        const EXTERNAL_OPTION = {
+          label: '$(link-external) External Terminal',
+          description: 'Open in system default terminal',
+          mode: 'external' as const,
+        }
+        const ANTHROPIC_OPTION = {
+          label: '$(window) Claude Code Extension',
+          description: 'Open inside the official Claude Code extension',
+          mode: 'anthropic' as const,
+        }
+
+        // The resume-mode decision is delegated to the pure-function
+        // `decideResume` (src/lib/crossWorkspace.ts), unit-tested via
+        // src/test/suite/crossWorkspace.test.ts. It returns one of:
+        //   - { kind: 'direct',          mode }                   → dispatch immediately
+        //   - { kind: 'picker',          options: [...] }         → show primary picker
+        //   - { kind: 'fallback-picker', options: [...], reason } → show fallback picker
+        //
+        // The picker branches share the option metadata (label, description,
+        // icon) defined above; the pure function only emits mode names.
+        const folders = vscode.workspace.workspaceFolders ?? []
+        const decision = decideResume({
+          defaultMode: defaultTerminalMode as 'ask' | ResumeMode,
+          cwd,
+          folders,
+        })
+        outputChannel.appendLine(
+          `[resumeSession] cwd=${cwd ?? '<empty>'} folders=[${folders
+            .map((f) => f.uri.fsPath)
+            .join(', ')}] decision=${decision.kind}`
+        )
+
+        const MODE_TO_OPTION = {
+          internal: INTERNAL_OPTION,
+          external: EXTERNAL_OPTION,
+          anthropic: ANTHROPIC_OPTION,
+        } as const
+
+        let mode: ResumeMode
+        if (decision.kind === 'direct') {
+          mode = decision.mode
         } else {
-          const choice = await vscode.window.showQuickPick(
-            [
-              {
-                label: '$(terminal) Internal Terminal',
-                description: 'Open in VSCode integrated terminal',
-                mode: 'internal' as const,
-              },
-              {
-                label: '$(link-external) External Terminal',
-                description: 'Open in system default terminal',
-                mode: 'external' as const,
-              },
-              {
-                label: '$(window) Claude Code Extension',
-                description: 'Open inside the official anthropic.claude-code webview tab',
-                mode: 'anthropic' as const,
-              },
-            ],
-            {
-              placeHolder: 'Where to open Claude session?',
-              title: 'Resume Session',
-            }
-          )
+          const items = decision.options.map((m) => MODE_TO_OPTION[m])
+          const isFallback = decision.kind === 'fallback-picker'
+          const choice = await vscode.window.showQuickPick(items, {
+            placeHolder: isFallback
+              ? `Cross-workspace session (${cwd}) — Claude Code Extension cannot resolve. Fall back to:`
+              : 'Where to open Claude session?',
+            title: isFallback ? 'Resume Session (fallback)' : 'Resume Session',
+          })
 
           if (!choice) return
           mode = choice.mode
@@ -801,35 +828,17 @@ export function activate(context: vscode.ExtensionContext) {
             }
           }
 
-          // Cross-workspace hard block: anthropic.claude-code resolves sessions
-          // against the active workspace cwd, so a cross-workspace dispatch ends
-          // up loading an empty session instead of the requested one. Open
-          // Anyway is not a useful escape hatch — the user gets a broken
-          // session rather than a warning. Block + report; the user must open
-          // the session's folder as a workspace before resuming via Claude
-          // Code Extension.
-          // Iterate ALL workspaceFolders + normalize paths (lowercase + forward
-          // slashes) so multi-root + Windows case-mismatched drive letters
-          // count as same-workspace. (Pattern mirrors openOrRevealFolder.)
-          const normalizePath = (p: string) => p.toLowerCase().replace(/\\/g, '/')
-          const folders = vscode.workspace.workspaceFolders ?? []
-          const sessionCwdNorm = cwd ? normalizePath(cwd) : ''
-          const matchesAnyFolder = folders.some(
-            (f) => normalizePath(f.uri.fsPath) === sessionCwdNorm
-          )
-          if (folders.length > 0 && cwd && !matchesAnyFolder) {
-            const firstFolder = folders[0]?.uri.fsPath ?? ''
-            void vscode.window.showErrorMessage(
-              `Session belongs to "${cwd}" and cannot be resumed in the Claude Code Extension from the current workspace ("${firstFolder}"${folders.length > 1 ? ` and ${folders.length - 1} more` : ''}). Open the session's folder as a workspace first, or resume in Internal/External Terminal instead.`
-            )
-            return
-          }
-
-          // Dispatch via vscode.env.openExternal — this is the ONLY API that
-          // routes `vscode://<extension-id>/...` URIs through the registered
-          // UriHandler. vscode.commands.executeCommand('vscode.open', uri)
-          // resolves the URI as a file path (EntryNotFound) and does NOT
-          // trigger the extension's UriHandler. The PoC branch
+          // Cross-workspace dispatch is unreachable here: `decideResume`
+          // above converts cross-workspace + anthropic intent into a
+          // fallback-picker (Internal/External only). By the time control
+          // reaches this branch, the session cwd is guaranteed to match an
+          // open workspace folder, so the anthropic URI handler can resolve.
+          //
+          // Dispatch via vscode.env.openExternal — this is the
+          // ONLY API that routes `<ide-scheme>://<extension-id>/...` URIs
+          // through the registered UriHandler. vscode.commands.executeCommand(
+          // 'vscode.open', uri) resolves the URI as a file path (EntryNotFound)
+          // and does NOT trigger the extension's UriHandler. The PoC branch
           // feat/resume-in-extension verified this end-to-end.
           const uri = vscode.Uri.parse(
             `${vscode.env.uriScheme}://anthropic.claude-code/open?session=${encodeURIComponent(sessionId)}`
