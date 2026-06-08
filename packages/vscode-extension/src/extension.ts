@@ -798,14 +798,16 @@ export function activate(context: vscode.ExtensionContext) {
             }
           }
 
-          // Cross-workspace warning (Issue 1, option C1 conservative default):
-          // anthropic.claude-code resolves sessions against the active workspace
-          // cwd, so sessions from other working directories will not open.
+          // Cross-workspace hard block: anthropic.claude-code resolves sessions
+          // against the active workspace cwd, so a cross-workspace dispatch ends
+          // up loading an empty session instead of the requested one. Open
+          // Anyway is not a useful escape hatch — the user gets a broken
+          // session rather than a warning. Block + report; the user must open
+          // the session's folder as a workspace before resuming via Claude
+          // Code Extension.
           // Iterate ALL workspaceFolders + normalize paths (lowercase + forward
-          // slashes) — matches openOrRevealFolder's pattern; without this the
-          // check produces false-positive warnings on multi-root workspaces and
-          // on Windows case-mismatched drive letters. (PR #172 Internal Code
-          // Review #1 + CodeRabbit inline.)
+          // slashes) so multi-root + Windows case-mismatched drive letters
+          // count as same-workspace. (Pattern mirrors openOrRevealFolder.)
           const normalizePath = (p: string) => p.toLowerCase().replace(/\\/g, '/')
           const folders = vscode.workspace.workspaceFolders ?? []
           const sessionCwdNorm = cwd ? normalizePath(cwd) : ''
@@ -814,12 +816,10 @@ export function activate(context: vscode.ExtensionContext) {
           )
           if (folders.length > 0 && cwd && !matchesAnyFolder) {
             const firstFolder = folders[0]?.uri.fsPath ?? ''
-            const proceed = await vscode.window.showWarningMessage(
-              `Session belongs to "${cwd}". The Claude Code extension only resumes sessions for an open workspace folder (currently "${firstFolder}"${folders.length > 1 ? ` and ${folders.length - 1} more` : ''}).`,
-              'Open Anyway',
-              'Cancel'
+            void vscode.window.showErrorMessage(
+              `Session belongs to "${cwd}" and cannot be resumed in the Claude Code Extension from the current workspace ("${firstFolder}"${folders.length > 1 ? ` and ${folders.length - 1} more` : ''}). Open the session's folder as a workspace first, or resume in Internal/External Terminal instead.`
             )
-            if (proceed !== 'Open Anyway') return
+            return
           }
 
           // Dispatch via vscode.env.openExternal — this is the ONLY API that
