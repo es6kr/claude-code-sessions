@@ -759,7 +759,10 @@ export function activate(context: vscode.ExtensionContext) {
         } else {
           // anthropic: open inside the official Claude Code extension webview tab
           // via its registered URI handler:
-          //   vscode://anthropic.claude-code/open?session=<sessionId>
+          //   <ide-scheme>://anthropic.claude-code/open?session=<sessionId>
+          // where <ide-scheme> = vscode.env.uriScheme (vscode / cursor /
+          // antigravity / vscodium / ...) so the dispatch stays in-process
+          // on every Open VSX-supported fork.
           // Addresses discussion #159 (option M2 — 3-way integrated picker).
           const sessionId = String(item.sessionId ?? '')
           if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
@@ -829,7 +832,7 @@ export function activate(context: vscode.ExtensionContext) {
           // trigger the extension's UriHandler. The PoC branch
           // feat/resume-in-extension verified this end-to-end.
           const uri = vscode.Uri.parse(
-            `vscode://anthropic.claude-code/open?session=${encodeURIComponent(sessionId)}`
+            `${vscode.env.uriScheme}://anthropic.claude-code/open?session=${encodeURIComponent(sessionId)}`
           )
           const opened = await vscode.env.openExternal(uri)
           if (!opened) {
