@@ -822,21 +822,20 @@ export function activate(context: vscode.ExtensionContext) {
             if (proceed !== 'Open Anyway') return
           }
 
-          // Dispatch in-process via vscode.open instead of vscode.env.openExternal:
-          // openExternal resolves true when the URI is handed off to the OS URI
-          // resolver — it does NOT confirm that anthropic.claude-code's
-          // UriHandler.handleUri ran successfully. vscode.open routes inside the
-          // IDE and surfaces failures synchronously, giving a usable error path.
-          // (PR #172 Internal Code Review #3.)
+          // Dispatch via vscode.env.openExternal — this is the ONLY API that
+          // routes `vscode://<extension-id>/...` URIs through the registered
+          // UriHandler. vscode.commands.executeCommand('vscode.open', uri)
+          // resolves the URI as a file path (EntryNotFound) and does NOT
+          // trigger the extension's UriHandler. PoC branch feat/resume-in-extension
+          // verified this end-to-end; Internal Review #3's `vscode.open`
+          // suggestion was incorrect and reverted after runtime verification
+          // (EntryNotFound observed in Antigravity console 2026-06-08).
           const uri = vscode.Uri.parse(
             `vscode://anthropic.claude-code/open?session=${encodeURIComponent(sessionId)}`
           )
-          try {
-            await vscode.commands.executeCommand('vscode.open', uri)
-          } catch (err) {
-            void vscode.window.showErrorMessage(
-              `Failed to open session in Claude Code extension: ${err instanceof Error ? err.message : String(err)}`
-            )
+          const opened = await vscode.env.openExternal(uri)
+          if (!opened) {
+            void vscode.window.showErrorMessage('Failed to open session in Claude Code extension.')
           }
         }
       }
