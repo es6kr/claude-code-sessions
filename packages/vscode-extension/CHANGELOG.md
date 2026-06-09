@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.9-beta.5](https://github.com/es6kr/claude-code-sessions/compare/vscode-v0.4.9-beta.4...vscode-v0.4.9-beta.5) (2026-06-09)
+
+### Features
+
+- **vscode:** integrate Claude Code extension as 3rd resume option (discussion [#159](https://github.com/es6kr/claude-code-sessions/issues/159) M2) ([f85f05c](https://github.com/es6kr/claude-code-sessions/commit/f85f05c97ba33d67ac78787ff02df5ba1a6170df))
+
 ## [0.4.9-beta.4](https://github.com/es6kr/claude-code-sessions/compare/vscode-v0.4.0...vscode-v0.4.9-beta.4) (2026-06-06)
 
 ### Features
