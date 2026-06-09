@@ -23,7 +23,10 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: '24'  # release-vscode.yml과 일관 — semantic-release npx 실행 환경 동일
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4  # @semantic-release/exec prepareCmd로 pnpm install --lockfile-only 실행 위해 필요
 
       - name: Install semantic-release + plugins
         run: |
@@ -31,6 +34,7 @@ jobs:
             semantic-release@^24 \
             @semantic-release/commit-analyzer \
             @semantic-release/release-notes-generator \
+            @semantic-release/exec \
             @semantic-release/npm \
             @semantic-release/git \
             @semantic-release/github

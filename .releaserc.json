@@ -11,19 +11,17 @@
           { "type": "perf", "release": "patch" },
           { "type": "chore", "release": "patch" },
           { "type": "refactor", "release": "patch" },
-          { "type": "docs", "release": "patch" },
-          { "type": "test", "release": "patch" },
-          { "type": "ci", "release": "patch" },
           { "breaking": true, "release": "minor" }
         ]
       }
     ],
-    "@semantic-release/release-notes-generator",
+    ["@semantic-release/release-notes-generator", { "preset": "angular" }],
+    ["@semantic-release/exec", { "prepareCmd": "pnpm install --lockfile-only" }],
     ["@semantic-release/npm", { "npmPublish": false, "pkgRoot": "packages/vscode-extension" }],
     [
       "@semantic-release/git",
       {
-        "assets": ["packages/vscode-extension/package.json"],
+        "assets": ["packages/vscode-extension/package.json", "pnpm-lock.yaml"],
         "message": "chore(release): vscode-v${nextRelease.version} [skip ci]"
       }
     ],
