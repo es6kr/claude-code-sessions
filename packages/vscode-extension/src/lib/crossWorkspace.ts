@@ -34,23 +34,24 @@ export function normalizeWorkspacePath(p: string): string {
 }
 
 /**
- * `true` iff the session cwd matches the **active workspace folder
- * (folders[0])**. anthropic.claude-code resolves sessions against the active
+ * `true` iff the session cwd matches the **primary workspace folder
+ * (folders[0])**. anthropic.claude-code resolves sessions against the primary
  * workspace only — additional roots in a multi-root workspace do NOT enable
  * anthropic to resolve a session whose cwd lives outside folders[0]. Treats
  * null/empty cwd and empty folders as no-match. Windows case-mismatched drive
  * letters are normalized.
+ *
+ * Function name retains `…AnyWorkspaceFolder` for backward compatibility with
+ * existing call sites; semantics are folders[0]-only.
  */
 export function matchesAnyWorkspaceFolder(
   cwd: string | null | undefined,
   folders: ReadonlyArray<WorkspaceFolderLike>
 ): boolean {
   if (!cwd) return false
-  const cwdNorm = normalizeWorkspacePath(cwd)
-  if (!cwdNorm) return false
   const primary = folders[0]
   if (!primary) return false
-  return normalizeWorkspacePath(primary.uri.fsPath) === cwdNorm
+  return normalizeWorkspacePath(primary.uri.fsPath) === normalizeWorkspacePath(cwd)
 }
 
 /**
