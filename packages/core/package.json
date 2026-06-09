@@ -32,12 +32,12 @@
     "lint": "eslint src"
   },
   "dependencies": {
-    "effect": "^3.21.2"
+    "effect": "^3.21.3"
   },
   "devDependencies": {
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.8"
   }
 }
