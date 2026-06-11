@@ -9,6 +9,11 @@
           { "type": "feat", "scope": "vscode", "release": false },
           { "type": "fix", "scope": "vscode", "release": false },
           { "type": "perf", "scope": "vscode", "release": false },
+          { "type": "chore", "scope": "vscode", "release": false },
+          { "type": "refactor", "scope": "vscode", "release": false },
+          { "type": "docs", "scope": "vscode", "release": false },
+          { "type": "test", "scope": "vscode", "release": false },
+          { "type": "ci", "scope": "vscode", "release": false },
           { "type": "feat", "release": "patch" },
           { "type": "fix", "release": "patch" },
           { "type": "perf", "release": "patch" },
@@ -25,7 +30,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "pnpm version ${nextRelease.version} --no-git-tag-version --allow-same-version && pnpm install --lockfile-only"
+        "prepareCmd": "pnpm version ${nextRelease.version} --no-git-tag-version --allow-same-version && pnpm install --lockfile-only --frozen-lockfile"
       }
     ],
     [
@@ -39,7 +44,7 @@
           "packages/mcp/package.json",
           "pnpm-lock.yaml"
         ],
-        "message": "chore(release): v${nextRelease.version} [skip ci]"
+        "message": "chore(release): v${nextRelease.version} [skip release]"
       }
     ],
     "@semantic-release/github"

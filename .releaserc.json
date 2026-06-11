@@ -9,12 +9,27 @@
           { "type": "feat", "scope": "web", "release": false },
           { "type": "fix", "scope": "web", "release": false },
           { "type": "perf", "scope": "web", "release": false },
+          { "type": "chore", "scope": "web", "release": false },
+          { "type": "refactor", "scope": "web", "release": false },
+          { "type": "docs", "scope": "web", "release": false },
+          { "type": "test", "scope": "web", "release": false },
+          { "type": "ci", "scope": "web", "release": false },
           { "type": "feat", "scope": "mcp", "release": false },
           { "type": "fix", "scope": "mcp", "release": false },
           { "type": "perf", "scope": "mcp", "release": false },
+          { "type": "chore", "scope": "mcp", "release": false },
+          { "type": "refactor", "scope": "mcp", "release": false },
+          { "type": "docs", "scope": "mcp", "release": false },
+          { "type": "test", "scope": "mcp", "release": false },
+          { "type": "ci", "scope": "mcp", "release": false },
           { "type": "feat", "scope": "ui", "release": false },
           { "type": "fix", "scope": "ui", "release": false },
           { "type": "perf", "scope": "ui", "release": false },
+          { "type": "chore", "scope": "ui", "release": false },
+          { "type": "refactor", "scope": "ui", "release": false },
+          { "type": "docs", "scope": "ui", "release": false },
+          { "type": "test", "scope": "ui", "release": false },
+          { "type": "ci", "scope": "ui", "release": false },
           { "type": "feat", "release": "patch" },
           { "type": "fix", "release": "patch" },
           { "type": "perf", "release": "patch" },
@@ -31,7 +46,7 @@
       "@semantic-release/git",
       {
         "assets": ["packages/vscode-extension/package.json", "pnpm-lock.yaml"],
-        "message": "chore(release): vscode-v${nextRelease.version} [skip ci]"
+        "message": "chore(release): vscode-v${nextRelease.version} [skip release]"
       }
     ],
     "@semantic-release/github"
