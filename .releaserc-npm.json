@@ -1,0 +1,48 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "angular",
+        "releaseRules": [
+          { "type": "feat", "scope": "vscode", "release": false },
+          { "type": "fix", "scope": "vscode", "release": false },
+          { "type": "perf", "scope": "vscode", "release": false },
+          { "type": "feat", "release": "patch" },
+          { "type": "fix", "release": "patch" },
+          { "type": "perf", "release": "patch" },
+          { "type": "chore", "release": "patch" },
+          { "type": "refactor", "release": "patch" },
+          { "type": "docs", "release": "patch" },
+          { "type": "test", "release": "patch" },
+          { "type": "ci", "release": "patch" },
+          { "breaking": true, "release": "minor" }
+        ]
+      }
+    ],
+    ["@semantic-release/release-notes-generator", { "preset": "angular" }],
+    [
+      "@semantic-release/exec",
+      {
+        "prepareCmd": "pnpm version ${nextRelease.version} --no-git-tag-version --allow-same-version && pnpm install --lockfile-only"
+      }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "package.json",
+          "packages/core/package.json",
+          "packages/ui/package.json",
+          "packages/web/package.json",
+          "packages/mcp/package.json",
+          "pnpm-lock.yaml"
+        ],
+        "message": "chore(release): v${nextRelease.version} [skip ci]"
+      }
+    ],
+    "@semantic-release/github"
+  ],
+  "tagFormat": "v${version}"
+}

@@ -6,6 +6,15 @@
       {
         "preset": "angular",
         "releaseRules": [
+          { "type": "feat", "scope": "web", "release": false },
+          { "type": "fix", "scope": "web", "release": false },
+          { "type": "perf", "scope": "web", "release": false },
+          { "type": "feat", "scope": "mcp", "release": false },
+          { "type": "fix", "scope": "mcp", "release": false },
+          { "type": "perf", "scope": "mcp", "release": false },
+          { "type": "feat", "scope": "ui", "release": false },
+          { "type": "fix", "scope": "ui", "release": false },
+          { "type": "perf", "scope": "ui", "release": false },
           { "type": "feat", "release": "patch" },
           { "type": "fix", "release": "patch" },
           { "type": "perf", "release": "patch" },
