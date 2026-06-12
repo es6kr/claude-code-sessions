@@ -1,7 +1,0 @@
-{
-  "packages/core": "0.5.0",
-  "packages/ui": "0.4.10",
-  "packages/web": "0.5.0",
-  "packages/mcp": "0.5.0",
-  "packages/vscode-extension": "0.4.9"
-}
