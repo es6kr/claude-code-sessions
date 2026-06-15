@@ -29,7 +29,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production-npm # required reviewer approval before publish
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PLEASE_PAT }} # PAT enables downstream publish-npm.yml trigger on tag push
