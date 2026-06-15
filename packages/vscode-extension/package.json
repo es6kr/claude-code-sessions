@@ -2,7 +2,7 @@
   "name": "claude-sessions",
   "displayName": "Claude Code Sessions",
   "description": "Manage Claude Code sessions from VS Code sidebar",
-  "version": "0.4.7",
+  "version": "0.4.9",
   "publisher": "es6kr",
   "license": "MIT",
   "repository": {
@@ -457,12 +457,13 @@
         "claudeSessions.defaultTerminalMode": {
           "type": "string",
           "enum": [
+            "anthropic",
             "ask",
             "external",
             "internal"
           ],
           "default": "ask",
-          "description": "Default terminal mode when resuming sessions: 'ask' shows a picker, 'internal' uses the integrated terminal, 'external' uses the system terminal"
+          "description": "Default mode when resuming sessions: 'ask' shows a picker, 'internal' uses the integrated terminal, 'external' uses the system terminal, 'anthropic' opens the session inside the official Claude Code extension (anthropic.claude-code)"
         },
         "claudeSessions.webServerPath": {
           "type": "string",
@@ -486,7 +487,7 @@
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
-    "effect": "^3.21.2"
+    "effect": "^3.21.3"
   },
   "devDependencies": {
     "@claude-sessions/ui": "workspace:^",
@@ -494,17 +495,17 @@
     "@tailwindcss/vite": "^4.3.0",
     "@types/glob": "^9.0.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.9.1",
+    "@types/node": "^25.9.2",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^3.9.1",
+    "@vscode/vsce": "^3.9.2",
     "glob": "^13.0.6",
     "mocha": "^11.7.6",
-    "svelte": "^5.56.0",
-    "svelte-check": "^4.4.8",
+    "svelte": "^5.56.2",
+    "svelte-check": "^4.6.0",
     "tailwindcss": "^4.3.0",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",
-    "vite": "^7.3.3"
+    "vite": "^7.3.5"
   }
 }

@@ -1,0 +1,33 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "angular",
+        "releaseRules": [
+          { "type": "feat", "scope": "vscode", "release": "minor" },
+          { "type": "fix", "scope": "vscode", "release": "patch" },
+          { "type": "perf", "scope": "vscode", "release": "patch" },
+          { "type": "feat", "scope": "core", "release": "minor" },
+          { "type": "fix", "scope": "core", "release": "patch" },
+          { "type": "perf", "scope": "core", "release": "patch" },
+          { "breaking": true, "release": "minor" },
+          { "release": false }
+        ]
+      }
+    ],
+    ["@semantic-release/release-notes-generator", { "preset": "angular" }],
+    ["@semantic-release/exec", { "prepareCmd": "pnpm install --lockfile-only" }],
+    ["@semantic-release/npm", { "npmPublish": false, "pkgRoot": "packages/vscode-extension" }],
+    [
+      "@semantic-release/git",
+      {
+        "assets": ["packages/vscode-extension/package.json", "pnpm-lock.yaml"],
+        "message": "chore(release): vscode-v${nextRelease.version} [skip release]"
+      }
+    ],
+    "@semantic-release/github"
+  ],
+  "tagFormat": "vscode-v${version}"
+}

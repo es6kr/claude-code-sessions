@@ -1,0 +1,7 @@
+{"type":"summary","summary":"Duplicate UUID regression fixture for Issue #137","leafUuid":"dup-a","timestamp":"2026-06-14T10:00:00.000Z"}
+{"type":"user","uuid":"dup-a","cwd":"/Users/test/dup-test","timestamp":"2026-06-14T10:00:00.000Z","message":{"role":"user","content":[{"type":"text","text":"first user message"}]}}
+{"type":"assistant","uuid":"dup-b","parentUuid":"dup-a","cwd":"/Users/test/dup-test","timestamp":"2026-06-14T10:00:01.000Z","message":{"role":"assistant","content":[{"type":"text","text":"first assistant response"}]}}
+{"type":"user","uuid":"dup-a","cwd":"/Users/test/dup-test","timestamp":"2026-06-14T10:00:02.000Z","message":{"role":"user","content":[{"type":"text","text":"first user message (sync conflict duplicate)"}]}}
+{"type":"assistant","uuid":"dup-b","parentUuid":"dup-a","cwd":"/Users/test/dup-test","timestamp":"2026-06-14T10:00:03.000Z","message":{"role":"assistant","content":[{"type":"text","text":"first assistant response (sync conflict duplicate)"}]}}
+{"type":"user","uuid":"dup-c","cwd":"/Users/test/dup-test","timestamp":"2026-06-14T10:00:04.000Z","message":{"role":"user","content":[{"type":"text","text":"second user message"}]}}
+{"type":"assistant","uuid":"dup-d","parentUuid":"dup-c","cwd":"/Users/test/dup-test","timestamp":"2026-06-14T10:00:05.000Z","message":{"role":"assistant","content":[{"type":"text","text":"second assistant response"}]}}
