@@ -35,7 +35,7 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_PAT }} # PAT enables downstream publish-npm.yml trigger on tag push
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24' # consistent with main-semantic-release.yml + release-vscode.yml
 
