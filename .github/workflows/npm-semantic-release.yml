@@ -1,19 +1,23 @@
 name: npm semantic-release
 
-# Versioning strategy: stable-only channel on the main branch.
-# - Baseline: highest matching git tag for tagFormat `v${version}` (excluding vscode-v tags).
+# Versioning strategy: stable channel on the main branch + prerelease channel on the beta branch.
+# - Baseline (main): highest matching git tag for tagFormat `v${version}` (excluding vscode-v tags).
+# - Baseline (beta): highest matching prerelease tag `v${version}` where version ends in `-beta.N`.
 # - Commit-analyzer scope filter (.releaserc-npm.json) blocks `(vscode)`-scoped commits so vscode-only work does NOT bump npm packages.
 # - Tag push (`v[0-9]*`) triggers downstream publish-npm.yml (npm publish for @claude-sessions/core/ui/web/mcp).
-# - prerelease channel: not configured here. Beta releases live on ovsx-beta / beta branches with their own configs.
+# - main → npm latest dist-tag (publish-npm.yml default).
+# - beta → npm beta dist-tag (semantic-release prerelease auto-applies via @semantic-release/npm distTag from the branch config).
 
 on:
-  push: { branches: [main] }
+  push: { branches: [main, beta] }
   workflow_dispatch:
 
-# Serialize with main-semantic-release.yml (vscode) on the same push: main event.
-# Two semantic-release runs sharing main HEAD must not race on git push.
+# Serialize per branch so two semantic-release runs sharing the same HEAD
+# (main + main-semantic-release on the same push, or beta-only on a beta push)
+# never race on git push. The group key includes the branch name so main and
+# beta releases can run concurrently with each other.
 concurrency:
-  group: semantic-release-main
+  group: semantic-release-npm-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -22,10 +26,55 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Preview job: runs semantic-release in --dry-run mode WITHOUT the
+  # production-npm environment gate, so the next version + tag + impacted
+  # packages appear in the log BEFORE the human reviewer approves the
+  # release environment. The release job below depends on this preview
+  # passing — if dry-run errors, the release job never starts.
+  # Aligns with ~/.agents/rules/release-automation.md "Production environment
+  # 승인 직전 dry-run 의무" (npx semantic-release --dry-run is 1차 자료).
+  dry-run-preview:
+    if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
+    runs-on: ubuntu-latest
+    # NO environment — runs immediately, no reviewer approval needed for read-only dry-run
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install semantic-release + plugins
+        run: |
+          npm install --no-save \
+            semantic-release@^24 \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/exec \
+            @semantic-release/git \
+            @semantic-release/github
+
+      - name: Swap release config (npm becomes main config)
+        run: |
+          mv .releaserc.json .releaserc-vscode.bak
+          cp .releaserc-npm.json .releaserc.json
+
+      - name: Run semantic-release (--dry-run preview)
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_PAT }}
+        run: npx semantic-release --dry-run
+
   release:
     # Skip release on the commit semantic-release itself pushed back (loop prevention).
     # `[skip release]` is project-narrow signal — does NOT block CI / e2e / dependabot workflows.
     if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
+    needs: dry-run-preview # block real release until preview log shows next version + tag
     runs-on: ubuntu-latest
     environment: production-npm # required reviewer approval before publish
     steps:
@@ -52,7 +101,24 @@ jobs:
             @semantic-release/git \
             @semantic-release/github
 
+      # Swap release config so cosmiconfig auto-detects the npm config as the
+      # main config. The previous approach (`npx semantic-release --extends
+      # ./.releaserc-npm.json`) is wrong: `--extends` imports a shareable config
+      # and *merges* it into the auto-detected main config (`.releaserc.json` —
+      # vscode), so the main config's `branches: ["main"]` always wins and beta
+      # publishes are silently skipped ("This test run was triggered on the
+      # branch beta, while semantic-release is configured to only publish from
+      # main"). CLI args / main config take precedence over extends per
+      # semantic-release docs (Configuration > Options > extends).
+      # File-swap makes `.releaserc-npm.json` the main config, restoring the
+      # branches array ["main", {name: "beta", prerelease: true}]. The runner
+      # is ephemeral, so no restore step is needed.
+      - name: Swap release config (npm becomes main config)
+        run: |
+          mv .releaserc.json .releaserc-vscode.bak
+          cp .releaserc-npm.json .releaserc.json
+
       - name: Run semantic-release (npm config)
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_PAT }}
-        run: npx semantic-release --extends ./.releaserc-npm.json
+        run: npx semantic-release
