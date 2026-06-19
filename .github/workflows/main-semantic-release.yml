@@ -15,18 +15,18 @@ jobs:
     runs-on: ubuntu-latest
     environment: production-vscode # required reviewer 승인 후 진행
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PLEASE_PAT }} # release-vscode workflow downstream trigger 위해 PAT 사용
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24' # release-vscode.yml과 일관 — semantic-release npx 실행 환경 동일
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4 # @semantic-release/exec prepareCmd로 pnpm install --lockfile-only 실행 위해 필요
+        uses: pnpm/action-setup@v6 # @semantic-release/exec prepareCmd로 pnpm install --lockfile-only 실행 위해 필요
 
       - name: Install semantic-release + plugins
         run: |

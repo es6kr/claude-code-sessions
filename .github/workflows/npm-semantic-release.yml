@@ -78,18 +78,18 @@ jobs:
     runs-on: ubuntu-latest
     environment: production-npm # required reviewer approval before publish
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.RELEASE_PLEASE_PAT }} # PAT enables downstream publish-npm.yml trigger on tag push
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: '24' # consistent with main-semantic-release.yml + release-vscode.yml
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4 # needed by @semantic-release/exec prepareCmd (pnpm version + pnpm install --lockfile-only)
+        uses: pnpm/action-setup@v6 # needed by @semantic-release/exec prepareCmd (pnpm version + pnpm install --lockfile-only)
 
       - name: Install semantic-release + plugins
         run: |
