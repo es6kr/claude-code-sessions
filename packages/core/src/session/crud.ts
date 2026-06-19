@@ -124,11 +124,25 @@ export const listSessions = (projectName: string) =>
     return sortSessionsByDate(sessions.filter((s): s is NonNullable<typeof s> => s !== null))
   })
 
-// Read session messages
+// Deduplicate messages by `uuid`, keeping the last occurrence. Messages without
+// a `uuid` (summary, file-history-snapshot, custom-title, agent-name) pass through
+// unchanged. Resolves Issue #137 Phase 3 — JSONL files with duplicated uuid records
+// (Syncthing conflicts, repeated history appends, cross-session edits) inflate the
+// rendered DOM and token-usage metrics; we keep only the latest record per uuid.
+export const dedupeMessagesByUuid = <T extends { uuid?: string }>(messages: T[]): T[] => {
+  const lastIndexByUuid = new Map<string, number>()
+  messages.forEach((m, i) => {
+    if (m.uuid) lastIndexByUuid.set(m.uuid, i)
+  })
+  return messages.filter((m, i) => !m.uuid || lastIndexByUuid.get(m.uuid) === i)
+}
+
+// Read session messages (deduplicates duplicate uuids — see dedupeMessagesByUuid)
 export const readSession = (projectName: string, sessionId: string) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    return yield* readJsonlFile<Message>(filePath)
+    const messages = yield* readJsonlFile<Message>(filePath)
+    return dedupeMessagesByUuid(messages)
   })
 
 import { deleteMessageWithChainRepair } from './validation.js'
