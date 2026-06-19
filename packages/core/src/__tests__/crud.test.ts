@@ -563,3 +563,181 @@ describe('updateMessageContent', () => {
     expect((result as { error?: string }).error).toBe('Message not found')
   })
 })
+
+describe('readSession dedup (Issue #137 Phase 3)', () => {
+  let tempDir: string
+  let projectDir: string
+  const projectName = '-Users-test-readsession-dedup'
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-session-dedup-'))
+    projectDir = path.join(tempDir, projectName)
+    await fs.mkdir(projectDir, { recursive: true })
+    vi.mocked(getSessionsDir).mockReturnValue(tempDir)
+  })
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true })
+    vi.clearAllMocks()
+  })
+
+  const writeMessages = async (sessionId: string, messages: unknown[]) => {
+    const filePath = path.join(projectDir, `${sessionId}.jsonl`)
+    await fs.writeFile(filePath, messages.map((m) => JSON.stringify(m)).join('\n') + '\n')
+  }
+
+  it('should keep all messages when there are no duplicate uuids', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'user',
+        uuid: 'user-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'A' }] },
+      },
+      {
+        type: 'assistant',
+        uuid: 'assistant-1',
+        parentUuid: 'user-1',
+        timestamp: '2025-12-19T01:00:01.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'B' }] },
+      },
+    ])
+
+    const messages = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(messages).toHaveLength(2)
+    expect(messages.map((m) => m.uuid)).toEqual(['user-1', 'assistant-1'])
+  })
+
+  it('should dedupe duplicate uuids keeping the last occurrence', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'user',
+        uuid: 'user-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'First' }] },
+      },
+      {
+        type: 'user',
+        uuid: 'user-1',
+        timestamp: '2025-12-19T01:00:05.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Second (latest)' }] },
+      },
+    ])
+
+    const messages = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(messages).toHaveLength(1)
+    expect(messages[0].uuid).toBe('user-1')
+    const payload = messages[0].message as { content: Array<{ text: string }> }
+    expect(payload.content[0].text).toBe('Second (latest)')
+  })
+
+  it('should dedupe 3+ occurrences keeping only the last', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'user',
+        uuid: 'dup-uuid',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'v1' }] },
+      },
+      {
+        type: 'user',
+        uuid: 'dup-uuid',
+        timestamp: '2025-12-19T01:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'v2' }] },
+      },
+      {
+        type: 'user',
+        uuid: 'dup-uuid',
+        timestamp: '2025-12-19T01:00:02.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'v3 (latest)' }] },
+      },
+    ])
+
+    const messages = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(messages).toHaveLength(1)
+    const payload = messages[0].message as { content: Array<{ text: string }> }
+    expect(payload.content[0].text).toBe('v3 (latest)')
+  })
+
+  it('should preserve order of non-duplicated messages around dedup target', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'user',
+        uuid: 'user-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'A' }] },
+      },
+      {
+        type: 'user',
+        uuid: 'dup',
+        timestamp: '2025-12-19T01:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'dup-first' }] },
+      },
+      {
+        type: 'assistant',
+        uuid: 'assistant-1',
+        parentUuid: 'dup',
+        timestamp: '2025-12-19T01:00:02.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'B' }] },
+      },
+      {
+        type: 'user',
+        uuid: 'dup',
+        timestamp: '2025-12-19T01:00:03.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'dup-last' }] },
+      },
+    ])
+
+    const messages = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(messages).toHaveLength(3)
+    expect(messages.map((m) => m.uuid)).toEqual(['user-1', 'assistant-1', 'dup'])
+    const dupMsg = messages.find((m) => m.uuid === 'dup')!
+    const payload = dupMsg.message as { content: Array<{ text: string }> }
+    expect(payload.content[0].text).toBe('dup-last')
+  })
+
+  it('should not dedupe messages without uuid (summary, file-history-snapshot, custom-title)', async () => {
+    const sessionId = 'test-session'
+    await writeMessages(sessionId, [
+      {
+        type: 'summary',
+        summary: 'Summary one',
+        leafUuid: 'leaf-1',
+      },
+      {
+        type: 'summary',
+        summary: 'Summary two',
+        leafUuid: 'leaf-2',
+      },
+      {
+        type: 'file-history-snapshot',
+        messageId: 'fhs-shared',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        snapshot: { trackedFileBackups: {} },
+      },
+      {
+        type: 'file-history-snapshot',
+        messageId: 'fhs-shared',
+        timestamp: '2025-12-19T01:00:01.000Z',
+        snapshot: { trackedFileBackups: {} },
+      },
+      {
+        type: 'custom-title',
+        customTitle: 'A',
+        sessionId,
+      },
+      {
+        type: 'custom-title',
+        customTitle: 'B',
+        sessionId,
+      },
+    ])
+
+    const messages = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(messages).toHaveLength(6)
+  })
+})
