@@ -487,7 +487,7 @@
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:^",
-    "effect": "^3.21.3"
+    "effect": "^3.21.4"
   },
   "devDependencies": {
     "@claude-sessions/ui": "workspace:^",
