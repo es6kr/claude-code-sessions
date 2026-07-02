@@ -234,7 +234,7 @@ const loadSessionTreeDataInternal = (
           )
 
           let agentName: string | undefined
-          const firstAgentMsg = agentMsgs.find((m) => m.type === 'user')
+          const firstAgentMsg = agentMsgs.find((m) => m.type === 'user' && !isMetaMessage(m))
           if (firstAgentMsg) {
             const text = extractTextContent(firstAgentMsg.message as Message['message'])
             if (text) {
