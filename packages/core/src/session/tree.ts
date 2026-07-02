@@ -11,6 +11,7 @@ import {
   getDisplaySortTimestamp,
   getSummarySortTimestamp,
   isErrorSessionTitle,
+  isMetaMessage,
   parseJsonlLines,
   fileExists,
   tryParseJsonLine,
@@ -179,15 +180,22 @@ const loadSessionTreeDataInternal = (
       }
     }
 
-    // Get first user message
-    const firstUserMsg = messages.find((m) => m.type === 'user') as Message | undefined
+    // Get first real user message — skip synthetic isMeta reminders
+    // (e.g., the rename announcement Claude Code injects) so they never
+    // become the fallback title
+    const firstUserMsg = messages.find((m) => m.type === 'user' && !isMetaMessage(m)) as
+      | Message
+      | undefined
 
-    // Scan from end: only titles after the last user/assistant message count
+    // Scan backward for the latest custom-title / agent-name records. Keep
+    // scanning past conversational turns — Claude Code appends user/assistant
+    // messages (and file-history-snapshot) after the rename metadata, so
+    // stopping at the first user/assistant would miss the record entirely.
     let customTitle: string | undefined
     let agentName: string | undefined
     for (let i = messages.length - 1; i >= 0; i--) {
+      if (customTitle !== undefined && agentName !== undefined) break
       const msg = messages[i]
-      if (msg.type === 'user' || msg.type === 'assistant') break
       if (customTitle === undefined && msg.type === 'custom-title') {
         customTitle = (msg as { type: 'custom-title'; customTitle?: string }).customTitle
       } else if (agentName === undefined && msg.type === 'agent-name') {
@@ -226,7 +234,7 @@ const loadSessionTreeDataInternal = (
           )
 
           let agentName: string | undefined
-          const firstAgentMsg = agentMsgs.find((m) => m.type === 'user')
+          const firstAgentMsg = agentMsgs.find((m) => m.type === 'user' && !isMetaMessage(m))
           if (firstAgentMsg) {
             const text = extractTextContent(firstAgentMsg.message as Message['message'])
             if (text) {

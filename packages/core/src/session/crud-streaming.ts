@@ -7,7 +7,7 @@ import { Effect } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir } from '../paths.js'
-import { extractTitle, FileReadError } from '../utils.js'
+import { extractTitle, isMetaMessage, FileReadError } from '../utils.js'
 import { filterSessionFiles, buildSessionMeta, sortSessionsByDate } from './crud-helpers.js'
 import { createLogger } from '../logger.js'
 import type { Message, SessionMeta } from '../types.js'
@@ -44,20 +44,21 @@ const scanSessionMeta = async (
 
     if (type === 'user' || type === 'assistant') {
       userAssistantCount++
-      // Reset title fields — only titles after the last message count
-      customTitle = undefined
-      agentName = undefined
+      // Do NOT reset customTitle/agentName here — Claude Code appends
+      // conversational turns after the rename metadata, so the latest
+      // custom-title/agent-name record wins regardless of position
       // Extract timestamp with regex (avoid full parse)
       const tsMatch = line.match(/"timestamp"\s*:\s*"([^"]+)"/)
       if (tsMatch) {
         if (!firstTimestamp) firstTimestamp = tsMatch[1]
         lastTimestamp = tsMatch[1]
       }
-      // Full parse only for first user message (need extractTitle)
+      // Full parse only for first user message (need extractTitle).
+      // Skip synthetic isMeta reminders (rename announcements)
       if (type === 'user' && title === undefined) {
         try {
           const msg = JSON.parse(line) as Message
-          title = extractTitle(msg.message)
+          if (!isMetaMessage(msg)) title = extractTitle(msg.message)
         } catch {
           /* skip malformed */
         }
