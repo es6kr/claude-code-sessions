@@ -10,6 +10,7 @@ import {
   extractTitle,
   fileExists,
   isContinuationSummary,
+  isMetaMessage,
   cleanupSplitFirstMessage,
   parseJsonlLines,
   readJsonlFile,
@@ -41,9 +42,7 @@ export const updateSessionSummary = (projectName: string, sessionId: string, new
       // Add new summary at the beginning. Anchor leafUuid on the first real
       // user prompt — synthetic isMeta reminders (rename announcements) have
       // no meaningful uuid to reference.
-      const firstUserMsg = messages.find(
-        (m) => m.type === 'user' && !(m as { isMeta?: boolean }).isMeta
-      )
+      const firstUserMsg = messages.find((m) => m.type === 'user' && !isMetaMessage(m))
       const summaryMsg = {
         type: 'summary',
         summary: newSummary,
@@ -80,7 +79,7 @@ const readSessionMeta = (projectPath: string, file: string, projectName: string)
     // Code injects when a session is renamed — those are not user prompts.
     const title = pipe(
       messages,
-      A.findFirst((m) => m.type === 'user' && !(m as { isMeta?: boolean }).isMeta),
+      A.findFirst((m) => m.type === 'user' && !isMetaMessage(m)),
       O.map((m) => extractTitle(m.message)),
       O.getOrUndefined
     )

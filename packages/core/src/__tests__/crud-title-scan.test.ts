@@ -13,6 +13,8 @@ vi.mock('../paths.js', async () => {
 })
 
 import { listSessions } from '../session/crud.js'
+import { listSessionsMeta } from '../session/crud-streaming.js'
+import { loadProjectTreeData } from '../session/tree.js'
 import { getSessionsDir } from '../paths.js'
 
 async function writeSession(
@@ -130,5 +132,94 @@ describe('listSessions title resolution (issue #189)', () => {
     // Reminder text must not leak through
     expect(sessions[0].title ?? '').not.toContain('<system-reminder>')
     expect(sessions[0].title ?? '').not.toContain('named this session')
+  })
+})
+
+// Same regressions via the VSCode sidebar path (loadProjectTreeData) and the
+// streaming path (listSessionsMeta) — both had their own copies of the logic
+describe.each([
+  {
+    pathName: 'loadProjectTreeData (VSCode sidebar)',
+    load: async (projectName: string) => {
+      const result = await Effect.runPromise(loadProjectTreeData(projectName))
+      return result?.sessions ?? []
+    },
+  },
+  {
+    pathName: 'listSessionsMeta (streaming)',
+    load: (projectName: string) => Effect.runPromise(listSessionsMeta(projectName)),
+  },
+])('$pathName title resolution (issue #189)', ({ load }) => {
+  let tempDir: string
+  let projectDir: string
+  const projectName = '-project-title-scan-alt-path'
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-title-scan-alt-'))
+    projectDir = path.join(tempDir, projectName)
+    await fs.mkdir(projectDir, { recursive: true })
+    vi.mocked(getSessionsDir).mockReturnValue(tempDir)
+  })
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true })
+    vi.clearAllMocks()
+  })
+
+  it('finds customTitle when conversational turns follow the custom-title record', async () => {
+    const sessionId = 'session-alt-bug1'
+    await writeSession(projectDir, sessionId, [
+      {
+        type: 'user',
+        uuid: 'msg-1',
+        timestamp: '2025-01-01T10:00:00.000Z',
+        message: { role: 'user', content: 'First prompt' },
+      },
+      { type: 'custom-title', customTitle: 'My-Session-Name', sessionId },
+      { type: 'agent-name', agentName: 'My-Agent', sessionId },
+      {
+        type: 'user',
+        uuid: 'msg-2',
+        parentUuid: 'msg-1',
+        timestamp: '2025-01-01T10:00:02.000Z',
+        message: { role: 'user', content: 'Follow-up prompt' },
+      },
+      { type: 'file-history-snapshot', messageId: 'msg-2', snapshot: {}, isSnapshotUpdate: false },
+    ])
+
+    const sessions = await load(projectName)
+
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0].customTitle).toBe('My-Session-Name')
+    expect(sessions[0].agentName).toBe('My-Agent')
+  })
+
+  it('skips isMeta system-reminder messages when picking fallback title', async () => {
+    const sessionId = 'session-alt-bug2'
+    await writeSession(projectDir, sessionId, [
+      {
+        type: 'user',
+        isMeta: true,
+        uuid: 'meta-1',
+        timestamp: '2025-01-01T09:59:00.000Z',
+        message: {
+          role: 'user',
+          content:
+            '<system-reminder>\nThe user named this session "My-Session-Name". This may indicate the session\'s focus or intent.\n</system-reminder>',
+        },
+      },
+      {
+        type: 'user',
+        uuid: 'msg-1',
+        timestamp: '2025-01-01T10:00:00.000Z',
+        message: { role: 'user', content: 'What is the answer to life?' },
+      },
+    ])
+
+    const sessions = await load(projectName)
+
+    expect(sessions).toHaveLength(1)
+    expect(sessions[0].title).toBe('What is the answer to life?')
+    expect(sessions[0].title ?? '').not.toContain('<system-reminder>')
   })
 })
