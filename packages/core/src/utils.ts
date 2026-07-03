@@ -144,6 +144,11 @@ export const isErrorSessionTitle = (title: string | undefined): boolean => {
   return ERROR_SESSION_PATTERNS.some((pattern) => title.includes(pattern))
 }
 
+// Check if a message is a synthetic meta entry (e.g., the system-reminder
+// Claude Code injects to announce a session rename) rather than a real prompt.
+// Accepts both Message and JsonlRecord shapes — the cast is confined here
+export const isMetaMessage = (msg: object): boolean => (msg as { isMeta?: unknown }).isMeta === true
+
 // Check if a message is a continuation summary (from compact)
 export const isContinuationSummary = (msg: Message): boolean => {
   // isCompactSummary flag is set by Claude Code for continuation summaries

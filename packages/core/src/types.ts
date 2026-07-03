@@ -130,6 +130,8 @@ export interface Message extends TypedObject {
   summary?: string
   /** Flag indicating this is a context continuation summary */
   isCompactSummary?: boolean
+  /** Flag indicating a synthetic meta message (e.g., rename announcement reminder) */
+  isMeta?: boolean
   /** Tool use result (string for rejections, AskUserQuestionResult for Q&A) */
   toolUseResult?: ToolUseResult
 }
