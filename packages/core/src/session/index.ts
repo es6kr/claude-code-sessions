@@ -9,6 +9,7 @@ export { listProjects } from './projects.js'
 export {
   listSessions,
   readSession,
+  dedupeMessagesByUuid,
   deleteMessage,
   restoreMessage,
   deleteSession,

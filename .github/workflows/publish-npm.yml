@@ -17,6 +17,11 @@ on:
           - ui
           - mcp
           - web
+      version:
+        description: 'Explicit version override (e.g. 0.5.1). Leave empty to use repo HEAD package.json version as-is.'
+        required: false
+        default: ''
+        type: string
 
 jobs:
   publish:
@@ -27,7 +32,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -43,12 +48,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Parse tag version
+      - name: Parse version
         id: tag
-        if: ${{ github.event_name == 'push' }}
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '') }}
         run: |
-          TAG_NAME="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG_NAME#v}"
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            VERSION="${TAG_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
           # Check if beta version (contains -beta)
@@ -60,8 +69,8 @@ jobs:
             echo "npm_tag=latest" >> $GITHUB_OUTPUT
           fi
 
-      - name: Update package versions from tag
-        if: ${{ github.event_name == 'push' }}
+      - name: Update package versions
+        if: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '') }}
         run: |
           VERSION="${{ steps.tag.outputs.version }}"
           echo "Setting version to $VERSION"

@@ -1,8 +1,13 @@
 {
   "name": "@claude-sessions/ui",
-  "version": "0.4.10",
+  "version": "0.5.0",
   "private": false,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/es6kr/claude-code-sessions",
+    "directory": "packages/ui"
+  },
   "exports": {
     ".": "./src/lib/index.ts",
     "./components/*": "./src/lib/components/*"
@@ -14,11 +19,11 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json --threshold error"
   },
   "peerDependencies": {
-    "svelte": "^5.56.2"
+    "svelte": "^5.56.3"
   },
   "devDependencies": {
     "@claude-sessions/core": "workspace:^",
-    "svelte": "^5.56.2",
+    "svelte": "^5.56.3",
     "svelte-check": "^4.6.0",
     "typescript": "^5.9.3"
   }

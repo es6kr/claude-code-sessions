@@ -10,6 +10,7 @@ import {
   extractTitle,
   fileExists,
   isContinuationSummary,
+  isMetaMessage,
   cleanupSplitFirstMessage,
   parseJsonlLines,
   readJsonlFile,
@@ -38,8 +39,10 @@ export const updateSessionSummary = (projectName: string, sessionId: string, new
       // Update existing summary
       messages[summaryIdx] = { ...messages[summaryIdx], summary: newSummary }
     } else {
-      // Add new summary at the beginning
-      const firstUserMsg = messages.find((m) => m.type === 'user')
+      // Add new summary at the beginning. Anchor leafUuid on the first real
+      // user prompt — synthetic isMeta reminders (rename announcements) have
+      // no meaningful uuid to reference.
+      const firstUserMsg = messages.find((m) => m.type === 'user' && !isMetaMessage(m))
       const summaryMsg = {
         type: 'summary',
         summary: newSummary,
@@ -71,19 +74,25 @@ const readSessionMeta = (projectPath: string, file: string, projectName: string)
     )
     const hasSummary = messages.some((m) => m.type === 'summary')
 
+    // Fallback title = first real user prompt. Skip synthetic isMeta reminders
+    // (e.g., '<system-reminder>The user named this session "X"...') that Claude
+    // Code injects when a session is renamed — those are not user prompts.
     const title = pipe(
       messages,
-      A.findFirst((m) => m.type === 'user'),
+      A.findFirst((m) => m.type === 'user' && !isMetaMessage(m)),
       O.map((m) => extractTitle(m.message)),
       O.getOrUndefined
     )
 
-    // Only titles after the last user/assistant message count as current
+    // Scan backward for the latest custom-title / agent-name records. Keep
+    // scanning past conversational turns — Claude Code appends user/assistant
+    // messages (and file-history-snapshot) after the rename metadata, so
+    // stopping at the first user/assistant would miss the record entirely.
     let customTitle: string | undefined
     let agentName: string | undefined
     for (let i = messages.length - 1; i >= 0; i--) {
+      if (customTitle !== undefined && agentName !== undefined) break
       const m = messages[i]
-      if (m.type === 'user' || m.type === 'assistant') break
       if (customTitle === undefined && m.type === 'custom-title') {
         customTitle = (m as { customTitle?: string }).customTitle ?? undefined
       } else if (agentName === undefined && m.type === 'agent-name') {
@@ -124,11 +133,25 @@ export const listSessions = (projectName: string) =>
     return sortSessionsByDate(sessions.filter((s): s is NonNullable<typeof s> => s !== null))
   })
 
-// Read session messages
+// Deduplicate messages by `uuid`, keeping the last occurrence. Messages without
+// a `uuid` (summary, file-history-snapshot, custom-title, agent-name) pass through
+// unchanged. Resolves Issue #137 Phase 3 — JSONL files with duplicated uuid records
+// (Syncthing conflicts, repeated history appends, cross-session edits) inflate the
+// rendered DOM and token-usage metrics; we keep only the latest record per uuid.
+export const dedupeMessagesByUuid = <T extends { uuid?: string }>(messages: T[]): T[] => {
+  const lastIndexByUuid = new Map<string, number>()
+  messages.forEach((m, i) => {
+    if (m.uuid) lastIndexByUuid.set(m.uuid, i)
+  })
+  return messages.filter((m, i) => !m.uuid || lastIndexByUuid.get(m.uuid) === i)
+}
+
+// Read session messages (deduplicates duplicate uuids — see dedupeMessagesByUuid)
 export const readSession = (projectName: string, sessionId: string) =>
   Effect.gen(function* () {
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    return yield* readJsonlFile<Message>(filePath)
+    const messages = yield* readJsonlFile<Message>(filePath)
+    return dedupeMessagesByUuid(messages)
   })
 
 import { deleteMessageWithChainRepair } from './validation.js'
