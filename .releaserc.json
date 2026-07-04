@@ -6,14 +6,14 @@
       {
         "preset": "angular",
         "releaseRules": [
+          { "release": false },
           { "type": "feat", "scope": "vscode", "release": "minor" },
           { "type": "fix", "scope": "vscode", "release": "patch" },
           { "type": "perf", "scope": "vscode", "release": "patch" },
           { "type": "feat", "scope": "core", "release": "minor" },
           { "type": "fix", "scope": "core", "release": "patch" },
           { "type": "perf", "scope": "core", "release": "patch" },
-          { "breaking": true, "release": "minor" },
-          { "release": false }
+          { "breaking": true, "release": "minor" }
         ]
       }
     ],

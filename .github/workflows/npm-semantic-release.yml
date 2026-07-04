@@ -55,4 +55,11 @@ jobs:
       - name: Run semantic-release (npm config)
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_PAT }}
-        run: npx semantic-release --extends ./.releaserc-npm.json
+        # semantic-release auto-discovers .releaserc.json (the vscode config) as the base and merges
+        # `--extends` UNDER it, so `--extends ./.releaserc-npm.json` was fully shadowed (base kept the
+        # vscode tagFormat + plugins → npm never released). Overwrite the auto-discovered config with
+        # the npm config for this job so it becomes the effective base. Not committed: the git plugin
+        # only stages the configured assets, so this working-tree change is discarded with the runner.
+        run: |
+          cp .releaserc-npm.json .releaserc.json
+          npx semantic-release
