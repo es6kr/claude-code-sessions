@@ -495,17 +495,17 @@
     "@tailwindcss/vite": "^4.3.1",
     "@types/glob": "^9.0.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "^25.9.3",
+    "@types/node": "^25.9.4",
     "@types/vscode": "^1.85.0",
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^3.9.2",
     "glob": "^13.0.6",
     "mocha": "^11.7.6",
-    "svelte": "^5.56.3",
-    "svelte-check": "^4.6.0",
+    "svelte": "^5.56.4",
+    "svelte-check": "^4.7.1",
     "tailwindcss": "^4.3.1",
     "tsup": "^8.3.0",
     "typescript": "^5.7.0",
-    "vite": "^7.3.5"
+    "vite": "^7.3.6"
   }
 }
