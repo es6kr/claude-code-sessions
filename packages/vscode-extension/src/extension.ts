@@ -695,7 +695,15 @@ export function activate(context: vscode.ExtensionContext) {
         // `do script` / `cmd /k` string interpolation (external), and the
         // anthropic URI query parameter. Validate once, up front, so no
         // branch can act on an unvalidated session ID.
-        if (!/^[A-Za-z0-9_-]+$/.test(item.sessionId)) {
+        //
+        // typeof-gated (not just regex.test): this command is registered
+        // globally, so any extension can invoke it via
+        // vscode.commands.executeCommand('claudeSessions.resumeSession', ...)
+        // with an arbitrary payload, bypassing SessionTreeItem's compile-time
+        // `sessionId: string`. RegExp#test coerces its argument via ToString,
+        // so a bare regex check on undefined/null would pass (they stringify
+        // to "undefined"/"null", both of which match [A-Za-z0-9_-]+).
+        if (typeof item.sessionId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(item.sessionId)) {
           void vscode.window.showErrorMessage('Invalid session id; cannot resume session.')
           return
         }
