@@ -6,7 +6,7 @@ import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { outputChannel } from './output'
 import { SESSION_EDITOR_VIEW_TYPE, SessionEditorProvider } from './sessionEditorProvider'
-import { decideResume, type ResumeMode } from './lib/crossWorkspace'
+import { decideResume, ensureClaudeCodeExtension, type ResumeMode } from './lib/crossWorkspace'
 
 let webServerProcess: ChildProcess | null = null
 
@@ -686,7 +686,27 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'claudeSessions.resumeSession',
       async (item: SessionTreeItem) => {
-        if (item.type !== 'session') return
+        if (!item || item.type !== 'session') return
+
+        // Session IDs are attacker-controllable in a shared repository (a
+        // session file can be crafted or renamed) and flow unescaped into
+        // shell commands in every dispatch branch below: terminal.sendText
+        // (internal), resumeSession -> startClaude's `bash -c` / AppleScript
+        // `do script` / `cmd /k` string interpolation (external), and the
+        // anthropic URI query parameter. Validate once, up front, so no
+        // branch can act on an unvalidated session ID.
+        //
+        // typeof-gated (not just regex.test): this command is registered
+        // globally, so any extension can invoke it via
+        // vscode.commands.executeCommand('claudeSessions.resumeSession', ...)
+        // with an arbitrary payload, bypassing SessionTreeItem's compile-time
+        // `sessionId: string`. RegExp#test coerces its argument via ToString,
+        // so a bare regex check on undefined/null would pass (they stringify
+        // to "undefined"/"null", both of which match [A-Za-z0-9_-]+).
+        if (typeof item.sessionId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(item.sessionId)) {
+          void vscode.window.showErrorMessage('Invalid session id; cannot resume session.')
+          return
+        }
 
         const { defaultTerminalMode, cliFlags } = getConfig()
         const cliCommand = cliFlags
@@ -791,42 +811,25 @@ export function activate(context: vscode.ExtensionContext) {
           // antigravity / vscodium / ...) so the dispatch stays in-process
           // on every Open VSX-supported fork.
           // Addresses discussion #159 (option M2 — 3-way integrated picker).
-          const sessionId = String(item.sessionId ?? '')
-          if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
-            void vscode.window.showErrorMessage('Invalid session id; cannot resume session.')
-            return
-          }
+          // sessionId is already validated at the top of this handler.
+          const sessionId = item.sessionId
 
-          const claudeExt = vscode.extensions.getExtension('anthropic.claude-code')
-          if (!claudeExt) {
-            const installChoice = await vscode.window.showWarningMessage(
-              'Claude Code extension (anthropic.claude-code) is not installed.',
-              'Install',
-              'Cancel'
-            )
-            if (installChoice === 'Install') {
-              await vscode.commands.executeCommand(
-                'workbench.extensions.installExtension',
-                'anthropic.claude-code'
-              )
-            }
-            return
-          }
-
-          // Defensive activation: getExtension returns the Extension object even
-          // when it is installed-but-disabled (isActive === false). Without this
-          // step the URI dispatch below silently fails because no UriHandler is
-          // registered until activation. (PR #172 Internal Code Review #2.)
-          if (!claudeExt.isActive) {
-            try {
-              await claudeExt.activate()
-            } catch (err) {
-              void vscode.window.showErrorMessage(
-                `Failed to activate Claude Code extension: ${err instanceof Error ? err.message : String(err)}`
-              )
-              return
-            }
-          }
+          // Install-on-demand + defensive activation (installed-but-disabled
+          // extensions still surface via getExtension with isActive===false;
+          // without activation the URI dispatch below silently fails because
+          // no UriHandler is registered yet — PR #172 Internal Code Review #2).
+          // Extracted to ensureClaudeCodeExtension so it's unit-testable
+          // without a live open workspace folder (see crossWorkspace.ts).
+          const ensureResult = await ensureClaudeCodeExtension({
+            getExtension: (id) => vscode.extensions.getExtension(id),
+            showWarningMessage: (message, ...items) =>
+              vscode.window.showWarningMessage(message, ...items),
+            installExtension: (id) =>
+              vscode.commands.executeCommand('workbench.extensions.installExtension', id),
+            showInformationMessage: (message) => void vscode.window.showInformationMessage(message),
+            showErrorMessage: (message) => void vscode.window.showErrorMessage(message),
+          })
+          if (ensureResult.kind !== 'ready') return
 
           // Cross-workspace dispatch is unreachable here: `decideResume`
           // above converts cross-workspace + anthropic intent into a
@@ -902,6 +905,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
+    // openTerminalHere and startClaudeInFolder deliberately keep the 2-way
+    // Internal/External picker instead of resumeSession's 3-way: both are
+    // terminal launchers (no session to resume), and the Claude Code Extension
+    // option is a webview, not a terminal flavor. A `defaultTerminalMode` of
+    // 'anthropic' (or 'ask') therefore falls through to the 2-way picker here.
     vscode.commands.registerCommand(
       'claudeSessions.openTerminalHere',
       async (item: SessionTreeItem) => {
