@@ -16,7 +16,7 @@ View messages with tab interface. Inspect user/assistant turns, tool calls, and 
 
 - **Session Browser**: View all Claude Code projects and sessions in a tree view
 - **Web UI Integration**: View messages, delete messages, split sessions
-- **Resume Session**: Continue any session directly in terminal
+- **Resume Session**: Continue any session in a terminal or inside the official Claude Code extension
 - **Session Management**: Rename, delete, and move sessions between projects
 - **Cleanup**: Remove empty and invalid sessions in bulk
 - **Drag & Drop**: Move sessions between projects
@@ -50,12 +50,23 @@ Search for "Claude Code Sessions" in VS Code Extensions.
 
 ## Commands
 
-| Command                                | Description                           |
-| -------------------------------------- | ------------------------------------- |
-| `Claude Code Sessions: Refresh`        | Refresh the session tree              |
-| `Claude Code Sessions: Open Web UI`    | Open the web interface                |
-| `Claude Code Sessions: Cleanup`        | Remove empty/invalid sessions         |
-| `Claude Code Sessions: Resume Session` | Resume session in integrated terminal |
+| Command                                | Description                                        |
+| -------------------------------------- | -------------------------------------------------- |
+| `Claude Code Sessions: Refresh`        | Refresh the session tree                           |
+| `Claude Code Sessions: Open Web UI`    | Open the web interface                             |
+| `Claude Code Sessions: Cleanup`        | Remove empty/invalid sessions                      |
+| `Claude Code Sessions: Resume Session` | Resume session (terminal or Claude Code extension) |
+
+## Resume modes (`claudeSessions.defaultTerminalMode`)
+
+Resume Session supports three destinations, controlled by the `claudeSessions.defaultTerminalMode` setting:
+
+- **`ask`** (default) — shows a picker on every resume. When the session belongs to the current workspace, the picker offers all three destinations (Internal Terminal / External Terminal / Claude Code Extension); for a session from another workspace, the Claude Code Extension entry is hidden because the official extension can only resolve sessions of the open workspace.
+- **`internal`** — skips the picker and always resumes in the VSCode integrated terminal.
+- **`external`** — skips the picker and always resumes in the system default terminal.
+- **`anthropic`** — skips the picker and opens the session inside the official Claude Code extension (installs it on demand). If the session belongs to a different workspace, a fallback picker with the two terminal options appears instead.
+
+`Open Terminal Here` and `Start Claude in Folder` are terminal launchers, so they intentionally offer only the two terminal destinations regardless of this setting.
 
 ## Requirements
 
