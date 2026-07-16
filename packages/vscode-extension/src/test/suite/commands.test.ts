@@ -131,4 +131,29 @@ suite('Resume Session Quick Pick rendering', () => {
     assert.strictEqual(captured[0].items.length, 2, 'fallback picker offers the 2 terminal flavors')
     assert.strictEqual(captured[0].options?.title, 'Resume Session (fallback)')
   })
+
+  // Regression guard for a CodeRabbit Critical finding on PR #199: the session
+  // ID validation used to sit only inside the anthropic branch, leaving the
+  // internal (terminal.sendText) and external (shell-interpolated spawn)
+  // branches able to dispatch an attacker-crafted session ID (a session file
+  // in a shared repository can be named/renamed arbitrarily) into a shell
+  // command. Validation now runs at the very top of the handler, before any
+  // mode is chosen — so an invalid ID must reject before the picker even
+  // renders, proving no branch (terminal or extension) can be reached with it.
+  test('rejects an invalid session id before any destination — including the picker — is reached', async function () {
+    this.timeout(30000)
+    await vscode.workspace
+      .getConfiguration('claudeSessions')
+      .update('defaultTerminalMode', 'ask', vscode.ConfigurationTarget.Global)
+
+    const captured = captureQuickPick()
+    const maliciousItem = { ...fakeSessionItem, sessionId: 'abc; rm -rf ~ #' }
+    await vscode.commands.executeCommand('claudeSessions.resumeSession', maliciousItem)
+
+    assert.strictEqual(
+      captured.length,
+      0,
+      'an invalid session id must reject before the picker is shown, for any mode'
+    )
+  })
 })

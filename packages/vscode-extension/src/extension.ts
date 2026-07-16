@@ -688,6 +688,18 @@ export function activate(context: vscode.ExtensionContext) {
       async (item: SessionTreeItem) => {
         if (item.type !== 'session') return
 
+        // Session IDs are attacker-controllable in a shared repository (a
+        // session file can be crafted or renamed) and flow unescaped into
+        // shell commands in every dispatch branch below: terminal.sendText
+        // (internal), resumeSession -> startClaude's `bash -c` / AppleScript
+        // `do script` / `cmd /k` string interpolation (external), and the
+        // anthropic URI query parameter. Validate once, up front, so no
+        // branch can act on an unvalidated session ID.
+        if (!/^[A-Za-z0-9_-]+$/.test(item.sessionId)) {
+          void vscode.window.showErrorMessage('Invalid session id; cannot resume session.')
+          return
+        }
+
         const { defaultTerminalMode, cliFlags } = getConfig()
         const cliCommand = cliFlags
           ? `claude --resume ${item.sessionId} ${cliFlags}`
@@ -791,15 +803,8 @@ export function activate(context: vscode.ExtensionContext) {
           // antigravity / vscodium / ...) so the dispatch stays in-process
           // on every Open VSX-supported fork.
           // Addresses discussion #159 (option M2 — 3-way integrated picker).
-          // SessionTreeItem guarantees sessionId: string for type === 'session'
-          // (guarded at the top of this handler); the regex below is the URI
-          // injection guard, so no defensive String() coercion is needed —
-          // matching the raw usage in the internal/external branches.
+          // sessionId is already validated at the top of this handler.
           const sessionId = item.sessionId
-          if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
-            void vscode.window.showErrorMessage('Invalid session id; cannot resume session.')
-            return
-          }
 
           let claudeExt = vscode.extensions.getExtension('anthropic.claude-code')
           if (!claudeExt) {
