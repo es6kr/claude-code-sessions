@@ -457,6 +457,33 @@ suite('ensureClaudeCodeExtension Suite', () => {
     )
   })
 
+  // CodeRabbit finding on PR #199 (crossWorkspace.ts:152-156): a rejected
+  // installExtension call used to propagate uncaught out of the helper —
+  // inconsistent with the other typed failure states and left an unhandled
+  // rejection at the resumeSession call site.
+  test('installExtension rejects — install-failed with the error message, error surfaced, no throw escapes', async () => {
+    const { deps, calls } = makeDeps({
+      getExtension: () => undefined,
+      installExtension: () => {
+        calls.installExtension++
+        return Promise.reject(new Error('marketplace unreachable'))
+      },
+    })
+
+    const result = await ensureClaudeCodeExtension(deps)
+
+    assert.strictEqual(result.kind, 'install-failed')
+    if (result.kind === 'install-failed') {
+      assert.strictEqual(result.error, 'marketplace unreachable')
+    }
+    assert.strictEqual(calls.showErrorMessage, 1)
+    assert.strictEqual(
+      calls.showInformationMessage,
+      0,
+      'install-failed must not also show the re-trigger info message'
+    )
+  })
+
   test('installed-but-disabled — activation runs before ready (PR #172 Internal Code Review #2 regression guard)', async () => {
     let activateCalls = 0
     const disabledExt: ClaudeExtensionLike = {

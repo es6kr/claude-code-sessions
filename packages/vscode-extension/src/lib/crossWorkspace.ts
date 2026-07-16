@@ -153,6 +153,7 @@ export type EnsureClaudeCodeExtensionResult =
   | { kind: 'ready'; extension: ClaudeExtensionLike }
   | { kind: 'declined' }
   | { kind: 'install-pending' }
+  | { kind: 'install-failed'; error: string }
   | { kind: 'activation-failed'; error: string }
 
 const ANTHROPIC_EXTENSION_ID = 'anthropic.claude-code'
@@ -181,7 +182,13 @@ export async function ensureClaudeCodeExtension(
     )
     if (choice !== 'Install') return { kind: 'declined' }
 
-    await deps.installExtension(ANTHROPIC_EXTENSION_ID)
+    try {
+      await deps.installExtension(ANTHROPIC_EXTENSION_ID)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      deps.showErrorMessage(`Failed to install Claude Code extension: ${message}`)
+      return { kind: 'install-failed', error: message }
+    }
 
     // Auto-continue: pick up the freshly installed extension and fall through
     // to activation, so the original resume intent completes without a
