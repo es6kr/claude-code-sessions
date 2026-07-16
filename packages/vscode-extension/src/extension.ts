@@ -686,7 +686,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand(
       'claudeSessions.resumeSession',
       async (item: SessionTreeItem) => {
-        if (item.type !== 'session') return
+        if (!item || item.type !== 'session') return
 
         // Session IDs are attacker-controllable in a shared repository (a
         // session file can be crafted or renamed) and flow unescaped into
