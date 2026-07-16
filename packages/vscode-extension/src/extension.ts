@@ -791,26 +791,40 @@ export function activate(context: vscode.ExtensionContext) {
           // antigravity / vscodium / ...) so the dispatch stays in-process
           // on every Open VSX-supported fork.
           // Addresses discussion #159 (option M2 — 3-way integrated picker).
-          const sessionId = String(item.sessionId ?? '')
+          // SessionTreeItem guarantees sessionId: string for type === 'session'
+          // (guarded at the top of this handler); the regex below is the URI
+          // injection guard, so no defensive String() coercion is needed —
+          // matching the raw usage in the internal/external branches.
+          const sessionId = item.sessionId
           if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) {
             void vscode.window.showErrorMessage('Invalid session id; cannot resume session.')
             return
           }
 
-          const claudeExt = vscode.extensions.getExtension('anthropic.claude-code')
+          let claudeExt = vscode.extensions.getExtension('anthropic.claude-code')
           if (!claudeExt) {
             const installChoice = await vscode.window.showWarningMessage(
-              'Claude Code extension (anthropic.claude-code) is not installed.',
+              'The official Claude Code extension is not installed.',
               'Install',
               'Cancel'
             )
-            if (installChoice === 'Install') {
-              await vscode.commands.executeCommand(
-                'workbench.extensions.installExtension',
-                'anthropic.claude-code'
+            if (installChoice !== 'Install') return
+            await vscode.commands.executeCommand(
+              'workbench.extensions.installExtension',
+              'anthropic.claude-code'
+            )
+            // Auto-continue: pick up the freshly installed extension and fall
+            // through to the activation + URI dispatch below, so the user's
+            // original resume intent completes without re-running the command.
+            claudeExt = vscode.extensions.getExtension('anthropic.claude-code')
+            if (!claudeExt) {
+              // The extension host has not surfaced the new install yet — the
+              // one remaining case where a manual re-trigger is required.
+              void vscode.window.showInformationMessage(
+                'Claude Code extension installed — run Resume Session again to open the session.'
               )
+              return
             }
-            return
           }
 
           // Defensive activation: getExtension returns the Extension object even
@@ -902,6 +916,11 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
+    // openTerminalHere and startClaudeInFolder deliberately keep the 2-way
+    // Internal/External picker instead of resumeSession's 3-way: both are
+    // terminal launchers (no session to resume), and the Claude Code Extension
+    // option is a webview, not a terminal flavor. A `defaultTerminalMode` of
+    // 'anthropic' (or 'ask') therefore falls through to the 2-way picker here.
     vscode.commands.registerCommand(
       'claudeSessions.openTerminalHere',
       async (item: SessionTreeItem) => {
