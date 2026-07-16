@@ -6,7 +6,7 @@ import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { outputChannel } from './output'
 import { SESSION_EDITOR_VIEW_TYPE, SessionEditorProvider } from './sessionEditorProvider'
-import { decideResume, type ResumeMode } from './lib/crossWorkspace'
+import { decideResume, ensureClaudeCodeExtension, type ResumeMode } from './lib/crossWorkspace'
 
 let webServerProcess: ChildProcess | null = null
 
@@ -814,46 +814,22 @@ export function activate(context: vscode.ExtensionContext) {
           // sessionId is already validated at the top of this handler.
           const sessionId = item.sessionId
 
-          let claudeExt = vscode.extensions.getExtension('anthropic.claude-code')
-          if (!claudeExt) {
-            const installChoice = await vscode.window.showWarningMessage(
-              'The official Claude Code extension is not installed.',
-              'Install',
-              'Cancel'
-            )
-            if (installChoice !== 'Install') return
-            await vscode.commands.executeCommand(
-              'workbench.extensions.installExtension',
-              'anthropic.claude-code'
-            )
-            // Auto-continue: pick up the freshly installed extension and fall
-            // through to the activation + URI dispatch below, so the user's
-            // original resume intent completes without re-running the command.
-            claudeExt = vscode.extensions.getExtension('anthropic.claude-code')
-            if (!claudeExt) {
-              // The extension host has not surfaced the new install yet — the
-              // one remaining case where a manual re-trigger is required.
-              void vscode.window.showInformationMessage(
-                'Claude Code extension installed — run Resume Session again to open the session.'
-              )
-              return
-            }
-          }
-
-          // Defensive activation: getExtension returns the Extension object even
-          // when it is installed-but-disabled (isActive === false). Without this
-          // step the URI dispatch below silently fails because no UriHandler is
-          // registered until activation. (PR #172 Internal Code Review #2.)
-          if (!claudeExt.isActive) {
-            try {
-              await claudeExt.activate()
-            } catch (err) {
-              void vscode.window.showErrorMessage(
-                `Failed to activate Claude Code extension: ${err instanceof Error ? err.message : String(err)}`
-              )
-              return
-            }
-          }
+          // Install-on-demand + defensive activation (installed-but-disabled
+          // extensions still surface via getExtension with isActive===false;
+          // without activation the URI dispatch below silently fails because
+          // no UriHandler is registered yet — PR #172 Internal Code Review #2).
+          // Extracted to ensureClaudeCodeExtension so it's unit-testable
+          // without a live open workspace folder (see crossWorkspace.ts).
+          const ensureResult = await ensureClaudeCodeExtension({
+            getExtension: (id) => vscode.extensions.getExtension(id),
+            showWarningMessage: (message, ...items) =>
+              vscode.window.showWarningMessage(message, ...items),
+            installExtension: (id) =>
+              vscode.commands.executeCommand('workbench.extensions.installExtension', id),
+            showInformationMessage: (message) => void vscode.window.showInformationMessage(message),
+            showErrorMessage: (message) => void vscode.window.showErrorMessage(message),
+          })
+          if (ensureResult.kind !== 'ready') return
 
           // Cross-workspace dispatch is unreachable here: `decideResume`
           // above converts cross-workspace + anthropic intent into a

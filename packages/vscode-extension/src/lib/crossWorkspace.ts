@@ -135,3 +135,77 @@ export function decideResume(input: {
   // defaultMode === 'ask' — picker with 2 or 3 options
   return { kind: 'picker', options: pickerOptions(cross) }
 }
+
+export interface ClaudeExtensionLike {
+  readonly isActive: boolean
+  activate(): PromiseLike<unknown>
+}
+
+export interface EnsureClaudeCodeExtensionDeps {
+  getExtension: (id: string) => ClaudeExtensionLike | undefined
+  showWarningMessage: (message: string, ...items: string[]) => PromiseLike<string | undefined>
+  installExtension: (id: string) => PromiseLike<unknown>
+  showInformationMessage: (message: string) => void
+  showErrorMessage: (message: string) => void
+}
+
+export type EnsureClaudeCodeExtensionResult =
+  | { kind: 'ready'; extension: ClaudeExtensionLike }
+  | { kind: 'declined' }
+  | { kind: 'install-pending' }
+  | { kind: 'activation-failed'; error: string }
+
+const ANTHROPIC_EXTENSION_ID = 'anthropic.claude-code'
+
+/**
+ * Ensure the official Claude Code extension is installed and active,
+ * prompting to install it on demand.
+ *
+ * Extracted from resumeSession's anthropic branch so it can be unit-tested
+ * with mock deps instead of requiring a live open workspace folder in the
+ * test-electron host — the anthropic branch is otherwise unreachable there,
+ * since `decideResume` always routes cross-workspace when no folder is open.
+ * Deps are typed structurally (PromiseLike, not vscode.Thenable) to keep this
+ * file free of vscode imports, matching the rest of the module.
+ */
+export async function ensureClaudeCodeExtension(
+  deps: EnsureClaudeCodeExtensionDeps
+): Promise<EnsureClaudeCodeExtensionResult> {
+  let ext = deps.getExtension(ANTHROPIC_EXTENSION_ID)
+
+  if (!ext) {
+    const choice = await deps.showWarningMessage(
+      'The official Claude Code extension is not installed.',
+      'Install',
+      'Cancel'
+    )
+    if (choice !== 'Install') return { kind: 'declined' }
+
+    await deps.installExtension(ANTHROPIC_EXTENSION_ID)
+
+    // Auto-continue: pick up the freshly installed extension and fall through
+    // to activation, so the original resume intent completes without a
+    // second manual trigger.
+    ext = deps.getExtension(ANTHROPIC_EXTENSION_ID)
+    if (!ext) {
+      // The extension host has not surfaced the new install yet — the one
+      // remaining case where a manual re-trigger is required.
+      deps.showInformationMessage(
+        'Claude Code extension installed — run Resume Session again to open the session.'
+      )
+      return { kind: 'install-pending' }
+    }
+  }
+
+  if (!ext.isActive) {
+    try {
+      await ext.activate()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      deps.showErrorMessage(`Failed to activate Claude Code extension: ${message}`)
+      return { kind: 'activation-failed', error: message }
+    }
+  }
+
+  return { kind: 'ready', extension: ext }
+}
