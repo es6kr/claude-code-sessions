@@ -29,8 +29,21 @@ export type ResumeDecision =
   | { kind: 'picker'; options: ReadonlyArray<ResumeMode> }
   | { kind: 'fallback-picker'; options: ReadonlyArray<ResumeMode>; reason: 'cross-workspace' }
 
+/**
+ * Canonicalize a path for equality comparison only (both sides of every
+ * comparison pass through this function): lowercase (Windows drive/case
+ * insensitivity), unify separators, and trim trailing separators.
+ *
+ * Invariant note: neither producer normally emits a trailing separator —
+ * `vscode.Uri.fsPath` strips them (except for filesystem roots like "/" or
+ * "C:\"), and session cwd values come from `process.cwd()` which does the
+ * same. The trim is defensive for cwd values recorded by other tools. A
+ * single-character root ("/") is kept as-is; "c:/" trims to "c:" which stays
+ * equality-consistent because both comparands are normalized identically.
+ */
 export function normalizeWorkspacePath(p: string): string {
-  return p.toLowerCase().replace(/\\/g, '/')
+  const unified = p.toLowerCase().replace(/\\/g, '/')
+  return unified.length > 1 ? unified.replace(/\/+$/, '') : unified
 }
 
 /**
@@ -71,6 +84,10 @@ export function isCrossWorkspace(
  * Picker option list given the cross-workspace flag. Cross → 2 options
  * (Internal / External). Same-workspace → 3 options (Internal / External /
  * Anthropic).
+ *
+ * The ordering is deliberate: the established terminal flavors come first and
+ * the Claude Code Extension entry stays last. Promote it only on real UX
+ * feedback — reordering here is the single place that changes the picker.
  */
 export function pickerOptions(crossWorkspace: boolean): ReadonlyArray<ResumeMode> {
   return crossWorkspace ? ['internal', 'external'] : ['internal', 'external', 'anthropic']

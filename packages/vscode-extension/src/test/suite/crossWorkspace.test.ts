@@ -31,6 +31,37 @@ suite('crossWorkspace Suite', () => {
     test('empty string stays empty', () => {
       assert.strictEqual(normalizeWorkspacePath(''), '')
     })
+
+    test('trims a trailing separator so both comparands canonicalize equal', () => {
+      assert.strictEqual(normalizeWorkspacePath('/users/a/project/'), '/users/a/project')
+      assert.strictEqual(
+        normalizeWorkspacePath('/users/a/project/'),
+        normalizeWorkspacePath('/users/a/project')
+      )
+    })
+
+    test('trims repeated trailing separators (backslash form included)', () => {
+      assert.strictEqual(normalizeWorkspacePath('/users/a/project///'), '/users/a/project')
+      assert.strictEqual(normalizeWorkspacePath('C:\\Users\\A\\Project\\'), 'c:/users/a/project')
+    })
+
+    test('filesystem roots stay equality-consistent', () => {
+      // "/" is kept as-is (the separator IS the path)
+      assert.strictEqual(normalizeWorkspacePath('/'), '/')
+      // "C:\" trims to "c:" — fine for equality because both sides normalize
+      assert.strictEqual(normalizeWorkspacePath('C:\\'), normalizeWorkspacePath('c:/'))
+    })
+
+    test('trailing-slash cwd matches a clean workspace folder end-to-end', () => {
+      assert.strictEqual(
+        matchesAnyWorkspaceFolder('/users/a/project/', [folder('/users/a/project')]),
+        true
+      )
+      assert.strictEqual(
+        matchesAnyWorkspaceFolder('/users/a/project', [folder('/users/a/project/')]),
+        true
+      )
+    })
   })
 
   suite('matchesAnyWorkspaceFolder', () => {
