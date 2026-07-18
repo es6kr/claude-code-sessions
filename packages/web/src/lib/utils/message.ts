@@ -114,12 +114,16 @@ const EDITABLE_MESSAGE_TYPES = new Set(['user', 'human', 'assistant'])
  * Compute the capability set for a message from its content shape.
  *
  * Capability matrix (issue #123):
- * - `text`: edit/copy/export — edit blocked when a sibling `tool_use` block
- *   exists (pairing invariant kept inside this function, not in the UI)
+ * - `text`: edit/copy/export
  * - `tool_result`: edit/copy/export/convert/extract
  * - `thinking`: edit/copy/export/convert
  * - `tool_use`: copy only (editing would break tool_use <-> tool_result pairing)
  * - unknown types: delete only
+ *
+ * Pairing invariant: a sibling `tool_use` block anywhere in the content blocks
+ * the mutating capabilities (edit/convert) in EVERY branch — matching
+ * getMessageCategory, which classifies any tool_use-bearing message as
+ * `tool_use` regardless of block order (e.g. `[thinking, tool_use]`).
  */
 export const getCapabilities = (msg: Message): Capabilities => {
   if (!EDITABLE_MESSAGE_TYPES.has(msg.type)) return { ...BASE_CAPABILITIES }
@@ -143,19 +147,19 @@ export const getCapabilities = (msg: Message): Capabilities => {
     case 'tool_result':
       return {
         ...BASE_CAPABILITIES,
-        canEdit: editable,
+        canEdit: editable && !hasToolUse,
         canCopy: true,
         canExport: true,
-        canConvert: true,
+        canConvert: !hasToolUse,
         canExtract: true,
       }
     case 'thinking':
       return {
         ...BASE_CAPABILITIES,
-        canEdit: editable,
+        canEdit: editable && !hasToolUse,
         canCopy: true,
         canExport: true,
-        canConvert: true,
+        canConvert: !hasToolUse,
       }
     case 'tool_use':
       return { ...BASE_CAPABILITIES, canCopy: true }
