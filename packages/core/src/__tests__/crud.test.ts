@@ -461,29 +461,52 @@ describe('updateMessageContent', () => {
     expect(content[2]).toEqual({ type: 'thinking', text: 'thinking...' })
   })
 
-  it('should append text block when message has no text content', async () => {
+  it('should reject when the only content is a tool_use block (issue #123 Finding 2)', async () => {
+    const sessionId = 'test-session'
+    const toolUseMsg = {
+      type: 'assistant',
+      uuid: 'asst-1',
+      timestamp: '2025-12-19T01:00:00.000Z',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'tool-1', name: 'Read', input: {} }],
+      },
+    }
+    await writeMessages(sessionId, [toolUseMsg])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'asst-1', 'New text')
+    )
+
+    expect(result.success).toBe(false)
+    expect((result as { error?: string }).error).toMatch(/tool_use/i)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(updated[0]).toEqual(toolUseMsg)
+  })
+
+  it('should append text block when message has no text content and no tool_use block', async () => {
     const sessionId = 'test-session'
     await writeMessages(sessionId, [
       {
         type: 'assistant',
-        uuid: 'asst-1',
+        uuid: 'asst-2',
         timestamp: '2025-12-19T01:00:00.000Z',
         message: {
           role: 'assistant',
-          content: [{ type: 'tool_use', id: 'tool-1', name: 'Read', input: {} }],
+          content: [{ type: 'image', source: { type: 'base64', data: 'x' } }],
         },
       },
     ])
 
     const result = await Effect.runPromise(
-      updateMessageContent(projectName, sessionId, 'asst-1', 'New text')
+      updateMessageContent(projectName, sessionId, 'asst-2', 'New text')
     )
 
     expect(result.success).toBe(true)
     const updated = await Effect.runPromise(readSession(projectName, sessionId))
     const content = updated[0].message?.content as Array<Record<string, unknown>>
     expect(content).toHaveLength(2)
-    expect(content[0]).toEqual({ type: 'tool_use', id: 'tool-1', name: 'Read', input: {} })
+    expect(content[0]).toEqual({ type: 'image', source: { type: 'base64', data: 'x' } })
     expect(content[1]).toEqual({ type: 'text', text: 'New text' })
   })
 
@@ -881,29 +904,5 @@ describe('updateMessageContent — type-aware editing (tool_result/thinking)', (
     expect(updated[1].message?.content).toEqual([
       { type: 'tool_result', tool_use_id: 'tu-9', content: 'file-a file-b file-c' },
     ])
-  })
-
-  it('should reject editing a tool_use-only message instead of appending a text block', async () => {
-    const sessionId = 'typed-tool-use-only'
-    const toolUseOnlyMsg = {
-      type: 'assistant',
-      uuid: 'tu-only-1',
-      timestamp: '2025-12-19T01:00:00.000Z',
-      message: {
-        role: 'assistant',
-        content: [{ type: 'tool_use', id: 'tu-only', name: 'Bash', input: { command: 'ls' } }],
-      },
-    }
-    await writeMessages(sessionId, [toolUseOnlyMsg])
-
-    const result = await Effect.runPromise(
-      updateMessageContent(projectName, sessionId, 'tu-only-1', 'injected text')
-    )
-
-    expect(result.success).toBe(false)
-    expect((result as { error?: string }).error).toMatch(/tool_use/i)
-    const updated = await Effect.runPromise(readSession(projectName, sessionId))
-    // content untouched — no text block was appended
-    expect(updated[0]).toEqual(toolUseOnlyMsg)
   })
 })

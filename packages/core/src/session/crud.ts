@@ -228,7 +228,12 @@ const EDITABLE_MESSAGE_TYPES = new Set(['user', 'human', 'assistant'])
 //    tool_use_id / is_error (pairing invariant stays intact)
 // 3. else first `thinking` block -> replace its `thinking`, preserving
 //    signature and any unknown fields via spread
-// 4. else append a new text block (legacy fallback)
+// 4. else, if no tool_use block is present, append a new text block
+//    (legacy fallback)
+// 5. else (only a tool_use block, no editable target) -> reject. Mirrors
+//    the UI's getCapabilities tool_use exclusion (pairing invariant) —
+//    without this, a direct API PATCH could edit a tool_use-only message
+//    that the UI never exposes an edit affordance for.
 // Non-target blocks are always copied untouched. Reject non-editable message
 // types up front.
 export const updateMessageContent = (
@@ -270,6 +275,11 @@ export const updateMessageContent = (
       blocks[toolResultIdx] = { ...blocks[toolResultIdx], content: newText }
     } else if (thinkingIdx !== -1) {
       blocks[thinkingIdx] = { ...blocks[thinkingIdx], thinking: newText }
+    } else if (blocks.some((b) => b.type === 'tool_use')) {
+      return {
+        success: false,
+        error: 'Message contains only a tool_use block, which is not editable',
+      }
     } else {
       blocks.push({ type: 'text', text: newText })
     }
