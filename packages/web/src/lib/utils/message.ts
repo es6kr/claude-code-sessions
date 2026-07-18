@@ -78,6 +78,92 @@ export const getMessageCategory = (msg: Message): MessageCategory => {
   return 'metadata'
 }
 
+/**
+ * Per-message capability flags for UI affordances (issue #123 Scope (b)).
+ *
+ * Derived from the message's ContentItem types via a single type-aware
+ * function so capability policy (including the tool_use <-> tool_result
+ * pairing invariant) lives here, not in components.
+ */
+export interface Capabilities {
+  canEdit: boolean
+  canDelete: boolean
+  canCopy: boolean
+  canExport: boolean
+  canConvert: boolean
+  canExtract: boolean
+}
+
+/**
+ * canDelete is universally true (behavior-preserving: the Delete affordance
+ * has never been content-gated). The remaining flags start false and are
+ * granted per content type below.
+ */
+const BASE_CAPABILITIES: Capabilities = {
+  canEdit: false,
+  canDelete: true,
+  canCopy: false,
+  canExport: false,
+  canConvert: false,
+  canExtract: false,
+}
+
+const EDITABLE_MESSAGE_TYPES = new Set(['user', 'human', 'assistant'])
+
+/**
+ * Compute the capability set for a message from its content shape.
+ *
+ * Capability matrix (issue #123):
+ * - `text`: edit/copy/export — edit blocked when a sibling `tool_use` block
+ *   exists (pairing invariant kept inside this function, not in the UI)
+ * - `tool_result`: edit/copy/export/convert/extract
+ * - `thinking`: edit/copy/export/convert
+ * - `tool_use`: copy only (editing would break tool_use <-> tool_result pairing)
+ * - unknown types: delete only
+ */
+export const getCapabilities = (msg: Message): Capabilities => {
+  if (!EDITABLE_MESSAGE_TYPES.has(msg.type)) return { ...BASE_CAPABILITIES }
+
+  const m = msg.message as { content?: Content } | undefined
+  if (!m?.content) return { ...BASE_CAPABILITIES }
+
+  const items = normalizeContent(m.content)
+  const primary = items[0]?.type
+  const hasToolUse = items.some((c) => c?.type === 'tool_use')
+  const editable = !!msg.uuid
+
+  switch (primary) {
+    case 'text':
+      return {
+        ...BASE_CAPABILITIES,
+        canEdit: editable && !hasToolUse,
+        canCopy: true,
+        canExport: true,
+      }
+    case 'tool_result':
+      return {
+        ...BASE_CAPABILITIES,
+        canEdit: editable,
+        canCopy: true,
+        canExport: true,
+        canConvert: true,
+        canExtract: true,
+      }
+    case 'thinking':
+      return {
+        ...BASE_CAPABILITIES,
+        canEdit: editable,
+        canCopy: true,
+        canExport: true,
+        canConvert: true,
+      }
+    case 'tool_use':
+      return { ...BASE_CAPABILITIES, canCopy: true }
+    default:
+      return { ...BASE_CAPABILITIES }
+  }
+}
+
 export const MESSAGE_CATEGORY_LABELS: Record<MessageCategory, string> = {
   assistant: 'Assistant',
   metadata: 'Metadata',
