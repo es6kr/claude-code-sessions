@@ -222,9 +222,15 @@ export const restoreMessage = (
 // Editable JSONL message types — others (summary, file-history-snapshot, etc.) are rejected
 const EDITABLE_MESSAGE_TYPES = new Set(['user', 'human', 'assistant'])
 
-// Update message content by UUID — replace the first text block while preserving
-// non-text blocks (tool_use, tool_result, thinking, image, ...). Append a new text
-// block if the message has no text. Reject non-editable message types up front.
+// Update message content by UUID — type-aware (#123 Scope (b)):
+// 1. first `text` block exists -> replace its text (legacy behavior)
+// 2. else first `tool_result` block -> replace its `content`, preserving
+//    tool_use_id / is_error (pairing invariant stays intact)
+// 3. else first `thinking` block -> replace its `thinking`, preserving
+//    signature and any unknown fields via spread
+// 4. else append a new text block (legacy fallback)
+// Non-target blocks are always copied untouched. Reject non-editable message
+// types up front.
 export const updateMessageContent = (
   projectName: string,
   sessionId: string,
@@ -256,10 +262,16 @@ export const updateMessageContent = (
       : []
 
     const textIdx = blocks.findIndex((b) => b.type === 'text')
-    if (textIdx === -1) {
-      blocks.push({ type: 'text', text: newText })
-    } else {
+    const toolResultIdx = blocks.findIndex((b) => b.type === 'tool_result')
+    const thinkingIdx = blocks.findIndex((b) => b.type === 'thinking')
+    if (textIdx !== -1) {
       blocks[textIdx] = { ...blocks[textIdx], type: 'text', text: newText }
+    } else if (toolResultIdx !== -1) {
+      blocks[toolResultIdx] = { ...blocks[toolResultIdx], content: newText }
+    } else if (thinkingIdx !== -1) {
+      blocks[thinkingIdx] = { ...blocks[thinkingIdx], thinking: newText }
+    } else {
+      blocks.push({ type: 'text', text: newText })
     }
 
     messages[idx] = {
