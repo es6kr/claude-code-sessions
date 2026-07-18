@@ -45,9 +45,19 @@ const editMessage = async (
   await container.locator('button', { hasText: '📝' }).click()
   const dialog = page.locator('[role="dialog"]')
   await expect(dialog).toBeVisible()
+  // CartaEditor syncs on real input events — fill() alone doesn't propagate
   const textarea = dialog.locator('textarea').first()
-  await textarea.fill(newText)
+  await textarea.click()
+  await textarea.press('ControlOrMeta+a')
+  await textarea.pressSequentially(newText)
+  await expect(textarea).toHaveValue(newText)
+  // Assert the save round-trip actually hits the API (the editor cancels
+  // silently when it believes the value is unchanged)
+  const patchResponse = page.waitForResponse(
+    (r) => r.url().includes('/api/message') && r.request().method() === 'PATCH'
+  )
   await dialog.locator('button', { hasText: 'Save' }).click()
+  expect((await patchResponse).ok()).toBe(true)
   await expect(dialog).not.toBeVisible()
 }
 
