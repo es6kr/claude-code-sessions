@@ -3,6 +3,8 @@
   import * as api from '$lib/api'
   import {
     formatDate,
+    getCapabilities,
+    getMessageCategory,
     getMessageContent,
     maskHomePaths,
     parseCommandMessage,
@@ -39,27 +41,13 @@
   const isHuman = $derived(msg.type === 'human' || msg.type === 'user')
   const isLocalCommand = $derived(msg.type === 'system' && msg.subtype === 'local_command')
   const isQueueOperation = $derived(msg.type === 'queue-operation')
-  const isToolResult = $derived.by(() => {
-    if (msg.type !== 'user') return false
-    const m = msg.message as { content?: unknown[] } | undefined
-    if (!Array.isArray(m?.content)) return false
-    const first = m.content[0] as { type?: string } | undefined
-    return first?.type === 'tool_result'
-  })
-
-  // Assistant messages may carry tool_use, thinking, or other non-text blocks.
-  // Replacing content for those would silently drop structured data and break
-  // tool_use ↔ tool_result pairing, so block editing whenever any non-text block is present.
-  const hasNonTextBlocks = $derived.by(() => {
-    if (!isAssistant) return false
-    const m = msg.message as { content?: unknown } | undefined
-    if (!Array.isArray(m?.content)) return false
-    return m.content.some((b) => (b as { type?: string })?.type !== 'text')
-  })
-
-  const isEditable = $derived(
-    !!(msg.uuid && (isHuman || isAssistant) && !isToolResult && !hasNonTextBlocks && onEdit)
-  )
+  // Type-aware capability + category derivation (#123 Scope (b)) — content
+  // inspection lives in $lib/utils, not in ad-hoc component logic. The
+  // tool_use ↔ tool_result pairing invariant is enforced inside
+  // getCapabilities (tool_use blocks are never editable).
+  const category = $derived(getMessageCategory(msg))
+  const isToolResult = $derived(category === 'tool_result')
+  const caps = $derived(getCapabilities(msg))
 
   // Parse file snapshot data
   const snapshotData = $derived.by(() => {
@@ -429,10 +417,10 @@
             ✏️
           </TooltipButton>
         {/if}
-        {#if isEditable}
+        {#if caps.canEdit && onEdit}
           <TooltipButton
             class="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-gh-border text-xs"
-            onclick={() => onEdit!(msg)}
+            onclick={() => onEdit(msg)}
             title="Edit message content"
           >
             📝

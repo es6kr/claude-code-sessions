@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { maskHomePath } from '$lib/stores/config'
 import {
   ALL_MESSAGE_CATEGORIES,
+  getCapabilities,
   getMessageCategory,
   DEFAULT_VISIBLE_CATEGORIES,
   MESSAGE_CATEGORY_LABELS,
@@ -113,6 +114,46 @@ describe('getMessageCategory', () => {
   it('should categorize assistant without content array as assistant', () => {
     const msg = makeMsg({ type: 'assistant', message: { content: 'plain string' } })
     expect(getMessageCategory(msg)).toBe('assistant')
+  })
+
+  // Regression: Content can be string | ContentItem | ContentItem[]; previously the
+  // categorizer only inspected the array form. See #123.
+
+  it('should categorize user message with single tool_result ContentItem as tool_result', () => {
+    const msg = makeMsg({
+      type: 'user',
+      message: { content: { type: 'tool_result', tool_use_id: 'id', content: 'r' } },
+    })
+    expect(getMessageCategory(msg)).toBe('tool_result')
+  })
+
+  it('should categorize assistant with single tool_use ContentItem as tool_use', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: { content: { type: 'tool_use', id: 'tu1', name: 'Read', input: {} } },
+    })
+    expect(getMessageCategory(msg)).toBe('tool_use')
+  })
+
+  it('should categorize assistant with single thinking ContentItem as thinking', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: { content: { type: 'thinking', thinking: 'hmm' } },
+    })
+    expect(getMessageCategory(msg)).toBe('thinking')
+  })
+
+  it('should categorize assistant with single text ContentItem as assistant', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: { content: { type: 'text', text: 'Hi' } },
+    })
+    expect(getMessageCategory(msg)).toBe('assistant')
+  })
+
+  it('should categorize user with string content as user (no tool_result inferred)', () => {
+    const msg = makeMsg({ type: 'user', message: { content: 'plain string' } })
+    expect(getMessageCategory(msg)).toBe('user')
   })
 })
 
@@ -407,6 +448,169 @@ describe('parseProgress', () => {
       hookEvent: undefined,
       hookName: undefined,
       command: undefined,
+    })
+  })
+})
+
+describe('getCapabilities', () => {
+  it('should grant edit/delete/copy/export for plain text user message (string content)', () => {
+    const msg = makeMsg({ type: 'user', message: { content: 'hello' } })
+    expect(getCapabilities(msg)).toEqual({
+      canEdit: true,
+      canDelete: true,
+      canCopy: true,
+      canExport: true,
+      canConvert: false,
+      canExtract: false,
+    })
+  })
+
+  it('should grant edit for assistant text-only array content', () => {
+    const msg = makeMsg({ type: 'assistant', message: { content: [{ type: 'text', text: 'hi' }] } })
+    const caps = getCapabilities(msg)
+    expect(caps.canEdit).toBe(true)
+    expect(caps.canDelete).toBe(true)
+  })
+
+  it('should block edit when assistant text is paired with tool_use (pairing invariant)', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'text', text: 'calling tool' },
+          { type: 'tool_use', id: 't1', name: 'Bash', input: {} },
+        ],
+      },
+    })
+    const caps = getCapabilities(msg)
+    expect(caps.canEdit).toBe(false)
+    expect(caps.canDelete).toBe(true)
+  })
+
+  it('should grant full matrix for tool_result messages', () => {
+    const msg = makeMsg({
+      type: 'user',
+      message: { content: [{ type: 'tool_result', tool_use_id: 'id', content: 'out' }] },
+    })
+    expect(getCapabilities(msg)).toEqual({
+      canEdit: true,
+      canDelete: true,
+      canCopy: true,
+      canExport: true,
+      canConvert: true,
+      canExtract: true,
+    })
+  })
+
+  it('should grant edit/convert but not extract for thinking messages', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: { content: [{ type: 'thinking', thinking: 'hmm' }] },
+    })
+    expect(getCapabilities(msg)).toEqual({
+      canEdit: true,
+      canDelete: true,
+      canCopy: true,
+      canExport: true,
+      canConvert: true,
+      canExtract: false,
+    })
+  })
+
+  it('should block edit for tool_use-primary messages but keep delete/copy', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: {} }] },
+    })
+    expect(getCapabilities(msg)).toEqual({
+      canEdit: false,
+      canDelete: true,
+      canCopy: true,
+      canExport: false,
+      canConvert: false,
+      canExtract: false,
+    })
+  })
+
+  it('should keep delete-only for unknown content types', () => {
+    const msg = makeMsg({ type: 'user', message: { content: [{ type: 'mystery' }] } })
+    expect(getCapabilities(msg)).toEqual({
+      canEdit: false,
+      canDelete: true,
+      canCopy: false,
+      canExport: false,
+      canConvert: false,
+      canExtract: false,
+    })
+  })
+
+  it('should keep delete-only for non-editable message types (behavior-preserving delete)', () => {
+    const msg = makeMsg({ type: 'summary' })
+    const caps = getCapabilities(msg)
+    expect(caps.canDelete).toBe(true)
+    expect(caps.canEdit).toBe(false)
+  })
+
+  it('should block edit when uuid is missing but preserve delete', () => {
+    const msg = makeMsg({ uuid: undefined, type: 'user', message: { content: 'hello' } })
+    const caps = getCapabilities(msg)
+    expect(caps.canEdit).toBe(false)
+    expect(caps.canDelete).toBe(true)
+  })
+
+  it('should treat single ContentItem (non-array) shape via normalization', () => {
+    const msg = makeMsg({
+      type: 'user',
+      message: { content: { type: 'tool_result', tool_use_id: 'id', content: 'out' } },
+    })
+    expect(getCapabilities(msg).canEdit).toBe(true)
+    expect(getCapabilities(msg).canExtract).toBe(true)
+  })
+
+  it('should treat human type like user for text capabilities', () => {
+    const msg = makeMsg({ type: 'human', message: { content: 'typed by human' } })
+    expect(getCapabilities(msg).canEdit).toBe(true)
+  })
+
+  it('should block edit/convert when thinking is paired with tool_use (pairing invariant)', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'thinking', thinking: 'planning the call' },
+          { type: 'tool_use', id: 't2', name: 'Bash', input: {} },
+        ],
+      },
+    })
+    const caps = getCapabilities(msg)
+    expect(caps.canEdit).toBe(false)
+    expect(caps.canConvert).toBe(false)
+    expect(caps.canDelete).toBe(true)
+  })
+
+  it('should block edit when thinking+text is paired with tool_use', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'thinking', thinking: 'hmm' },
+          { type: 'text', text: 'calling' },
+          { type: 'tool_use', id: 't3', name: 'Read', input: {} },
+        ],
+      },
+    })
+    expect(getCapabilities(msg).canEdit).toBe(false)
+  })
+
+  it('should keep delete-only when message content is absent', () => {
+    const msg = makeMsg({ type: 'user' })
+    expect(getCapabilities(msg)).toEqual({
+      canEdit: false,
+      canDelete: true,
+      canCopy: false,
+      canExport: false,
+      canConvert: false,
+      canExtract: false,
     })
   })
 })

@@ -2,8 +2,27 @@
  * Message content utilities
  */
 
-import type { Content, Message } from '$lib/api'
+import type { Content, ContentItem, Message } from '$lib/api'
 import { maskHomePath } from '$lib/stores/config'
+
+/**
+ * Normalize Content into a uniform ContentItem array for inspection.
+ *
+ * Content can be a string, a single ContentItem, or an array of ContentItems
+ * (see api.ts). Categorization logic must look at the items inside, so each
+ * shape is normalized to the array form here.
+ *
+ * - `string` -> `[{ type: 'text', text }]`
+ * - single `ContentItem` -> `[item]`
+ * - `ContentItem[]` -> pass through
+ */
+export const normalizeContent = (content: Content): ContentItem[] => {
+  if (typeof content === 'string') {
+    return [{ type: 'text', text: content } as ContentItem]
+  }
+  if (Array.isArray(content)) return content
+  return [content]
+}
 
 export type MessageCategory =
   | 'assistant'
@@ -24,6 +43,11 @@ const METADATA_TYPES = new Set([
   'queue-operation',
 ])
 
+type CategoryContentItem = ContentItem & {
+  text?: string
+  thinking?: string
+}
+
 export const getMessageCategory = (msg: Message): MessageCategory => {
   if (METADATA_TYPES.has(msg.type)) return 'metadata'
   if (msg.type === 'progress') return 'progress'
@@ -32,25 +56,116 @@ export const getMessageCategory = (msg: Message): MessageCategory => {
   if (msg.type === 'human') return 'user'
 
   if (msg.type === 'user') {
-    const m = msg.message as { content?: unknown[] } | undefined
-    if (Array.isArray(m?.content)) {
-      const first = m.content[0] as { type?: string } | undefined
-      if (first?.type === 'tool_result') return 'tool_result'
+    const m = msg.message as { content?: Content } | undefined
+    if (m?.content) {
+      const items = normalizeContent(m.content)
+      if (items[0]?.type === 'tool_result') return 'tool_result'
     }
     return 'user'
   }
 
   if (msg.type === 'assistant') {
-    const m = msg.message as { content?: Array<Record<string, unknown>> } | undefined
-    if (Array.isArray(m?.content)) {
-      if (m.content.some((c) => c?.type === 'tool_use')) return 'tool_use'
-      const hasText = m.content.some((c) => c?.type === 'text' && (c?.text as string)?.trim())
-      if (!hasText && m.content.some((c) => c?.type === 'thinking')) return 'thinking'
+    const m = msg.message as { content?: Content } | undefined
+    if (m?.content) {
+      const items = normalizeContent(m.content) as CategoryContentItem[]
+      if (items.some((c) => c?.type === 'tool_use')) return 'tool_use'
+      const hasText = items.some((c) => c?.type === 'text' && c?.text?.trim())
+      if (!hasText && items.some((c) => c?.type === 'thinking')) return 'thinking'
     }
     return 'assistant'
   }
 
   return 'metadata'
+}
+
+/**
+ * Per-message capability flags for UI affordances (issue #123 Scope (b)).
+ *
+ * Derived from the message's ContentItem types via a single type-aware
+ * function so capability policy (including the tool_use <-> tool_result
+ * pairing invariant) lives here, not in components.
+ */
+export interface Capabilities {
+  canEdit: boolean
+  canDelete: boolean
+  canCopy: boolean
+  canExport: boolean
+  canConvert: boolean
+  canExtract: boolean
+}
+
+/**
+ * canDelete is universally true (behavior-preserving: the Delete affordance
+ * has never been content-gated). The remaining flags start false and are
+ * granted per content type below.
+ */
+const BASE_CAPABILITIES: Capabilities = {
+  canEdit: false,
+  canDelete: true,
+  canCopy: false,
+  canExport: false,
+  canConvert: false,
+  canExtract: false,
+}
+
+const EDITABLE_MESSAGE_TYPES = new Set(['user', 'human', 'assistant'])
+
+/**
+ * Compute the capability set for a message from its content shape.
+ *
+ * Capability matrix (issue #123):
+ * - `text`: edit/copy/export
+ * - `tool_result`: edit/copy/export/convert/extract
+ * - `thinking`: edit/copy/export/convert
+ * - `tool_use`: copy only (editing would break tool_use <-> tool_result pairing)
+ * - unknown types: delete only
+ *
+ * Pairing invariant: a sibling `tool_use` block anywhere in the content blocks
+ * the mutating capabilities (edit/convert) in EVERY branch — matching
+ * getMessageCategory, which classifies any tool_use-bearing message as
+ * `tool_use` regardless of block order (e.g. `[thinking, tool_use]`).
+ */
+export const getCapabilities = (msg: Message): Capabilities => {
+  if (!EDITABLE_MESSAGE_TYPES.has(msg.type)) return { ...BASE_CAPABILITIES }
+
+  const m = msg.message as { content?: Content } | undefined
+  if (!m?.content) return { ...BASE_CAPABILITIES }
+
+  const items = normalizeContent(m.content)
+  const primary = items[0]?.type
+  const hasToolUse = items.some((c) => c?.type === 'tool_use')
+  const editable = !!msg.uuid
+
+  switch (primary) {
+    case 'text':
+      return {
+        ...BASE_CAPABILITIES,
+        canEdit: editable && !hasToolUse,
+        canCopy: true,
+        canExport: true,
+      }
+    case 'tool_result':
+      return {
+        ...BASE_CAPABILITIES,
+        canEdit: editable && !hasToolUse,
+        canCopy: true,
+        canExport: true,
+        canConvert: !hasToolUse,
+        canExtract: true,
+      }
+    case 'thinking':
+      return {
+        ...BASE_CAPABILITIES,
+        canEdit: editable && !hasToolUse,
+        canCopy: true,
+        canExport: true,
+        canConvert: !hasToolUse,
+      }
+    case 'tool_use':
+      return { ...BASE_CAPABILITIES, canCopy: true }
+    default:
+      return { ...BASE_CAPABILITIES }
+  }
 }
 
 export const MESSAGE_CATEGORY_LABELS: Record<MessageCategory, string> = {
