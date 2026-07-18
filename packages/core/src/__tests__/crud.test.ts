@@ -882,4 +882,28 @@ describe('updateMessageContent — type-aware editing (tool_result/thinking)', (
       { type: 'tool_result', tool_use_id: 'tu-9', content: 'file-a file-b file-c' },
     ])
   })
+
+  it('should reject editing a tool_use-only message instead of appending a text block', async () => {
+    const sessionId = 'typed-tool-use-only'
+    const toolUseOnlyMsg = {
+      type: 'assistant',
+      uuid: 'tu-only-1',
+      timestamp: '2025-12-19T01:00:00.000Z',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'tu-only', name: 'Bash', input: { command: 'ls' } }],
+      },
+    }
+    await writeMessages(sessionId, [toolUseOnlyMsg])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'tu-only-1', 'injected text')
+    )
+
+    expect(result.success).toBe(false)
+    expect((result as { error?: string }).error).toMatch(/tool_use/i)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    // content untouched — no text block was appended
+    expect(updated[0]).toEqual(toolUseOnlyMsg)
+  })
 })
