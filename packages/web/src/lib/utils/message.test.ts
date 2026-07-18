@@ -572,6 +572,36 @@ describe('getCapabilities', () => {
     expect(getCapabilities(msg).canEdit).toBe(true)
   })
 
+  it('should block edit/convert when thinking is paired with tool_use (pairing invariant)', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'thinking', thinking: 'planning the call' },
+          { type: 'tool_use', id: 't2', name: 'Bash', input: {} },
+        ],
+      },
+    })
+    const caps = getCapabilities(msg)
+    expect(caps.canEdit).toBe(false)
+    expect(caps.canConvert).toBe(false)
+    expect(caps.canDelete).toBe(true)
+  })
+
+  it('should block edit when thinking+text is paired with tool_use', () => {
+    const msg = makeMsg({
+      type: 'assistant',
+      message: {
+        content: [
+          { type: 'thinking', thinking: 'hmm' },
+          { type: 'text', text: 'calling' },
+          { type: 'tool_use', id: 't3', name: 'Read', input: {} },
+        ],
+      },
+    })
+    expect(getCapabilities(msg).canEdit).toBe(false)
+  })
+
   it('should keep delete-only when message content is absent', () => {
     const msg = makeMsg({ type: 'user' })
     expect(getCapabilities(msg)).toEqual({

@@ -23,6 +23,7 @@ const ORIGINAL_FIXTURE =
     '{"type":"user","uuid":"cap-msg-3","parentUuid":"cap-msg-2","sessionId":"session-capability-matrix","timestamp":"2025-12-23T05:00:11.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_cap1","content":"original tool output","is_error":false}]}}',
     '{"type":"assistant","uuid":"cap-msg-4","parentUuid":"cap-msg-3","sessionId":"session-capability-matrix","timestamp":"2025-12-23T05:00:20.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"original reasoning","signature":"sig-cap"}]}}',
     '{"type":"assistant","uuid":"cap-msg-5","parentUuid":"cap-msg-4","sessionId":"session-capability-matrix","timestamp":"2025-12-23T05:00:30.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Done listing."}]}}',
+    '{"type":"assistant","uuid":"cap-msg-6","parentUuid":"cap-msg-5","sessionId":"session-capability-matrix","timestamp":"2025-12-23T05:00:40.000Z","message":{"role":"assistant","content":[{"type":"thinking","thinking":"one more check"},{"type":"tool_use","id":"toolu_cap2","name":"Read","input":{"file_path":"a.txt"}}]}}',
   ].join('\n') + '\n'
 
 const readFixtureLines = (): Array<Record<string, unknown>> =>
@@ -109,6 +110,13 @@ test.describe('Message capabilities (issue #123 Scope (b))', () => {
     await container.hover()
     await expect(container.locator('button', { hasText: '📝' })).toHaveCount(0)
     // delete affordance stays available (behavior-preserving)
+    await expect(container.locator('button', { hasText: '🗑️' })).toHaveCount(1)
+  })
+
+  test('thinking paired with tool_use is not editable (pairing invariant)', async ({ page }) => {
+    const container = page.locator('[data-msg-id="cap-msg-6"]')
+    await container.hover()
+    await expect(container.locator('button', { hasText: '📝' })).toHaveCount(0)
     await expect(container.locator('button', { hasText: '🗑️' })).toHaveCount(1)
   })
 
