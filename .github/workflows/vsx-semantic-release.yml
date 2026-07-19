@@ -22,11 +22,112 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Preview job runs semantic-release --dry-run without an environment gate,
+  # so reviewers of the downstream release job can inspect what the approval
+  # will actually produce (tag name, version, channel, or "no release" reason)
+  # via the workflow's Job Summary before clicking Approve.
+  preview:
+    runs-on: ubuntu-latest
+    outputs:
+      will-release: ${{ steps.parse.outputs.will-release }}
+      next-version: ${{ steps.parse.outputs.next-version }}
+      next-tag: ${{ steps.parse.outputs.next-tag }}
+      channel: ${{ steps.parse.outputs.channel }}
+      reason: ${{ steps.parse.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install semantic-release + plugins
+        run: |
+          npm install --no-save \
+            semantic-release@^24 \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/exec \
+            @semantic-release/npm \
+            @semantic-release/git \
+            @semantic-release/github
+
+      - name: Run semantic-release --dry-run
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_PAT }}
+        run: |
+          set -o pipefail
+          npx semantic-release --dry-run 2>&1 | tee dry-run.log
+          # exit 0 even if no release — dry-run reports no-release as info, not error
+
+      - name: Parse preview + write Job Summary
+        id: parse
+        run: |
+          LOG=dry-run.log
+          # semantic-release logs "The next release version is X.Y.Z" when it would release
+          NEXT_VER=$(grep -oE 'next release version is [^ ]+' "$LOG" | awk '{print $NF}' | head -1 || true)
+          if [ -n "$NEXT_VER" ]; then
+            WILL_RELEASE=true
+            # tagFormat interpolation happens inside semantic-release; extract the resolved tag from the log
+            NEXT_TAG=$(grep -oE 'Created tag [^ ]+' "$LOG" | awk '{print $NF}' | head -1 || true)
+            [ -z "$NEXT_TAG" ] && NEXT_TAG="v$NEXT_VER"
+            # channel is the branch's channel from releaserc — infer from tag suffix
+            case "$NEXT_TAG" in
+              *-next.*) CHANNEL=next ;;
+              *-beta.*) CHANNEL=beta ;;
+              *) CHANNEL=latest ;;
+            esac
+            REASON=""
+          else
+            WILL_RELEASE=false
+            NEXT_TAG=""
+            CHANNEL=""
+            REASON=$(grep -oE 'There are no relevant changes[^,]*' "$LOG" | head -1 || echo "no matching commits since baseline")
+          fi
+          {
+            echo "next-version=$NEXT_VER"
+            echo "next-tag=$NEXT_TAG"
+            echo "channel=$CHANNEL"
+            echo "will-release=$WILL_RELEASE"
+            echo "reason=$REASON"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## vsx-semantic-release preview"
+            echo
+            echo "**Branch**: \`${GITHUB_REF#refs/heads/}\`"
+            if [ "$WILL_RELEASE" = "true" ]; then
+              echo "**Will release**: ✅"
+              echo "**Version**: \`$NEXT_VER\`"
+              echo "**Tag**: \`$NEXT_TAG\`"
+              echo "**Channel**: \`$CHANNEL\`"
+            else
+              echo "**Will release**: ❌ no release"
+              echo "**Reason**: $REASON"
+            fi
+            echo
+            echo "<details><summary>Full dry-run log</summary>"
+            echo
+            echo '```text'
+            cat "$LOG"
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   release:
+    needs: preview
     runs-on: ubuntu-latest
     # Environment per channel: production (stable) needs manual reviewer approval,
     # main (channel:next pre-release) uses a separate "next-vscode" environment
     # so pre-release publishes are auditable without gating them behind stable-tier reviewers.
+    # Preview job's Job Summary shows what this approval will produce (tag/version/channel).
     environment: ${{ github.ref == 'refs/heads/production' && 'production-vscode' || 'next-vscode' }}
     steps:
       - uses: actions/checkout@v7

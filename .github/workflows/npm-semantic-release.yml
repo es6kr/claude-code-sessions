@@ -21,7 +21,104 @@ permissions:
   pull-requests: write
 
 jobs:
+  # Preview job runs semantic-release --dry-run (with npm config swapped in) without
+  # an environment gate, so reviewers can inspect the upcoming tag/version/channel
+  # or the "no release" reason in the Job Summary before approving the release job.
+  preview:
+    # Same loop-prevention guard as release — no need to preview a [skip release] commit.
+    if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
+    runs-on: ubuntu-latest
+    outputs:
+      will-release: ${{ steps.parse.outputs.will-release }}
+      next-version: ${{ steps.parse.outputs.next-version }}
+      next-tag: ${{ steps.parse.outputs.next-tag }}
+      channel: ${{ steps.parse.outputs.channel }}
+      reason: ${{ steps.parse.outputs.reason }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Install semantic-release + plugins
+        run: |
+          npm install --no-save \
+            semantic-release@^24 \
+            @semantic-release/commit-analyzer \
+            @semantic-release/release-notes-generator \
+            @semantic-release/exec \
+            @semantic-release/git \
+            @semantic-release/github
+
+      - name: Run semantic-release --dry-run (npm config)
+        env:
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_PAT }}
+        run: |
+          set -o pipefail
+          cp .releaserc-npm.json .releaserc.json
+          npx semantic-release --dry-run 2>&1 | tee dry-run.log
+
+      - name: Parse preview + write Job Summary
+        id: parse
+        run: |
+          LOG=dry-run.log
+          NEXT_VER=$(grep -oE 'next release version is [^ ]+' "$LOG" | awk '{print $NF}' | head -1 || true)
+          if [ -n "$NEXT_VER" ]; then
+            WILL_RELEASE=true
+            NEXT_TAG=$(grep -oE 'Created tag [^ ]+' "$LOG" | awk '{print $NF}' | head -1 || true)
+            [ -z "$NEXT_TAG" ] && NEXT_TAG="v$NEXT_VER"
+            case "$NEXT_TAG" in
+              *-next.*) CHANNEL=next ;;
+              *-beta.*) CHANNEL=beta ;;
+              *) CHANNEL=latest ;;
+            esac
+            REASON=""
+          else
+            WILL_RELEASE=false
+            NEXT_TAG=""
+            CHANNEL=""
+            REASON=$(grep -oE 'There are no relevant changes[^,]*' "$LOG" | head -1 || echo "no matching commits since baseline")
+          fi
+          {
+            echo "next-version=$NEXT_VER"
+            echo "next-tag=$NEXT_TAG"
+            echo "channel=$CHANNEL"
+            echo "will-release=$WILL_RELEASE"
+            echo "reason=$REASON"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## npm-semantic-release preview"
+            echo
+            echo "**Branch**: \`${GITHUB_REF#refs/heads/}\`"
+            if [ "$WILL_RELEASE" = "true" ]; then
+              echo "**Will release**: ✅"
+              echo "**Version**: \`$NEXT_VER\`"
+              echo "**Tag**: \`$NEXT_TAG\`"
+              echo "**npm dist-tag / channel**: \`$CHANNEL\`"
+            else
+              echo "**Will release**: ❌ no release"
+              echo "**Reason**: $REASON"
+            fi
+            echo
+            echo "<details><summary>Full dry-run log</summary>"
+            echo
+            echo '```text'
+            cat "$LOG"
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   release:
+    needs: preview
     # Skip release on the commit semantic-release itself pushed back (loop prevention).
     # `[skip release]` is project-narrow signal — does NOT block CI / e2e / dependabot workflows.
     if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
@@ -29,6 +126,7 @@ jobs:
     # Environment per channel: production (stable, dist-tag latest) needs manual reviewer approval,
     # main (channel:next pre-release, dist-tag next) uses a separate "next-npm" environment
     # so pre-release publishes are auditable without gating them behind stable-tier reviewers.
+    # Preview job's Job Summary shows what this approval will produce (tag/version/channel).
     environment: ${{ github.ref == 'refs/heads/production' && 'production-npm' || 'next-npm' }}
     steps:
       - uses: actions/checkout@v7
