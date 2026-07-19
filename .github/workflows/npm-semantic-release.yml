@@ -26,7 +26,10 @@ jobs:
     # `[skip release]` is project-narrow signal — does NOT block CI / e2e / dependabot workflows.
     if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
     runs-on: ubuntu-latest
-    environment: production-npm # required reviewer approval before publish
+    # Environment per channel: production (stable, dist-tag latest) needs manual reviewer approval,
+    # main (channel:next pre-release, dist-tag next) uses a separate "next-npm" environment
+    # so pre-release publishes are auditable without gating them behind stable-tier reviewers.
+    environment: ${{ github.ref == 'refs/heads/production' && 'production-npm' || 'next-npm' }}
     steps:
       - uses: actions/checkout@v7
         with:

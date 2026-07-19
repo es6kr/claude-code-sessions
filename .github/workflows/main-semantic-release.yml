@@ -20,7 +20,10 @@ permissions:
 jobs:
   release:
     runs-on: ubuntu-latest
-    environment: production-vscode # required reviewer 승인 후 진행
+    # Environment per channel: production (stable) needs manual reviewer approval,
+    # main (channel:next pre-release) uses a separate "next-vscode" environment
+    # so pre-release publishes are auditable without gating them behind stable-tier reviewers.
+    environment: ${{ github.ref == 'refs/heads/production' && 'production-vscode' || 'next-vscode' }}
     steps:
       - uses: actions/checkout@v7
         with:
