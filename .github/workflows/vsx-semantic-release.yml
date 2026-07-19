@@ -62,10 +62,14 @@ jobs:
             @semantic-release/github
 
       - name: Run semantic-release --dry-run
-        # Dry-run does not push, so the built-in github.token (workflow-scoped contents:write)
-        # is sufficient. Avoiding the long-lived RELEASE_PLEASE_PAT here reduces PAT exposure.
+        # semantic-release's verifyConditions step runs `git push --dry-run` against the release
+        # branch even in --dry-run mode (empirically verified 2026-07-19: post-PR #201 workflow
+        # runs 29687650391/29687973400 both failed with "Permission denied to github-actions[bot]"
+        # on that dry-push). github.token cannot push to protected branches, so the preview job
+        # requires the same PAT the release job uses. Copilot's PAT-hardening suggestion for
+        # --dry-run turned out to be theoretically sound but empirically incorrect for this tool.
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_PAT }}
         run: |
           set -o pipefail
           npx semantic-release --dry-run 2>&1 | tee dry-run.log
