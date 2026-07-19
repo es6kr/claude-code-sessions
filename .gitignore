@@ -34,3 +34,4 @@ storybook-static
 # VSCode extension test files
 packages/vscode-extension/.vscode-test/
 packages/vscode-extension/out/
+.tmp/
