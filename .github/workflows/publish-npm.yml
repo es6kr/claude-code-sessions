@@ -119,28 +119,56 @@ jobs:
       - name: Publish @claude-sessions/core
         if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'core' || github.event_name == 'push' }}
         working-directory: packages/core
-        run: pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
+        run: |
+          VERSION="${{ steps.versions.outputs.core }}"
+          IF_EXISTS=$(npm view @claude-sessions/core@$VERSION version 2>/dev/null || echo "")
+          if [ "$IF_EXISTS" = "$VERSION" ]; then
+            echo "Version $VERSION of @claude-sessions/core already exists. Skipping publish."
+          else
+            pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @claude-sessions/ui
         if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'ui' || github.event_name == 'push' }}
         working-directory: packages/ui
-        run: pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
+        run: |
+          VERSION="${{ steps.versions.outputs.ui }}"
+          IF_EXISTS=$(npm view @claude-sessions/ui@$VERSION version 2>/dev/null || echo "")
+          if [ "$IF_EXISTS" = "$VERSION" ]; then
+            echo "Version $VERSION of @claude-sessions/ui already exists. Skipping publish."
+          else
+            pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish @claude-sessions/web
         if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'web' || github.event_name == 'push' }}
         working-directory: packages/web
-        run: pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
+        run: |
+          VERSION="${{ steps.versions.outputs.web }}"
+          IF_EXISTS=$(npm view @claude-sessions/web@$VERSION version 2>/dev/null || echo "")
+          if [ "$IF_EXISTS" = "$VERSION" ]; then
+            echo "Version $VERSION of @claude-sessions/web already exists. Skipping publish."
+          else
+            pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish claude-sessions-mcp
         if: ${{ github.event.inputs.package == 'all' || github.event.inputs.package == 'mcp' || github.event_name == 'push' }}
         working-directory: packages/mcp
-        run: pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
+        run: |
+          VERSION="${{ steps.versions.outputs.mcp }}"
+          IF_EXISTS=$(npm view claude-sessions-mcp@$VERSION version 2>/dev/null || echo "")
+          if [ "$IF_EXISTS" = "$VERSION" ]; then
+            echo "Version $VERSION of claude-sessions-mcp already exists. Skipping publish."
+          else
+            pnpm publish --provenance --access public --no-git-checks --tag ${{ steps.tag.outputs.npm_tag || 'latest' }}
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

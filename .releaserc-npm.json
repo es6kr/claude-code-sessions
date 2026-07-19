@@ -1,28 +1,25 @@
 {
-  "branches": ["production", { "name": "main", "channel": "next", "prerelease": "next" }],
+  "branches": ["production", { "name": "main", "channel": "beta", "prerelease": "beta" }],
   "plugins": [
     [
       "@semantic-release/commit-analyzer",
       {
         "preset": "angular",
         "releaseRules": [
-          { "type": "feat", "release": "patch" },
-          { "type": "fix", "release": "patch" },
-          { "type": "perf", "release": "patch" },
-          { "type": "chore", "release": "patch" },
-          { "type": "refactor", "release": "patch" },
-          { "type": "docs", "release": "patch" },
-          { "type": "test", "release": "patch" },
-          { "type": "ci", "release": "patch" },
+          { "type": "feat", "scope": "core", "release": "minor" },
+          { "type": "fix", "scope": "core", "release": "patch" },
+          { "type": "perf", "scope": "core", "release": "patch" },
+          { "type": "feat", "scope": "ui", "release": "minor" },
+          { "type": "fix", "scope": "ui", "release": "patch" },
+          { "type": "perf", "scope": "ui", "release": "patch" },
+          { "type": "feat", "scope": "web", "release": "minor" },
+          { "type": "fix", "scope": "web", "release": "patch" },
+          { "type": "perf", "scope": "web", "release": "patch" },
+          { "type": "feat", "scope": "mcp", "release": "minor" },
+          { "type": "fix", "scope": "mcp", "release": "patch" },
+          { "type": "perf", "scope": "mcp", "release": "patch" },
           { "breaking": true, "release": "minor" },
-          { "type": "feat", "scope": "vscode", "release": false },
-          { "type": "fix", "scope": "vscode", "release": false },
-          { "type": "perf", "scope": "vscode", "release": false },
-          { "type": "chore", "scope": "vscode", "release": false },
-          { "type": "refactor", "scope": "vscode", "release": false },
-          { "type": "docs", "scope": "vscode", "release": false },
-          { "type": "test", "scope": "vscode", "release": false },
-          { "type": "ci", "scope": "vscode", "release": false }
+          { "release": false }
         ]
       }
     ],
