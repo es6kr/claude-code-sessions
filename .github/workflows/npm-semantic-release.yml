@@ -6,7 +6,7 @@ name: npm semantic-release
 # - Tag push (`v[0-9]*`) triggers downstream publish-npm.yml which discriminates -next.N tags → npm dist-tag next; plain tags → latest.
 
 on:
-  push: { branches: [main, production] }
+  push: { branches: [beta, production] }
   workflow_dispatch:
 
 permissions:
@@ -160,7 +160,7 @@ jobs:
     # main (channel:next pre-release, dist-tag next) uses a separate "next-npm" environment
     # so pre-release publishes are auditable without gating them behind stable-tier reviewers.
     # Preview job's Job Summary shows what this approval will produce (tag/version/channel).
-    environment: ${{ github.ref == 'refs/heads/production' && 'production-npm' || 'next-npm' }}
+    environment: ${{ github.ref == 'refs/heads/production' && 'production-npm' || 'beta-npm' }}
     steps:
       - uses: actions/checkout@v7
         with:

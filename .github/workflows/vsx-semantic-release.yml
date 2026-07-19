@@ -6,7 +6,7 @@ name: vsx semantic-release
 
 on:
   push:
-    branches: [main, production]
+    branches: [beta, production]
   workflow_dispatch:
 
 permissions:
@@ -164,7 +164,7 @@ jobs:
     # main (channel:next pre-release) uses a separate "next-vscode" environment
     # so pre-release publishes are auditable without gating them behind stable-tier reviewers.
     # Preview job's Job Summary shows what this approval will produce (tag/version/channel).
-    environment: ${{ github.ref == 'refs/heads/production' && 'production-vscode' || 'next-vscode' }}
+    environment: ${{ github.ref == 'refs/heads/production' && 'production-vscode' || 'beta-vscode' }}
     steps:
       - uses: actions/checkout@v7
         with:
