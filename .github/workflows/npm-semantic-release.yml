@@ -9,7 +9,7 @@ on:
   push: { branches: [main, production] }
   workflow_dispatch:
 
-# Serialize with main-semantic-release.yml (vscode) on the same push event per ref.
+# Serialize with vsx-semantic-release.yml (VS Code Extension line) on the same push event per ref.
 # Two semantic-release runs sharing HEAD must not race on git push, but main and production runs are independent.
 concurrency:
   group: semantic-release-${{ github.ref }}
@@ -39,7 +39,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24' # consistent with main-semantic-release.yml + release-vscode.yml
+          node-version: '24' # consistent with vsx-semantic-release.yml + release-vscode.yml
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6 # needed by @semantic-release/exec prepareCmd (pnpm version + pnpm install --lockfile-only)

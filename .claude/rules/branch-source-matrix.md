@@ -6,16 +6,16 @@ Every push to either branch triggers both semantic-release lines (vscode + npm).
 
 ## Source → tag → publish matrix
 
-| Source branch    | Workflow                    | Tag pattern              | Env (approval gate) | Publish target                                                                                                        | Config                                                                                       |
-| ---------------- | --------------------------- | ------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| **`production`** | `main-semantic-release.yml` | `vscode-v<X.Y.Z>`        | `production-vscode` | Open VSX `claude-sessions` + VS Code Marketplace `es6kr.claude-sessions` (stable) via `release-vscode.yml`            | `.releaserc.json` (`branches[0]: "production"`)                                              |
-| **`production`** | `npm-semantic-release.yml`  | `v<X.Y.Z>`               | `production-npm`    | npm `latest` dist-tag (`@claude-sessions/core`, `@claude-sessions/ui`, `@claude-sessions/web`, `claude-sessions-mcp`) | `.releaserc-npm.json` (`branches[0]: "production"`)                                          |
-| **`main`**       | `main-semantic-release.yml` | `vscode-v<X.Y.Z>-next.N` | `next-vscode`       | Open VSX + VS Code Marketplace **Pre-Release Version** channel (`--pre-release` flag) via `release-vscode.yml`        | `.releaserc.json` (`branches[1]: { name: "main", channel: "next", prerelease: "next" }`)     |
-| **`main`**       | `npm-semantic-release.yml`  | `v<X.Y.Z>-next.N`        | `next-npm`          | npm `next` dist-tag                                                                                                   | `.releaserc-npm.json` (`branches[1]: { name: "main", channel: "next", prerelease: "next" }`) |
+| Source branch    | Workflow                   | Tag pattern              | Env (approval gate) | Publish target                                                                                                        | Config                                                                                       |
+| ---------------- | -------------------------- | ------------------------ | ------------------- | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **`production`** | `vsx-semantic-release.yml` | `vscode-v<X.Y.Z>`        | `production-vscode` | Open VSX `claude-sessions` + VS Code Marketplace `es6kr.claude-sessions` (stable) via `release-vscode.yml`            | `.releaserc.json` (`branches[0]: "production"`)                                              |
+| **`production`** | `npm-semantic-release.yml` | `v<X.Y.Z>`               | `production-npm`    | npm `latest` dist-tag (`@claude-sessions/core`, `@claude-sessions/ui`, `@claude-sessions/web`, `claude-sessions-mcp`) | `.releaserc-npm.json` (`branches[0]: "production"`)                                          |
+| **`main`**       | `vsx-semantic-release.yml` | `vscode-v<X.Y.Z>-next.N` | `next-vscode`       | Open VSX + VS Code Marketplace **Pre-Release Version** channel (`--pre-release` flag) via `release-vscode.yml`        | `.releaserc.json` (`branches[1]: { name: "main", channel: "next", prerelease: "next" }`)     |
+| **`main`**       | `npm-semantic-release.yml` | `v<X.Y.Z>-next.N`        | `next-npm`          | npm `next` dist-tag                                                                                                   | `.releaserc-npm.json` (`branches[1]: { name: "main", channel: "next", prerelease: "next" }`) |
 
 ### Environment separation
 
-`main-semantic-release.yml` and `npm-semantic-release.yml` pick the GitHub Actions environment per pushed ref:
+`vsx-semantic-release.yml` and `npm-semantic-release.yml` pick the GitHub Actions environment per pushed ref:
 
 - `refs/heads/production` → `production-vscode` / `production-npm` (stable-tier reviewers)
 - everything else (i.e. `refs/heads/main`) → `next-vscode` / `next-npm` (pre-release reviewers or auto-proceed depending on how the environment is configured in the repo)
@@ -34,7 +34,7 @@ Legacy `-beta.N` tags remain supported by `publish-npm.yml` (maps to `--tag beta
 ## How releases happen
 
 1. Commit lands on `main` (PR merge or direct push). `main` = active development + auto pre-release.
-2. Both `main-semantic-release.yml` and `npm-semantic-release.yml` trigger on `push: main` (or `push: production` for stable).
+2. Both `vsx-semantic-release.yml` and `npm-semantic-release.yml` trigger on `push: main` (or `push: production` for stable).
 3. Each waits for `production-vscode` / `production-npm` environment reviewer approval.
 4. On approval, `semantic-release` analyzes commits since the channel's `tagFormat` baseline, picks a bump per `releaseRules`, pushes a release commit + tag (`-next.N` for main, plain for production) back to the source branch.
 5. Downstream `release-vscode.yml` / `publish-npm.yml` triggers on the tag push, discriminates `-next.N` suffix, and publishes to the appropriate channel.
