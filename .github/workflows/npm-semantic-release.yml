@@ -41,7 +41,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24'
 
@@ -173,7 +173,7 @@ jobs:
           token: ${{ secrets.RELEASE_PLEASE_PAT }} # PAT enables downstream publish-npm.yml trigger on tag push
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24' # consistent with vsx-semantic-release.yml + release-vscode.yml
 
