@@ -35,7 +35,7 @@ Legacy `-beta.N` tags remain supported by `publish-npm.yml` (maps to `--tag beta
 
 1. Commit lands on `main` (PR merge or direct push). `main` = active development + auto pre-release.
 2. Both `vsx-semantic-release.yml` and `npm-semantic-release.yml` trigger on `push: main` (or `push: production` for stable).
-3. Each waits for `production-vscode` / `production-npm` environment reviewer approval.
+3. Each selects its environment per pushed ref: `push: main` → `next-vscode` / `next-npm` (pre-release tier reviewers). `push: production` → `production-vscode` / `production-npm` (stable tier reviewers).
 4. On approval, `semantic-release` analyzes commits since the channel's `tagFormat` baseline, picks a bump per `releaseRules`, pushes a release commit + tag (`-next.N` for main, plain for production) back to the source branch.
 5. Downstream `release-vscode.yml` / `publish-npm.yml` triggers on the tag push, discriminates `-next.N` suffix, and publishes to the appropriate channel.
 6. Manual `pnpm version` / `vsce package` / `npm publish` is **not** the standard path — see `publishing.md` "직접 배포 금지" + `~/.agents/rules/release-automation.md` "Manual publish gate".
@@ -75,7 +75,7 @@ Catch-all `{ release: false }` ensures unrelated scopes (`fix(ci)`, `chore(deps)
 1. Did you intend to trigger a release? — If yes, the commit's `type(scope)` must match the corresponding config's white-list rules.
 2. Will semantic-release pick a bump? — If unsure, run the dry-run procedure from `~/.agents/rules/release-automation.md` before pushing.
 3. Which channel? — `main` push → `-next.N` pre-release. `production` push → plain stable.
-4. Are both `production-vscode` and `production-npm` reviewer approvals expected? — Confirm both workflows trigger and decide approval per workflow.
+4. Which environment approvals will be requested? — `main` push routes to `next-vscode` / `next-npm` (pre-release tier); `production` push routes to `production-vscode` / `production-npm` (stable tier). Confirm both workflows trigger and decide approval per workflow.
 
 ## Related
 
