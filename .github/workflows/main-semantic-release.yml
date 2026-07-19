@@ -2,13 +2,14 @@ name: main semantic-release
 
 on:
   push:
-    branches: [main]
+    branches: [main, production]
   workflow_dispatch:
 
-# Two semantic-release runs sharing main HEAD must not race on git push.
+# Two semantic-release runs sharing HEAD must not race on git push.
 # Same group as npm-semantic-release.yml so the vscode and npm lines queue sequentially.
+# Group is per-ref so main and production runs are independent, but same-branch races are serialized.
 concurrency:
-  group: semantic-release-main
+  group: semantic-release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:

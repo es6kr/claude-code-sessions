@@ -1,19 +1,18 @@
 name: npm semantic-release
 
-# Versioning strategy: stable-only channel on the main branch.
-# - Baseline: highest matching git tag for tagFormat `v${version}` (excluding vscode-v tags).
+# Versioning strategy: two channels — production (stable, dist-tag latest) + main (channel next, dist-tag next).
+# - Baseline: highest matching git tag for tagFormat `v${version}` per channel (excluding vscode-v tags).
 # - Commit-analyzer scope filter (.releaserc-npm.json) blocks `(vscode)`-scoped commits so vscode-only work does NOT bump npm packages.
-# - Tag push (`v[0-9]*`) triggers downstream publish-npm.yml (npm publish for @claude-sessions/core/ui/web/mcp).
-# - prerelease channel: not configured here. Beta releases live on ovsx-beta / beta branches with their own configs.
+# - Tag push (`v[0-9]*`) triggers downstream publish-npm.yml which discriminates -next.N tags → npm dist-tag next; plain tags → latest.
 
 on:
-  push: { branches: [main] }
+  push: { branches: [main, production] }
   workflow_dispatch:
 
-# Serialize with main-semantic-release.yml (vscode) on the same push: main event.
-# Two semantic-release runs sharing main HEAD must not race on git push.
+# Serialize with main-semantic-release.yml (vscode) on the same push event per ref.
+# Two semantic-release runs sharing HEAD must not race on git push, but main and production runs are independent.
 concurrency:
-  group: semantic-release-main
+  group: semantic-release-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
