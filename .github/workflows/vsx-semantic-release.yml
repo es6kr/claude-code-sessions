@@ -161,7 +161,7 @@ jobs:
       group: semantic-release-${{ github.ref }}
       cancel-in-progress: false
     # Environment per channel: production (stable) needs manual reviewer approval,
-    # main (channel:next pre-release) uses a separate "next-vscode" environment
+    # beta (pre-release) uses a separate "beta-vscode" environment
     # so pre-release publishes are auditable without gating them behind stable-tier reviewers.
     # Preview job's Job Summary shows what this approval will produce (tag/version/channel).
     environment: ${{ github.ref == 'refs/heads/production' && 'production-vscode' || 'beta-vscode' }}

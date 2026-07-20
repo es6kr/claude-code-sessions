@@ -1,8 +1,8 @@
 name: npm semantic-release
 
-# Versioning strategy: two channels — production (stable, dist-tag latest) + main (channel next, dist-tag next).
+# Versioning strategy: two channels — production (stable, dist-tag latest) + beta (channel beta, dist-tag beta).
 # - Baseline: highest matching git tag for tagFormat `v${version}` per channel (excluding vscode-v tags).
-# - Commit-analyzer scope filter (.releaserc-npm.json) blocks `(vscode)`-scoped commits so vscode-only work does NOT bump npm packages.
+# - Commit-analyzer scope filter (.releaserc-npm.json) whitelists core/ui/web/mcp scopes so vscode-only work does NOT bump npm packages.
 # - Tag push (`v[0-9]*`) triggers downstream publish-npm.yml which discriminates -next.N tags → npm dist-tag next; plain tags → latest.
 
 on:
@@ -157,7 +157,7 @@ jobs:
       group: semantic-release-${{ github.ref }}
       cancel-in-progress: false
     # Environment per channel: production (stable, dist-tag latest) needs manual reviewer approval,
-    # main (channel:next pre-release, dist-tag next) uses a separate "next-npm" environment
+    # beta (channel beta, dist-tag beta) uses a separate "beta-npm" environment
     # so pre-release publishes are auditable without gating them behind stable-tier reviewers.
     # Preview job's Job Summary shows what this approval will produce (tag/version/channel).
     environment: ${{ github.ref == 'refs/heads/production' && 'production-npm' || 'beta-npm' }}
