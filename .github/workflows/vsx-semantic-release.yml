@@ -41,6 +41,14 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+          # PAT required here too (not just on the release job's checkout) — without it,
+          # actions/checkout persists the job-scoped (contents:read) default GITHUB_TOKEN as
+          # the local git credential, which wins over the PAT that semantic-release embeds in
+          # its own dry-run push URL. Empirically verified 2026-07-20 (run 29749591279, npm
+          # sibling workflow): dry-run push was denied as `github-actions[bot]` despite the
+          # step-level GITHUB_TOKEN env override below — the ambient credential from checkout
+          # took precedence.
+          token: ${{ secrets.RELEASE_PLEASE_PAT }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
