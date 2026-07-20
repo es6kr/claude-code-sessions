@@ -127,8 +127,8 @@ jobs:
       - name: Determine pre-release channel
         id: channel
         run: |
-          # Tag pattern -next.N (semantic-release channel:next) → pre-release publish + Marketplace pre-release channel
-          # Legacy -beta.N tags remain supported for backward compatibility
+          # Tag pattern -next.N (legacy semantic-release channel:next, retired) → pre-release publish + Marketplace pre-release channel
+          # -beta.N (channel: beta, active pre-release channel) → pre-release publish + Marketplace pre-release channel
           # Plain tag vscode-vX.Y.Z → stable publish
           # Use native $GITHUB_REF_NAME instead of interpolating ${{ github.ref_name }} into the shell
           # to avoid template-expansion shell-injection (CodeRabbit CR-2 hardening).
@@ -140,7 +140,7 @@ jobs:
           elif [[ "$TAG" =~ -beta\.[0-9]+$ ]]; then
             echo "flag=--pre-release" >> $GITHUB_OUTPUT
             echo "gh_prerelease=true" >> $GITHUB_OUTPUT
-            echo "🚧 Pre-release publish (legacy channel: beta)"
+            echo "🚧 Pre-release publish (channel: beta)"
           else
             echo "flag=" >> $GITHUB_OUTPUT
             echo "gh_prerelease=false" >> $GITHUB_OUTPUT
