@@ -6,6 +6,7 @@
       {
         "preset": "angular",
         "releaseRules": [
+          { "release": false },
           { "type": "feat", "scope": "core", "release": "minor" },
           { "type": "fix", "scope": "core", "release": "patch" },
           { "type": "perf", "scope": "core", "release": "patch" },
@@ -18,8 +19,7 @@
           { "type": "feat", "scope": "mcp", "release": "minor" },
           { "type": "fix", "scope": "mcp", "release": "patch" },
           { "type": "perf", "scope": "mcp", "release": "patch" },
-          { "breaking": true, "release": "minor" },
-          { "release": false }
+          { "breaking": true, "release": "minor" }
         ]
       }
     ],

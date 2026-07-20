@@ -61,8 +61,8 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
           # Determine npm dist-tag from semantic-release prerelease id
-          # -next.N (channel:next, main branch)  → dist-tag next   → pre-release
-          # -beta.N (legacy, retired 2026-06-14) → dist-tag beta   → pre-release
+          # -next.N (legacy channel:next, retired — main no longer triggers releases) → dist-tag next → pre-release
+          # -beta.N (channel: beta, beta branch) → dist-tag beta → pre-release
           # plain vX.Y.Z (channel: latest, production branch) → dist-tag latest → stable
           if [[ "$VERSION" =~ -next\.[0-9]+$ ]]; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
