@@ -1,9 +1,12 @@
 import * as assert from 'assert'
 import {
   decideResume,
+  ensureClaudeCodeExtension,
   matchesAnyWorkspaceFolder,
   normalizeWorkspacePath,
+  type ClaudeExtensionLike,
   type DefaultTerminalMode,
+  type EnsureClaudeCodeExtensionDeps,
   type ResumeDecision,
   type WorkspaceFolderLike,
 } from '../../lib/crossWorkspace'
@@ -30,6 +33,37 @@ suite('crossWorkspace Suite', () => {
 
     test('empty string stays empty', () => {
       assert.strictEqual(normalizeWorkspacePath(''), '')
+    })
+
+    test('trims a trailing separator so both comparands canonicalize equal', () => {
+      assert.strictEqual(normalizeWorkspacePath('/users/a/project/'), '/users/a/project')
+      assert.strictEqual(
+        normalizeWorkspacePath('/users/a/project/'),
+        normalizeWorkspacePath('/users/a/project')
+      )
+    })
+
+    test('trims repeated trailing separators (backslash form included)', () => {
+      assert.strictEqual(normalizeWorkspacePath('/users/a/project///'), '/users/a/project')
+      assert.strictEqual(normalizeWorkspacePath('C:\\Users\\A\\Project\\'), 'c:/users/a/project')
+    })
+
+    test('filesystem roots stay equality-consistent', () => {
+      // "/" is kept as-is (the separator IS the path)
+      assert.strictEqual(normalizeWorkspacePath('/'), '/')
+      // "C:\" trims to "c:" — fine for equality because both sides normalize
+      assert.strictEqual(normalizeWorkspacePath('C:\\'), normalizeWorkspacePath('c:/'))
+    })
+
+    test('trailing-slash cwd matches a clean workspace folder end-to-end', () => {
+      assert.strictEqual(
+        matchesAnyWorkspaceFolder('/users/a/project/', [folder('/users/a/project')]),
+        true
+      )
+      assert.strictEqual(
+        matchesAnyWorkspaceFolder('/users/a/project', [folder('/users/a/project/')]),
+        true
+      )
     })
   })
 
@@ -306,5 +340,180 @@ suite('crossWorkspace Suite', () => {
     // INVARIANT 3/4 (null cwd + empty folders) were covered transitively by
     // INVARIANT 1/2's defaultMode enumeration on top of the matchesAnyWorkspaceFolder
     // null/empty unit tests — removed as redundant.
+  })
+})
+
+// Unit tests for the install-on-demand flow extracted from resumeSession's
+// anthropic branch (issue 173 finding 4's follow-up: this state machine is
+// unreachable via the real resumeSession command in the test-electron host,
+// since no workspace folder is open there and decideResume always routes
+// cross-workspace in that case — see PR #199 discussion). Mock deps exercise
+// every branch deterministically, with zero real vscode API / network calls.
+suite('ensureClaudeCodeExtension Suite', () => {
+  const activeExt: ClaudeExtensionLike = { isActive: true, activate: () => Promise.resolve() }
+
+  const makeDeps = (overrides: Partial<EnsureClaudeCodeExtensionDeps> = {}) => {
+    const calls = {
+      showWarningMessage: 0,
+      installExtension: 0,
+      showInformationMessage: 0,
+      showErrorMessage: 0,
+    }
+    const deps: EnsureClaudeCodeExtensionDeps = {
+      getExtension: () => activeExt,
+      showWarningMessage: () => {
+        calls.showWarningMessage++
+        return Promise.resolve('Install')
+      },
+      installExtension: () => {
+        calls.installExtension++
+        return Promise.resolve()
+      },
+      showInformationMessage: () => {
+        calls.showInformationMessage++
+      },
+      showErrorMessage: () => {
+        calls.showErrorMessage++
+      },
+      ...overrides,
+    }
+    return { deps, calls }
+  }
+
+  test('already installed and active — ready with zero prompts, zero install calls', async () => {
+    const { deps, calls } = makeDeps()
+    const result = await ensureClaudeCodeExtension(deps)
+
+    assert.strictEqual(result.kind, 'ready')
+    assert.strictEqual(calls.showWarningMessage, 0)
+    assert.strictEqual(calls.installExtension, 0)
+  })
+
+  test('not installed + user picks Install + extension appears immediately — auto-continues to ready in one call, zero manual re-trigger', async () => {
+    let installed = false
+    const { deps, calls } = makeDeps({
+      getExtension: () => (installed ? activeExt : undefined),
+      installExtension: () => {
+        calls.installExtension++
+        installed = true
+        return Promise.resolve()
+      },
+    })
+
+    const result = await ensureClaudeCodeExtension(deps)
+
+    assert.strictEqual(result.kind, 'ready', 'must resolve to ready within the single call')
+    assert.strictEqual(calls.installExtension, 1)
+    assert.strictEqual(
+      calls.showInformationMessage,
+      0,
+      'the re-trigger info message must NOT fire when auto-continue succeeds'
+    )
+  })
+
+  test('not installed + user picks Cancel — declined, no install attempted', async () => {
+    const { deps, calls } = makeDeps({
+      getExtension: () => undefined,
+      showWarningMessage: () => {
+        calls.showWarningMessage++
+        return Promise.resolve('Cancel')
+      },
+    })
+
+    const result = await ensureClaudeCodeExtension(deps)
+
+    assert.strictEqual(result.kind, 'declined')
+    assert.strictEqual(calls.installExtension, 0)
+  })
+
+  test('not installed + dismissed (no choice) — declined, same as Cancel', async () => {
+    const { deps, calls } = makeDeps({
+      getExtension: () => undefined,
+      showWarningMessage: () => {
+        calls.showWarningMessage++
+        return Promise.resolve(undefined)
+      },
+    })
+
+    const result = await ensureClaudeCodeExtension(deps)
+
+    assert.strictEqual(result.kind, 'declined')
+    assert.strictEqual(calls.installExtension, 0)
+  })
+
+  test('installed but extension host has not surfaced it yet — install-pending, info message shown once, no throw', async () => {
+    const { deps, calls } = makeDeps({
+      getExtension: () => undefined, // never appears, even after "install"
+    })
+
+    const result = await ensureClaudeCodeExtension(deps)
+
+    assert.strictEqual(result.kind, 'install-pending')
+    assert.strictEqual(calls.installExtension, 1)
+    assert.strictEqual(
+      calls.showInformationMessage,
+      1,
+      'must tell the user to re-trigger — this is the one legitimate manual-retry case'
+    )
+  })
+
+  // CodeRabbit finding on PR #199 (crossWorkspace.ts:152-156): a rejected
+  // installExtension call used to propagate uncaught out of the helper —
+  // inconsistent with the other typed failure states and left an unhandled
+  // rejection at the resumeSession call site.
+  test('installExtension rejects — install-failed with the error message, error surfaced, no throw escapes', async () => {
+    const { deps, calls } = makeDeps({
+      getExtension: () => undefined,
+      installExtension: () => {
+        calls.installExtension++
+        return Promise.reject(new Error('marketplace unreachable'))
+      },
+    })
+
+    const result = await ensureClaudeCodeExtension(deps)
+
+    assert.strictEqual(result.kind, 'install-failed')
+    if (result.kind === 'install-failed') {
+      assert.strictEqual(result.error, 'marketplace unreachable')
+    }
+    assert.strictEqual(calls.showErrorMessage, 1)
+    assert.strictEqual(
+      calls.showInformationMessage,
+      0,
+      'install-failed must not also show the re-trigger info message'
+    )
+  })
+
+  test('installed-but-disabled — activation runs before ready (PR #172 Internal Code Review #2 regression guard)', async () => {
+    let activateCalls = 0
+    const disabledExt: ClaudeExtensionLike = {
+      isActive: false,
+      activate: () => {
+        activateCalls++
+        return Promise.resolve()
+      },
+    }
+    const { deps } = makeDeps({ getExtension: () => disabledExt })
+
+    const result = await ensureClaudeCodeExtension(deps)
+
+    assert.strictEqual(result.kind, 'ready')
+    assert.strictEqual(activateCalls, 1, 'activate() must run when isActive is false')
+  })
+
+  test('activation throws — activation-failed with the error message, error surfaced', async () => {
+    const failingExt: ClaudeExtensionLike = {
+      isActive: false,
+      activate: () => Promise.reject(new Error('activation boom')),
+    }
+    const { deps, calls } = makeDeps({ getExtension: () => failingExt })
+
+    const result = await ensureClaudeCodeExtension(deps)
+
+    assert.strictEqual(result.kind, 'activation-failed')
+    if (result.kind === 'activation-failed') {
+      assert.strictEqual(result.error, 'activation boom')
+    }
+    assert.strictEqual(calls.showErrorMessage, 1)
   })
 })

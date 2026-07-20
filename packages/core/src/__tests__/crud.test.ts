@@ -461,29 +461,52 @@ describe('updateMessageContent', () => {
     expect(content[2]).toEqual({ type: 'thinking', text: 'thinking...' })
   })
 
-  it('should append text block when message has no text content', async () => {
+  it('should reject when the only content is a tool_use block (issue #123 Finding 2)', async () => {
+    const sessionId = 'test-session'
+    const toolUseMsg = {
+      type: 'assistant',
+      uuid: 'asst-1',
+      timestamp: '2025-12-19T01:00:00.000Z',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'tool-1', name: 'Read', input: {} }],
+      },
+    }
+    await writeMessages(sessionId, [toolUseMsg])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'asst-1', 'New text')
+    )
+
+    expect(result.success).toBe(false)
+    expect((result as { error?: string }).error).toMatch(/tool_use/i)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(updated[0]).toEqual(toolUseMsg)
+  })
+
+  it('should append text block when message has no text content and no tool_use block', async () => {
     const sessionId = 'test-session'
     await writeMessages(sessionId, [
       {
         type: 'assistant',
-        uuid: 'asst-1',
+        uuid: 'asst-2',
         timestamp: '2025-12-19T01:00:00.000Z',
         message: {
           role: 'assistant',
-          content: [{ type: 'tool_use', id: 'tool-1', name: 'Read', input: {} }],
+          content: [{ type: 'image', source: { type: 'base64', data: 'x' } }],
         },
       },
     ])
 
     const result = await Effect.runPromise(
-      updateMessageContent(projectName, sessionId, 'asst-1', 'New text')
+      updateMessageContent(projectName, sessionId, 'asst-2', 'New text')
     )
 
     expect(result.success).toBe(true)
     const updated = await Effect.runPromise(readSession(projectName, sessionId))
     const content = updated[0].message?.content as Array<Record<string, unknown>>
     expect(content).toHaveLength(2)
-    expect(content[0]).toEqual({ type: 'tool_use', id: 'tool-1', name: 'Read', input: {} })
+    expect(content[0]).toEqual({ type: 'image', source: { type: 'base64', data: 'x' } })
     expect(content[1]).toEqual({ type: 'text', text: 'New text' })
   })
 
@@ -739,5 +762,147 @@ describe('readSession dedup (Issue #137 Phase 3)', () => {
 
     const messages = await Effect.runPromise(readSession(projectName, sessionId))
     expect(messages).toHaveLength(6)
+  })
+})
+
+describe('updateMessageContent — type-aware editing (tool_result/thinking)', () => {
+  let tempDir: string
+  let projectDir: string
+  const projectName = '-Users-test-update-typed'
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'claude-session-update-typed-'))
+    projectDir = path.join(tempDir, projectName)
+    await fs.mkdir(projectDir, { recursive: true })
+    vi.mocked(getSessionsDir).mockReturnValue(tempDir)
+  })
+
+  afterEach(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true })
+    vi.clearAllMocks()
+  })
+
+  const writeMessages = async (sessionId: string, messages: unknown[]) => {
+    const filePath = path.join(projectDir, `${sessionId}.jsonl`)
+    await fs.writeFile(filePath, messages.map((m) => JSON.stringify(m)).join('\n') + '\n')
+  }
+
+  it('should edit tool_result content preserving tool_use_id and is_error', async () => {
+    const sessionId = 'typed-tool-result'
+    await writeMessages(sessionId, [
+      {
+        type: 'user',
+        uuid: 'tr-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'tu-1', content: 'old output', is_error: false },
+          ],
+        },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'tr-1', 'corrected output')
+    )
+
+    expect(result.success).toBe(true)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(updated[0].message?.content).toEqual([
+      { type: 'tool_result', tool_use_id: 'tu-1', content: 'corrected output', is_error: false },
+    ])
+  })
+
+  it('should edit thinking content preserving signature and unknown fields', async () => {
+    const sessionId = 'typed-thinking'
+    await writeMessages(sessionId, [
+      {
+        type: 'assistant',
+        uuid: 'th-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'thinking', thinking: 'old reasoning', signature: 'sig-abc' }],
+        },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'th-1', 'revised reasoning')
+    )
+
+    expect(result.success).toBe(true)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(updated[0].message?.content).toEqual([
+      { type: 'thinking', thinking: 'revised reasoning', signature: 'sig-abc' },
+    ])
+  })
+
+  it('should still prefer the first text block when text and tool_result coexist', async () => {
+    const sessionId = 'typed-mixed'
+    await writeMessages(sessionId, [
+      {
+        type: 'user',
+        uuid: 'mx-1',
+        timestamp: '2025-12-19T01:00:00.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'tu-2', content: 'tool output' },
+            { type: 'text', text: 'original note' },
+          ],
+        },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'mx-1', 'edited note')
+    )
+
+    expect(result.success).toBe(true)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    expect(updated[0].message?.content).toEqual([
+      { type: 'tool_result', tool_use_id: 'tu-2', content: 'tool output' },
+      { type: 'text', text: 'edited note' },
+    ])
+  })
+
+  it('should preserve tool_use <-> tool_result pairing across an edit (invariant fixture)', async () => {
+    const sessionId = 'typed-pairing'
+    const assistantMsg = {
+      type: 'assistant',
+      uuid: 'as-1',
+      timestamp: '2025-12-19T01:00:00.000Z',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'tu-9', name: 'Bash', input: { command: 'ls' } }],
+      },
+    }
+    await writeMessages(sessionId, [
+      assistantMsg,
+      {
+        type: 'user',
+        uuid: 'tr-9',
+        timestamp: '2025-12-19T01:00:01.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'tu-9', content: 'file-a file-b' }],
+        },
+      },
+    ])
+
+    const result = await Effect.runPromise(
+      updateMessageContent(projectName, sessionId, 'tr-9', 'file-a file-b file-c')
+    )
+
+    expect(result.success).toBe(true)
+    const updated = await Effect.runPromise(readSession(projectName, sessionId))
+    // paired assistant tool_use untouched
+    expect(updated[0]).toEqual(assistantMsg)
+    // tool_result edited in place, pairing id intact
+    expect(updated[1].message?.content).toEqual([
+      { type: 'tool_result', tool_use_id: 'tu-9', content: 'file-a file-b file-c' },
+    ])
   })
 })

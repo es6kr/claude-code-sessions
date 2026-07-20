@@ -1,19 +1,11 @@
 {
-  "branches": ["main", { "name": "beta", "prerelease": true }],
+  "branches": ["production", { "name": "main", "channel": "next", "prerelease": "next" }],
   "plugins": [
     [
       "@semantic-release/commit-analyzer",
       {
         "preset": "angular",
         "releaseRules": [
-          { "type": "feat", "scope": "vscode", "release": false },
-          { "type": "fix", "scope": "vscode", "release": false },
-          { "type": "perf", "scope": "vscode", "release": false },
-          { "type": "chore", "scope": "vscode", "release": false },
-          { "type": "refactor", "scope": "vscode", "release": false },
-          { "type": "docs", "scope": "vscode", "release": false },
-          { "type": "test", "scope": "vscode", "release": false },
-          { "type": "ci", "scope": "vscode", "release": false },
           { "type": "feat", "release": "patch" },
           { "type": "fix", "release": "patch" },
           { "type": "perf", "release": "patch" },
@@ -22,7 +14,15 @@
           { "type": "docs", "release": "patch" },
           { "type": "test", "release": "patch" },
           { "type": "ci", "release": "patch" },
-          { "breaking": true, "release": "minor" }
+          { "breaking": true, "release": "minor" },
+          { "type": "feat", "scope": "vscode", "release": false },
+          { "type": "fix", "scope": "vscode", "release": false },
+          { "type": "perf", "scope": "vscode", "release": false },
+          { "type": "chore", "scope": "vscode", "release": false },
+          { "type": "refactor", "scope": "vscode", "release": false },
+          { "type": "docs", "scope": "vscode", "release": false },
+          { "type": "test", "scope": "vscode", "release": false },
+          { "type": "ci", "scope": "vscode", "release": false }
         ]
       }
     ],

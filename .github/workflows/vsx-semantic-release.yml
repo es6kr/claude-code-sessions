@@ -1,12 +1,12 @@
-name: npm semantic-release
+name: vsx semantic-release
 
-# Versioning strategy: two channels — production (stable, dist-tag latest) + main (channel next, dist-tag next).
-# - Baseline: highest matching git tag for tagFormat `v${version}` per channel (excluding vscode-v tags).
-# - Commit-analyzer scope filter (.releaserc-npm.json) blocks `(vscode)`-scoped commits so vscode-only work does NOT bump npm packages.
-# - Tag push (`v[0-9]*`) triggers downstream publish-npm.yml which discriminates -next.N tags → npm dist-tag next; plain tags → latest.
+# Semantic-release entry for the VS Code Extension line (Marketplace + Open VSX).
+# Sibling of npm-semantic-release.yml (which handles the npm packages).
+# Filename uses the `vsx-` prefix (vendor-neutral over VS Code Marketplace + Open VSX).
 
 on:
-  push: { branches: [main, production] }
+  push:
+    branches: [main, production]
   workflow_dispatch:
 
 permissions:
@@ -15,16 +15,18 @@ permissions:
   pull-requests: write
 
 jobs:
-  # Preview job runs semantic-release --dry-run (with npm config swapped in) without
-  # an environment gate, so reviewers can inspect the upcoming tag/version/channel
-  # or the "no release" reason in the Job Summary before approving the release job.
+  # Preview job runs semantic-release --dry-run without an environment gate,
+  # so reviewers of the downstream release job can inspect what the approval
+  # will actually produce (tag name, version, channel, or "no release" reason)
+  # via the workflow's Job Summary before clicking Approve.
   #
   # Preview runs unconstrained (no concurrency group) so it fires immediately
-  # even while a sibling workflow's release job is pending approval.
+  # even while a sibling workflow's release job is pending approval — that is
+  # this workflow's headline design goal.
   preview:
-    # Same loop-prevention guard as release — no need to preview a [skip release] commit.
-    # `github.event.head_commit` is unset on workflow_dispatch, so gate on event_name
-    # first so manual dispatch is never blocked by the missing field.
+    # Skip preview when the push is semantic-release's own release commit ([skip release]).
+    # On workflow_dispatch, github.event.head_commit is unset — the condition below evaluates
+    # to true (allow) so manual dispatch is never blocked.
     if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip release]') }}
     runs-on: ubuntu-latest
     permissions:
@@ -55,13 +57,14 @@ jobs:
             @semantic-release/commit-analyzer \
             @semantic-release/release-notes-generator \
             @semantic-release/exec \
+            @semantic-release/npm \
             @semantic-release/git \
             @semantic-release/github
 
-      - name: Run semantic-release --dry-run (npm config)
-        # semantic-release's verifyConditions runs `git push --dry-run` against the release
+      - name: Run semantic-release --dry-run
+        # semantic-release's verifyConditions step runs `git push --dry-run` against the release
         # branch even in --dry-run mode (empirically verified 2026-07-19: post-PR #201 workflow
-        # runs 29687650382/29687973* both failed with "Permission denied to github-actions[bot]"
+        # runs 29687650391/29687973400 both failed with "Permission denied to github-actions[bot]"
         # on that dry-push). github.token cannot push to protected branches, so the preview job
         # requires the same PAT the release job uses. Copilot's PAT-hardening suggestion for
         # --dry-run turned out to be theoretically sound but empirically incorrect for this tool.
@@ -69,19 +72,20 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_PAT }}
         run: |
           set -o pipefail
-          cp .releaserc-npm.json .releaserc.json
           npx semantic-release --dry-run 2>&1 | tee dry-run.log
+          # exit 0 even if no release — dry-run reports no-release as info, not error
 
       - name: Parse preview + write Job Summary
         id: parse
-        # pipefail must be re-armed here — each step runs in a fresh shell, so the earlier
-        # step's pipefail setting does not carry over. Without it, `grep | head -1` reports
-        # head's (always-zero) exit status and the || fallback never triggers, silently
-        # emptying REASON on regex mismatch.
+        # pipefail must be re-armed here — each step runs in a fresh shell, so the
+        # earlier step's pipefail setting does not carry over. Without it, a grep|head
+        # pipeline reports head's (always-zero) exit status and the || fallback never
+        # triggers on regex mismatch, silently emptying REASON.
         shell: bash
         run: |
           set -o pipefail
           LOG=dry-run.log
+          # semantic-release logs "The next release version is X.Y.Z" when it would release
           NEXT_VER=$(grep -oE 'next release version is [^ ]+' "$LOG" | awk '{print $NF}' | head -1 || true)
           if [ -n "$NEXT_VER" ]; then
             WILL_RELEASE=true
@@ -91,10 +95,11 @@ jobs:
             NEXT_TAG=$(grep -oE 'Skip [^ ]+ tag creation in dry-run mode' "$LOG" | awk '{print $2}' | head -1 || true)
             if [ -z "$NEXT_TAG" ]; then
               # Fallback: semantic-release output format may change in future versions —
-              # try the "Created tag" line (non-dry-run wording). Leaving the tag empty
-              # is preferable to fabricating a wrong tagFormat manually.
+              # try the "Created tag" line (non-dry-run wording). If both fail, leave the
+              # tag empty rather than fabricating a wrong tagFormat manually.
               NEXT_TAG=$(grep -oE 'Created tag [^ ]+' "$LOG" | awk '{print $NF}' | head -1 || true)
             fi
+            # channel is the branch's channel from releaserc — infer from tag suffix
             case "$NEXT_TAG" in
               *-next.*) CHANNEL=next ;;
               *-beta.*) CHANNEL=beta ;;
@@ -120,14 +125,14 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
           {
-            echo "## npm-semantic-release preview"
+            echo "## vsx-semantic-release preview"
             echo
             echo "**Branch**: \`${GITHUB_REF#refs/heads/}\`"
             if [ "$WILL_RELEASE" = "true" ]; then
               echo "**Will release**: ✅"
               echo "**Version**: \`$NEXT_VER\`"
               echo "**Tag**: \`${NEXT_TAG:-(unresolved — see dry-run log)}\`"
-              echo "**npm dist-tag / channel**: \`$CHANNEL\`"
+              echo "**Channel**: \`$CHANNEL\`"
             else
               echo "**Will release**: ❌ no release"
               echo "**Reason**: $REASON"
@@ -144,23 +149,22 @@ jobs:
 
   release:
     needs: preview
-    # Skip release on the commit semantic-release itself pushed back (loop prevention).
-    # `[skip release]` is a project-narrow signal — does NOT block CI / e2e / dependabot workflows.
-    # Gate on event_name first so workflow_dispatch (where head_commit is unset) is never blocked.
+    # Skip release on semantic-release's own release commit ([skip release]) — mirrors
+    # the preview job's guard so the whole workflow no-ops on release-commit pushes.
     if: ${{ github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip release]') }}
     runs-on: ubuntu-latest
     # Concurrency is scoped to the release job only (not the workflow) so the preview job
-    # runs unconstrained. Sibling workflows (vsx-semantic-release.yml) sharing the same
+    # runs unconstrained. Sibling workflows (npm-semantic-release.yml) sharing the same
     # group serialize their release jobs (which push commits + tags back to the source
     # branch), preventing non-fast-forward push failures on same-ref races.
     concurrency:
       group: semantic-release-${{ github.ref }}
       cancel-in-progress: false
-    # Environment per channel: production (stable, dist-tag latest) needs manual reviewer approval,
-    # main (channel:next pre-release, dist-tag next) uses a separate "next-npm" environment
+    # Environment per channel: production (stable) needs manual reviewer approval,
+    # main (channel:next pre-release) uses a separate "next-vscode" environment
     # so pre-release publishes are auditable without gating them behind stable-tier reviewers.
     # Preview job's Job Summary shows what this approval will produce (tag/version/channel).
-    environment: ${{ github.ref == 'refs/heads/production' && 'production-npm' || 'next-npm' }}
+    environment: ${{ github.ref == 'refs/heads/production' && 'production-vscode' || 'next-vscode' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -170,15 +174,20 @@ jobs:
           # non-fast-forward because the first workflow already advanced the branch.
           ref: ${{ github.ref }}
           fetch-depth: 0
-          token: ${{ secrets.RELEASE_PLEASE_PAT }} # PAT enables downstream publish-npm.yml trigger on tag push
+          # PAT is required here so the semantic-release commit + tag push triggers the
+          # downstream release-vscode.yml workflow (github.token pushes do not trigger
+          # other workflows in the same repo).
+          token: ${{ secrets.RELEASE_PLEASE_PAT }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: '24' # consistent with vsx-semantic-release.yml + release-vscode.yml
+          # Keep aligned with release-vscode.yml so semantic-release runs on the same Node runtime.
+          node-version: '24'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6 # needed by @semantic-release/exec prepareCmd (pnpm version + pnpm install --lockfile-only)
+        # Required so @semantic-release/exec's prepareCmd can run `pnpm install --lockfile-only`.
+        uses: pnpm/action-setup@v6
 
       - name: Install semantic-release + plugins
         run: |
@@ -187,17 +196,11 @@ jobs:
             @semantic-release/commit-analyzer \
             @semantic-release/release-notes-generator \
             @semantic-release/exec \
+            @semantic-release/npm \
             @semantic-release/git \
             @semantic-release/github
 
-      - name: Run semantic-release (npm config)
+      - name: Run semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PLEASE_PAT }}
-        # semantic-release auto-discovers .releaserc.json (the vscode config) as the base and merges
-        # `--extends` UNDER it, so `--extends ./.releaserc-npm.json` was fully shadowed (base kept the
-        # vscode tagFormat + plugins → npm never released). Overwrite the auto-discovered config with
-        # the npm config for this job so it becomes the effective base. Not committed: the git plugin
-        # only stages the configured assets, so this working-tree change is discarded with the runner.
-        run: |
-          cp .releaserc-npm.json .releaserc.json
-          npx semantic-release
+        run: npx semantic-release

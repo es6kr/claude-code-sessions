@@ -60,12 +60,18 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-          # Check if beta version (contains -beta)
-          if [[ "$VERSION" == *"-beta"* ]]; then
-            echo "is_beta=true" >> $GITHUB_OUTPUT
+          # Determine npm dist-tag from semantic-release prerelease id
+          # -next.N (channel:next, main branch)  → dist-tag next   → pre-release
+          # -beta.N (legacy, retired 2026-06-14) → dist-tag beta   → pre-release
+          # plain vX.Y.Z (channel: latest, production branch) → dist-tag latest → stable
+          if [[ "$VERSION" =~ -next\.[0-9]+$ ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=next" >> $GITHUB_OUTPUT
+          elif [[ "$VERSION" =~ -beta\.[0-9]+$ ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
             echo "npm_tag=beta" >> $GITHUB_OUTPUT
           else
-            echo "is_beta=false" >> $GITHUB_OUTPUT
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
             echo "npm_tag=latest" >> $GITHUB_OUTPUT
           fi
 
@@ -159,14 +165,14 @@ jobs:
           name: v${{ steps.versions.outputs.core }}
           body_path: RELEASE_NOTES.md
           draft: false
-          prerelease: ${{ steps.tag.outputs.is_beta == 'true' }}
+          prerelease: ${{ steps.tag.outputs.is_prerelease == 'true' }}
 
       - name: Summary
         run: |
           echo "## Published packages" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ steps.tag.outputs.is_beta }}" == "true" ]]; then
-            echo "**Beta release** (npm tag: beta)" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ steps.tag.outputs.is_prerelease }}" == "true" ]]; then
+            echo "**Pre-release** (npm dist-tag: ${{ steps.tag.outputs.npm_tag }})" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
           fi
           if [[ "${{ github.event.inputs.package }}" == "all" || "${{ github.event.inputs.package }}" == "core" || "${{ github.event_name }}" == "push" ]]; then

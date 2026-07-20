@@ -29,8 +29,21 @@ export type ResumeDecision =
   | { kind: 'picker'; options: ReadonlyArray<ResumeMode> }
   | { kind: 'fallback-picker'; options: ReadonlyArray<ResumeMode>; reason: 'cross-workspace' }
 
+/**
+ * Canonicalize a path for equality comparison only (both sides of every
+ * comparison pass through this function): lowercase (Windows drive/case
+ * insensitivity), unify separators, and trim trailing separators.
+ *
+ * Invariant note: neither producer normally emits a trailing separator —
+ * `vscode.Uri.fsPath` strips them (except for filesystem roots like "/" or
+ * "C:\"), and session cwd values come from `process.cwd()` which does the
+ * same. The trim is defensive for cwd values recorded by other tools. A
+ * single-character root ("/") is kept as-is; "c:/" trims to "c:" which stays
+ * equality-consistent because both comparands are normalized identically.
+ */
 export function normalizeWorkspacePath(p: string): string {
-  return p.toLowerCase().replace(/\\/g, '/')
+  const unified = p.toLowerCase().replace(/\\/g, '/')
+  return unified.length > 1 ? unified.replace(/\/+$/, '') : unified
 }
 
 /**
@@ -71,6 +84,10 @@ export function isCrossWorkspace(
  * Picker option list given the cross-workspace flag. Cross → 2 options
  * (Internal / External). Same-workspace → 3 options (Internal / External /
  * Anthropic).
+ *
+ * The ordering is deliberate: the established terminal flavors come first and
+ * the Claude Code Extension entry stays last. Promote it only on real UX
+ * feedback — reordering here is the single place that changes the picker.
  */
 export function pickerOptions(crossWorkspace: boolean): ReadonlyArray<ResumeMode> {
   return crossWorkspace ? ['internal', 'external'] : ['internal', 'external', 'anthropic']
@@ -117,4 +134,85 @@ export function decideResume(input: {
 
   // defaultMode === 'ask' — picker with 2 or 3 options
   return { kind: 'picker', options: pickerOptions(cross) }
+}
+
+export interface ClaudeExtensionLike {
+  readonly isActive: boolean
+  activate(): PromiseLike<unknown>
+}
+
+export interface EnsureClaudeCodeExtensionDeps {
+  getExtension: (id: string) => ClaudeExtensionLike | undefined
+  showWarningMessage: (message: string, ...items: string[]) => PromiseLike<string | undefined>
+  installExtension: (id: string) => PromiseLike<unknown>
+  showInformationMessage: (message: string) => void
+  showErrorMessage: (message: string) => void
+}
+
+export type EnsureClaudeCodeExtensionResult =
+  | { kind: 'ready'; extension: ClaudeExtensionLike }
+  | { kind: 'declined' }
+  | { kind: 'install-pending' }
+  | { kind: 'install-failed'; error: string }
+  | { kind: 'activation-failed'; error: string }
+
+const ANTHROPIC_EXTENSION_ID = 'anthropic.claude-code'
+
+/**
+ * Ensure the official Claude Code extension is installed and active,
+ * prompting to install it on demand.
+ *
+ * Extracted from resumeSession's anthropic branch so it can be unit-tested
+ * with mock deps instead of requiring a live open workspace folder in the
+ * test-electron host — the anthropic branch is otherwise unreachable there,
+ * since `decideResume` always routes cross-workspace when no folder is open.
+ * Deps are typed structurally (PromiseLike, not vscode.Thenable) to keep this
+ * file free of vscode imports, matching the rest of the module.
+ */
+export async function ensureClaudeCodeExtension(
+  deps: EnsureClaudeCodeExtensionDeps
+): Promise<EnsureClaudeCodeExtensionResult> {
+  let ext = deps.getExtension(ANTHROPIC_EXTENSION_ID)
+
+  if (!ext) {
+    const choice = await deps.showWarningMessage(
+      'The official Claude Code extension is not installed.',
+      'Install',
+      'Cancel'
+    )
+    if (choice !== 'Install') return { kind: 'declined' }
+
+    try {
+      await deps.installExtension(ANTHROPIC_EXTENSION_ID)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      deps.showErrorMessage(`Failed to install Claude Code extension: ${message}`)
+      return { kind: 'install-failed', error: message }
+    }
+
+    // Auto-continue: pick up the freshly installed extension and fall through
+    // to activation, so the original resume intent completes without a
+    // second manual trigger.
+    ext = deps.getExtension(ANTHROPIC_EXTENSION_ID)
+    if (!ext) {
+      // The extension host has not surfaced the new install yet — the one
+      // remaining case where a manual re-trigger is required.
+      deps.showInformationMessage(
+        'Claude Code extension installed — run Resume Session again to open the session.'
+      )
+      return { kind: 'install-pending' }
+    }
+  }
+
+  if (!ext.isActive) {
+    try {
+      await ext.activate()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      deps.showErrorMessage(`Failed to activate Claude Code extension: ${message}`)
+      return { kind: 'activation-failed', error: message }
+    }
+  }
+
+  return { kind: 'ready', extension: ext }
 }

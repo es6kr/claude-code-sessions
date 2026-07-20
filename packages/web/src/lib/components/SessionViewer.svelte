@@ -237,19 +237,26 @@
   let editError = $state<string | null>(null)
 
   // Read the editable text from a message: prefer message.content, fall back to
-  // top-level content, scan the array for the first 'text' block (not just index 0).
+  // top-level content. Mirrors updateMessageContent's type-aware resolution
+  // order (#123): first 'text' block -> first 'tool_result' content ->
+  // first 'thinking' text, so the editor opens on the field the save will write.
   const getMessageText = (m: Message | null): string => {
     if (!m) return ''
     const nested = (m.message as { content?: unknown } | undefined)?.content
     const direct = (m as unknown as { content?: unknown }).content
     const source = nested ?? direct
     if (typeof source === 'string') return source
-    if (Array.isArray(source)) {
-      const textBlock = source.find((b) => (b as { type?: string })?.type === 'text') as
-        | { text?: string }
-        | undefined
-      return textBlock?.text ?? ''
-    }
+    const items = Array.isArray(source)
+      ? (source as Array<Record<string, unknown>>)
+      : typeof source === 'object' && source !== null
+        ? [source as Record<string, unknown>]
+        : []
+    const textBlock = items.find((b) => b?.type === 'text')
+    if (typeof textBlock?.text === 'string') return textBlock.text
+    const toolResult = items.find((b) => b?.type === 'tool_result')
+    if (typeof toolResult?.content === 'string') return toolResult.content
+    const thinking = items.find((b) => b?.type === 'thinking')
+    if (typeof thinking?.thinking === 'string') return thinking.thinking
     return ''
   }
 

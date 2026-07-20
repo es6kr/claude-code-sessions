@@ -116,6 +116,29 @@ jobs:
       - name: Install VSCE
         run: npm install -g @vscode/vsce
 
+      - name: Determine pre-release channel
+        id: channel
+        run: |
+          # Tag pattern -next.N (semantic-release channel:next) → pre-release publish + Marketplace pre-release channel
+          # Legacy -beta.N tags remain supported for backward compatibility
+          # Plain tag vscode-vX.Y.Z → stable publish
+          # Use native $GITHUB_REF_NAME instead of interpolating ${{ github.ref_name }} into the shell
+          # to avoid template-expansion shell-injection (CodeRabbit CR-2 hardening).
+          TAG="$GITHUB_REF_NAME"
+          if [[ "$TAG" =~ -next\.[0-9]+$ ]]; then
+            echo "flag=--pre-release" >> $GITHUB_OUTPUT
+            echo "gh_prerelease=true" >> $GITHUB_OUTPUT
+            echo "🚧 Pre-release publish (channel: next)"
+          elif [[ "$TAG" =~ -beta\.[0-9]+$ ]]; then
+            echo "flag=--pre-release" >> $GITHUB_OUTPUT
+            echo "gh_prerelease=true" >> $GITHUB_OUTPUT
+            echo "🚧 Pre-release publish (legacy channel: beta)"
+          else
+            echo "flag=" >> $GITHUB_OUTPUT
+            echo "gh_prerelease=false" >> $GITHUB_OUTPUT
+            echo "✅ Stable publish"
+          fi
+
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
@@ -124,7 +147,7 @@ jobs:
           body_path: RELEASE_NOTES.md
           files: out/${{ needs.build.outputs.filename }}
           draft: false
-          prerelease: false
+          prerelease: ${{ steps.channel.outputs.gh_prerelease }}
 
       - name: Publish to VS Code Marketplace
         if: ${{ !github.event.inputs.version || github.event_name == 'push' }}
@@ -132,8 +155,8 @@ jobs:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
           if [ -n "$VSCE_PAT" ]; then
-            vsce publish --packagePath out/${{ needs.build.outputs.filename }} --pat $VSCE_PAT
-            echo "✅ Published to VS Code Marketplace"
+            vsce publish ${{ steps.channel.outputs.flag }} --packagePath out/${{ needs.build.outputs.filename }} --pat $VSCE_PAT
+            echo "✅ Published to VS Code Marketplace ${{ steps.channel.outputs.flag }}"
           else
             echo "⚠️ VSCE_PAT not set, skipping marketplace publish"
           fi
@@ -144,8 +167,8 @@ jobs:
           OVSX_PAT: ${{ secrets.OVSX_PAT }}
         run: |
           if [ -n "$OVSX_PAT" ]; then
-            npx ovsx publish out/${{ needs.build.outputs.filename }} -p $OVSX_PAT
-            echo "✅ Published to Open VSX Registry"
+            npx ovsx publish ${{ steps.channel.outputs.flag }} out/${{ needs.build.outputs.filename }} -p $OVSX_PAT
+            echo "✅ Published to Open VSX Registry ${{ steps.channel.outputs.flag }}"
           else
             echo "⚠️ OVSX_PAT not set, skipping Open VSX publish"
           fi

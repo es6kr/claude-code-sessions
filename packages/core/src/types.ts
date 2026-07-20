@@ -58,6 +58,16 @@ export interface ToolUseContent {
 }
 
 /**
+ * Extended thinking block emitted by the assistant.
+ * `signature` is an opaque verification token that must be preserved on edit.
+ */
+export interface ThinkingContent {
+  type: 'thinking'
+  thinking: string
+  signature?: string
+}
+
+/**
  * Union type for all message content blocks.
  * Includes known types and a fallback for unknown content types.
  */
@@ -65,6 +75,7 @@ export type ContentItem =
   | TextContent
   | ToolResultContent
   | ToolUseContent
+  | ThinkingContent
   | {
       type: string
       text?: string
