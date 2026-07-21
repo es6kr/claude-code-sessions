@@ -175,8 +175,13 @@ jobs:
       - name: Generate changelog
         if: ${{ github.event_name == 'push' }}
         run: |
-          # Get previous npm tag (v* without vscode prefix)
-          PREV_TAG=$(git tag -l 'v[0-9]*' --sort=-v:refname | head -2 | tail -1 || echo '')
+          # Get previous tag (exclude current tag; stable releases also skip betas)
+          CURRENT_TAG="${GITHUB_REF#refs/tags/}"
+          if [[ "$CURRENT_TAG" == *"-beta"* ]]; then
+            PREV_TAG=$(git tag -l 'v[0-9]*' --sort=-v:refname | grep -v "^${CURRENT_TAG}$" | head -1 || echo '')
+          else
+            PREV_TAG=$(git tag -l 'v[0-9]*' --sort=-v:refname | grep -v -- '-beta' | grep -v "^${CURRENT_TAG}$" | head -1 || echo '')
+          fi
           if [ -n "$PREV_TAG" ]; then
             echo "Generating changelog from $PREV_TAG"
             npx changelogen --from $PREV_TAG --output RELEASE_NOTES.md
