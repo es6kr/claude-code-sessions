@@ -61,7 +61,7 @@ while read local_ref local_sha remote_ref remote_sha; do
     elif echo "$tag_name" | grep -q "^v"; then
       echo "📦 Version tag detected: $tag_name"
       echo "Running core/mcp/web tests (excluding VSCode)..."
-      run_quiet pnpm -s test:core && run_quiet pnpm -s test:mcp && run_quiet pnpm -s test:web
+      run_quiet pnpm --filter @claude-sessions/core build && run_quiet pnpm -s test:core && run_quiet pnpm -s test:mcp && run_quiet pnpm -s test:web
       exit $?
     fi
   fi
