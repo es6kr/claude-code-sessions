@@ -11,7 +11,6 @@ import {
   fileExists,
   isContinuationSummary,
   isMetaMessage,
-  isMissingFolderError,
   cleanupSplitFirstMessage,
   parseJsonlLines,
   readJsonlFile,
@@ -116,10 +115,7 @@ const readSessionMeta = (projectPath: string, file: string, projectName: string)
 export const listSessions = (projectName: string) =>
   Effect.gen(function* () {
     const projectPath = path.join(getSessionsDir(), projectName)
-    const files = yield* Effect.tryPromise({
-      try: () => fs.readdir(projectPath),
-      catch: (error) => error as NodeJS.ErrnoException,
-    })
+    const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
     const sessionFiles = filterSessionFiles(files)
 
     const sessions = yield* Effect.all(
@@ -135,19 +131,7 @@ export const listSessions = (projectName: string) =>
     )
 
     return sortSessionsByDate(sessions.filter((s): s is NonNullable<typeof s> => s !== null))
-  }).pipe(
-    // Guard against TOCTOU: a project's folder may vanish between listProjects()
-    // returning it and this readdir (cross-PC sync, manual deletion). Narrow to
-    // ENOENT/ENOTDIR so unrelated I/O failures (EACCES, EIO, etc.) still propagate.
-    // Mirrors listProjects' own guard — see Issue #103.
-    Effect.catchAll((error) => {
-      if (!isMissingFolderError(error)) {
-        return Effect.fail(error)
-      }
-      log.debug(`listSessions: skipping missing project ${projectName}`, error)
-      return Effect.succeed([])
-    })
-  )
+  })
 
 // Deduplicate messages by `uuid`, keeping the last occurrence. Messages without
 // a `uuid` (summary, file-history-snapshot, custom-title, agent-name) pass through

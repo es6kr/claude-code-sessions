@@ -33,10 +33,20 @@ export class FileWriteError extends Data.TaggedError('FileWriteError')<{
  * (ENOENT, ENOTDIR). Used to narrow TOCTOU-race recovery so unrelated
  * I/O failures (EACCES, EIO, EMFILE, EBUSY, etc.) still propagate.
  *
+ * Unwraps Effect's `UnknownException` (the wrapper `Effect.tryPromise(fn)`
+ * produces when called without an explicit `{ try, catch }` mapping — the
+ * original `NodeJS.ErrnoException` ends up on `.error`/`.cause` instead of
+ * the top level) so callers don't need to know which `tryPromise` form the
+ * effect they're guarding happens to use.
+ *
  * See Issue #103 + .claude/rules/async-io.md.
  */
 export const isMissingFolderError = (error: unknown): boolean => {
-  const code = (error as NodeJS.ErrnoException | null | undefined)?.code
+  const codeOf = (e: unknown) => (e as NodeJS.ErrnoException | null | undefined)?.code
+  const code =
+    codeOf(error) ??
+    codeOf((error as { error?: unknown } | null | undefined)?.error) ??
+    codeOf((error as { cause?: unknown } | null | undefined)?.cause)
   return code === 'ENOENT' || code === 'ENOTDIR'
 }
 

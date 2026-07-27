@@ -219,7 +219,26 @@ export const searchSessions = (
                   timestamp: session.updatedAt,
                 }) satisfies SearchResult
             )
-        )
+        ),
+        // Guard against TOCTOU: `project` just came from listProjects(), but its
+        // folder may vanish before this per-project listSessions() call (cross-PC
+        // sync, manual deletion). listSessions() itself intentionally throws on a
+        // missing project (callers passing an arbitrary/typo'd name should see an
+        // error — see packages/mcp's "should throw error for non-existent project"
+        // test), so the guard lives here at the call site, scoped to this
+        // already-enumerated aggregation context only. Narrow to ENOENT/ENOTDIR so
+        // unrelated I/O failures (EACCES, EIO, etc.) still propagate. Mirrors
+        // listProjects' own guard — see Issue #103.
+        Effect.catchAll((error) => {
+          if (!isMissingFolderError(error)) {
+            return Effect.fail(error)
+          }
+          log.debug(
+            `searchSessions: skipping missing project ${project.name} in title search`,
+            error
+          )
+          return Effect.succeed([] as SearchResult[])
+        })
       )
     )
 
