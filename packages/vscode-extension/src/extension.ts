@@ -123,7 +123,9 @@ async function ensureWebServer({
 
   // SvelteKit adapter-node only reads PORT env var, not --port CLI arg.
   // Always set PORT in spawn env to ensure it works regardless of entry point.
-  const spawnEnv = { ...process.env, PORT: String(port) }
+  // HOST pins the server to loopback — without it, adapter-node defaults to
+  // 0.0.0.0 (all interfaces), exposing the unauthenticated API to the LAN.
+  const spawnEnv = { ...process.env, PORT: String(port), HOST: '127.0.0.1' }
 
   if (webServerPath) {
     spawnCmd = 'node'
