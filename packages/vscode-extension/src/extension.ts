@@ -111,6 +111,35 @@ function appendAuthToken(url: string, authToken: string | null): string {
   return `${url}${url.includes('?') ? '&' : '?'}token=${authToken}`
 }
 
+// Version-coupling guard (P2-1): we always pass CLAUDE_SESSIONS_AUTH_TOKEN,
+// but a pinned/older `webServerPath` or `packageTag` may point at a
+// @claude-sessions/web build that predates hooks.server.ts entirely — it
+// would silently ignore the env var and serve unauthenticated. Negotiate via
+// a capability flag (not a semver threshold, which we can't hardcode without
+// knowing this fix's own future release version) and warn once per
+// activation rather than failing closed, matching the plan's "graceful
+// degrade + document" guidance.
+let hasWarnedUnhardenedServer = false
+
+async function warnIfServerUnhardened(response: Response): Promise<void> {
+  if (hasWarnedUnhardenedServer) return
+  try {
+    const body: unknown = await response.json()
+    if (body && typeof body === 'object' && (body as { hardened?: unknown }).hardened === true) {
+      return
+    }
+  } catch (e) {
+    outputChannel.appendLine(`Could not parse /api/version response for hardening check: ${e}`)
+  }
+  hasWarnedUnhardenedServer = true
+  const message =
+    'The running @claude-sessions/web server predates the Host allow-list / token-auth ' +
+    'hardening (webServerPath or packageTag may be pinned to an older build). ' +
+    'The session data it serves is not protected by those layers.'
+  outputChannel.appendLine(`WARNING: ${message}`)
+  vscode.window.showWarningMessage(message)
+}
+
 async function ensureWebServer({
   forceRestart = false,
   skipAutoStartCheck = false,
@@ -121,7 +150,13 @@ async function ensureWebServer({
   if (!forceRestart) {
     try {
       const response = await fetch(`http://localhost:${port}/api/version`)
-      if (response.ok) return { port, authToken: webServerAuthToken }
+      if (response.ok) {
+        // Only meaningful if we know we asked this server to require a
+        // token — an unknown (null) token here just means no spawn has
+        // happened yet this activation, not that hardening is absent.
+        if (webServerAuthToken) void warnIfServerUnhardened(response)
+        return { port, authToken: webServerAuthToken }
+      }
     } catch {
       // Server not running
     }
@@ -201,6 +236,7 @@ async function ensureWebServer({
         try {
           const response = await fetch(`http://localhost:${port}/api/version`)
           if (response.ok) {
+            await warnIfServerUnhardened(response)
             // Wait for SvelteKit to fully initialize
             outputChannel.appendLine(`Health check passed, waiting 1s for SvelteKit...`)
             await new Promise((r) => setTimeout(r, 1000))
