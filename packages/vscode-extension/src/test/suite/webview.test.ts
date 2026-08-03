@@ -41,6 +41,45 @@ function createMockSessionTreeItem(projectName: string, sessionId: string) {
   }
 }
 
+interface WebServerHandle {
+  port: number
+  authToken: string | null
+}
+
+function httpGet(
+  url: string,
+  headers: Record<string, string> = {}
+): Promise<{ statusCode: number; headers: http.IncomingHttpHeaders; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { headers }, (res) => {
+      let data = ''
+      res.on('data', (chunk: Buffer) => (data += chunk.toString()))
+      res.on('end', () =>
+        resolve({ statusCode: res.statusCode ?? 0, headers: res.headers, body: data })
+      )
+    })
+    req.on('error', reject)
+    req.setTimeout(5000, () => {
+      req.destroy()
+      reject(new Error('HTTP request timeout'))
+    })
+  })
+}
+
+// Raw http.get requests bypass the extension's own URL-building (which
+// appends ?token=), so tests that hit the server directly must replicate
+// the one-time-token → session-cookie exchange (hooks.server.ts Layer 3)
+// themselves when a token is configured.
+async function exchangeTokenForCookie(
+  port: number,
+  authToken: string | null
+): Promise<string | undefined> {
+  if (!authToken) return undefined
+  const result = await httpGet(`http://localhost:${port}/?token=${authToken}`)
+  const setCookie = result.headers['set-cookie']?.[0]
+  return setCookie?.split(';')[0]
+}
+
 suite('Webview Test Suite', () => {
   // Restore webServerPath after tests that override it
   suiteTeardown(async () => {
@@ -327,27 +366,20 @@ suite('Webview Test Suite', () => {
     }
 
     // Ensure web server is running (reuse from previous test or start fresh)
-    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    const handle = await vscode.commands.executeCommand<WebServerHandle | undefined>(
+      'claudeSessions.restartWebServer'
+    )
     console.log('restartWebServer executed, polling for server readiness...')
 
     const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
 
-    // Wait for /api/version first (server is ready)
+    // Wait for /api/version first (server is ready) — exempt from Layer 3
+    // auth (see hooks.server.ts PUBLIC_PATHS), so no token needed here.
     const maxRetries = 10
     const retryInterval = 1000
     for (let i = 0; i < maxRetries; i++) {
       try {
-        const result = await new Promise<{ statusCode: number }>((resolve, reject) => {
-          const req = http.get(`http://localhost:${port}/api/version`, (res) => {
-            res.resume()
-            res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
-          })
-          req.on('error', reject)
-          req.setTimeout(3000, () => {
-            req.destroy()
-            reject(new Error('timeout'))
-          })
-        })
+        const result = await httpGet(`http://localhost:${port}/api/version`)
         if (result.statusCode === 200) break
       } catch {
         console.log(`Retry ${i + 1}/${maxRetries}: server not ready yet`)
@@ -355,18 +387,12 @@ suite('Webview Test Suite', () => {
       }
     }
 
+    // Every other path requires Layer 3 auth when a token is configured —
+    // exchange it for a session cookie before checking the actual page.
+    const cookie = await exchangeTokenForCookie(port, handle?.authToken ?? null)
+
     // Now test the frontend root path
-    const rootResult = await new Promise<{ statusCode: number }>((resolve, reject) => {
-      const req = http.get(`http://localhost:${port}/`, (res) => {
-        res.resume()
-        res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
-      })
-      req.on('error', reject)
-      req.setTimeout(5000, () => {
-        req.destroy()
-        reject(new Error('Root path request timeout'))
-      })
-    })
+    const rootResult = await httpGet(`http://localhost:${port}/`, cookie ? { Cookie: cookie } : {})
 
     console.log(`Web server / responded with status: ${rootResult.statusCode}`)
     assert.strictEqual(
@@ -413,27 +439,20 @@ suite('Webview Test Suite', () => {
       return
     }
 
-    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    const handle = await vscode.commands.executeCommand<WebServerHandle | undefined>(
+      'claudeSessions.restartWebServer'
+    )
     console.log('restartWebServer executed, polling for server readiness...')
 
     const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
 
-    // Wait for /api/version first (server is ready)
+    // Wait for /api/version first (server is ready) — exempt from Layer 3
+    // auth (see hooks.server.ts PUBLIC_PATHS), so no token needed here.
     const maxRetries = 10
     const retryInterval = 1000
     for (let i = 0; i < maxRetries; i++) {
       try {
-        const result = await new Promise<{ statusCode: number }>((resolve, reject) => {
-          const req = http.get(`http://localhost:${port}/api/version`, (res) => {
-            res.resume()
-            res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
-          })
-          req.on('error', reject)
-          req.setTimeout(3000, () => {
-            req.destroy()
-            reject(new Error('timeout'))
-          })
-        })
+        const result = await httpGet(`http://localhost:${port}/api/version`)
         if (result.statusCode === 200) break
       } catch {
         console.log(`Retry ${i + 1}/${maxRetries}: server not ready yet`)
@@ -441,19 +460,16 @@ suite('Webview Test Suite', () => {
       }
     }
 
+    // Every other path requires Layer 3 auth when a token is configured —
+    // exchange it for a session cookie before checking the actual page.
+    const cookie = await exchangeTokenForCookie(port, handle?.authToken ?? null)
+
     // Now fetch the session page that the VSCode webview actually loads
     const sessionPath = `/session/${encodeURIComponent(sessionInfo.projectName)}/${encodeURIComponent(sessionInfo.sessionId)}`
-    const sessionResult = await new Promise<{ statusCode: number }>((resolve, reject) => {
-      const req = http.get(`http://localhost:${port}${sessionPath}`, (res) => {
-        res.resume()
-        res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
-      })
-      req.on('error', reject)
-      req.setTimeout(5000, () => {
-        req.destroy()
-        reject(new Error('Session page request timeout'))
-      })
-    })
+    const sessionResult = await httpGet(
+      `http://localhost:${port}${sessionPath}`,
+      cookie ? { Cookie: cookie } : {}
+    )
 
     console.log(`Web server ${sessionPath} responded with status: ${sessionResult.statusCode}`)
     assert.strictEqual(
