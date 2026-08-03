@@ -336,6 +336,105 @@ suite('Webview Test Suite', () => {
     assert.ok(parsed.version, 'Response should contain version field')
   })
 
+  // P2-2 regression guard: HOST=127.0.0.1 (P0-1) must actually keep the
+  // server off 0.0.0.0 — verified by attempting a connection via this
+  // machine's own LAN-facing interface, not just parsing `lsof`/`netstat`
+  // output (which is platform-specific and was only a manual check before).
+  test('Web server is not reachable via a LAN-facing interface (loopback-only bind)', async function () {
+    if (process.env.CI) {
+      console.log('Skipping loopback-bind regression test in CI environment')
+      this.skip()
+      return
+    }
+
+    this.timeout(30000)
+
+    const lanAddress = Object.values(os.networkInterfaces())
+      .flat()
+      .find((iface) => iface && iface.family === 'IPv4' && !iface.internal)?.address
+
+    if (!lanAddress) {
+      console.log('No LAN-facing IPv4 interface found on this machine, skipping')
+      this.skip()
+      return
+    }
+
+    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    if (!extension) {
+      assert.fail('Extension not found: es6kr.claude-sessions')
+    }
+    if (!extension.isActive) {
+      await extension.activate()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
+
+    for (let i = 0; i < 10; i++) {
+      try {
+        const result = await httpGet(`http://localhost:${port}/api/version`)
+        if (result.statusCode === 200) break
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    }
+
+    let reached = false
+    try {
+      await httpGet(`http://${lanAddress}:${port}/api/version`)
+      reached = true
+    } catch (e) {
+      console.log(`LAN-interface connection correctly refused: ${e}`)
+    }
+    assert.strictEqual(
+      reached,
+      false,
+      `Web server should not be reachable via LAN address ${lanAddress}:${port}`
+    )
+  })
+
+  // P2-2 regression guard for P1-1 (Host allow-list) — a spoofed Host header
+  // must be rejected end-to-end against a real running server, not just the
+  // isAllowedHost unit tests in hooks.server.test.ts.
+  test('Web server rejects a spoofed Host header with 403', async function () {
+    if (process.env.CI) {
+      console.log('Skipping Host-header regression test in CI environment')
+      this.skip()
+      return
+    }
+
+    this.timeout(30000)
+
+    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    if (!extension) {
+      assert.fail('Extension not found: es6kr.claude-sessions')
+    }
+    if (!extension.isActive) {
+      await extension.activate()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
+
+    for (let i = 0; i < 10; i++) {
+      try {
+        const result = await httpGet(`http://localhost:${port}/api/version`)
+        if (result.statusCode === 200) break
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    }
+
+    const spoofed = await httpGet(`http://localhost:${port}/api/version`, { Host: 'evil.com' })
+    assert.strictEqual(
+      spoofed.statusCode,
+      403,
+      `A spoofed Host header should be rejected with 403, got ${spoofed.statusCode}`
+    )
+  })
+
   test('Frontend root path responds with HTTP 200', async function () {
     if (process.env.CI) {
       console.log('Skipping frontend root test in CI environment')
