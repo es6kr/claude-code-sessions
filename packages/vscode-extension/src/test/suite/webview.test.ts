@@ -41,6 +41,45 @@ function createMockSessionTreeItem(projectName: string, sessionId: string) {
   }
 }
 
+interface WebServerHandle {
+  port: number
+  authToken: string | null
+}
+
+function httpGet(
+  url: string,
+  headers: Record<string, string> = {}
+): Promise<{ statusCode: number; headers: http.IncomingHttpHeaders; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { headers }, (res) => {
+      let data = ''
+      res.on('data', (chunk: Buffer) => (data += chunk.toString()))
+      res.on('end', () =>
+        resolve({ statusCode: res.statusCode ?? 0, headers: res.headers, body: data })
+      )
+    })
+    req.on('error', reject)
+    req.setTimeout(5000, () => {
+      req.destroy()
+      reject(new Error('HTTP request timeout'))
+    })
+  })
+}
+
+// Raw http.get requests bypass the extension's own URL-building (which
+// appends ?token=), so tests that hit the server directly must replicate
+// the one-time-token → session-cookie exchange (hooks.server.ts Layer 3)
+// themselves when a token is configured.
+async function exchangeTokenForCookie(
+  port: number,
+  authToken: string | null
+): Promise<string | undefined> {
+  if (!authToken) return undefined
+  const result = await httpGet(`http://localhost:${port}/?token=${authToken}`)
+  const setCookie = result.headers['set-cookie']?.[0]
+  return setCookie?.split(';')[0]
+}
+
 suite('Webview Test Suite', () => {
   // Restore webServerPath after tests that override it
   suiteTeardown(async () => {
@@ -297,6 +336,105 @@ suite('Webview Test Suite', () => {
     assert.ok(parsed.version, 'Response should contain version field')
   })
 
+  // P2-2 regression guard: HOST=127.0.0.1 (P0-1) must actually keep the
+  // server off 0.0.0.0 — verified by attempting a connection via this
+  // machine's own LAN-facing interface, not just parsing `lsof`/`netstat`
+  // output (which is platform-specific and was only a manual check before).
+  test('Web server is not reachable via a LAN-facing interface (loopback-only bind)', async function () {
+    if (process.env.CI) {
+      console.log('Skipping loopback-bind regression test in CI environment')
+      this.skip()
+      return
+    }
+
+    this.timeout(30000)
+
+    const lanAddress = Object.values(os.networkInterfaces())
+      .flat()
+      .find((iface) => iface && iface.family === 'IPv4' && !iface.internal)?.address
+
+    if (!lanAddress) {
+      console.log('No LAN-facing IPv4 interface found on this machine, skipping')
+      this.skip()
+      return
+    }
+
+    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    if (!extension) {
+      assert.fail('Extension not found: es6kr.claude-sessions')
+    }
+    if (!extension.isActive) {
+      await extension.activate()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
+
+    for (let i = 0; i < 10; i++) {
+      try {
+        const result = await httpGet(`http://localhost:${port}/api/version`)
+        if (result.statusCode === 200) break
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    }
+
+    let reached = false
+    try {
+      await httpGet(`http://${lanAddress}:${port}/api/version`)
+      reached = true
+    } catch (e) {
+      console.log(`LAN-interface connection correctly refused: ${e}`)
+    }
+    assert.strictEqual(
+      reached,
+      false,
+      `Web server should not be reachable via LAN address ${lanAddress}:${port}`
+    )
+  })
+
+  // P2-2 regression guard for P1-1 (Host allow-list) — a spoofed Host header
+  // must be rejected end-to-end against a real running server, not just the
+  // isAllowedHost unit tests in hooks.server.test.ts.
+  test('Web server rejects a spoofed Host header with 403', async function () {
+    if (process.env.CI) {
+      console.log('Skipping Host-header regression test in CI environment')
+      this.skip()
+      return
+    }
+
+    this.timeout(30000)
+
+    const extension = vscode.extensions.getExtension('es6kr.claude-sessions')
+    if (!extension) {
+      assert.fail('Extension not found: es6kr.claude-sessions')
+    }
+    if (!extension.isActive) {
+      await extension.activate()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+
+    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
+
+    for (let i = 0; i < 10; i++) {
+      try {
+        const result = await httpGet(`http://localhost:${port}/api/version`)
+        if (result.statusCode === 200) break
+      } catch {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+    }
+
+    const spoofed = await httpGet(`http://localhost:${port}/api/version`, { Host: 'evil.com' })
+    assert.strictEqual(
+      spoofed.statusCode,
+      403,
+      `A spoofed Host header should be rejected with 403, got ${spoofed.statusCode}`
+    )
+  })
+
   test('Frontend root path responds with HTTP 200', async function () {
     if (process.env.CI) {
       console.log('Skipping frontend root test in CI environment')
@@ -327,27 +465,20 @@ suite('Webview Test Suite', () => {
     }
 
     // Ensure web server is running (reuse from previous test or start fresh)
-    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    const handle = await vscode.commands.executeCommand<WebServerHandle | undefined>(
+      'claudeSessions.restartWebServer'
+    )
     console.log('restartWebServer executed, polling for server readiness...')
 
     const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
 
-    // Wait for /api/version first (server is ready)
+    // Wait for /api/version first (server is ready) — exempt from Layer 3
+    // auth (see hooks.server.ts PUBLIC_PATHS), so no token needed here.
     const maxRetries = 10
     const retryInterval = 1000
     for (let i = 0; i < maxRetries; i++) {
       try {
-        const result = await new Promise<{ statusCode: number }>((resolve, reject) => {
-          const req = http.get(`http://localhost:${port}/api/version`, (res) => {
-            res.resume()
-            res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
-          })
-          req.on('error', reject)
-          req.setTimeout(3000, () => {
-            req.destroy()
-            reject(new Error('timeout'))
-          })
-        })
+        const result = await httpGet(`http://localhost:${port}/api/version`)
         if (result.statusCode === 200) break
       } catch {
         console.log(`Retry ${i + 1}/${maxRetries}: server not ready yet`)
@@ -355,18 +486,12 @@ suite('Webview Test Suite', () => {
       }
     }
 
+    // Every other path requires Layer 3 auth when a token is configured —
+    // exchange it for a session cookie before checking the actual page.
+    const cookie = await exchangeTokenForCookie(port, handle?.authToken ?? null)
+
     // Now test the frontend root path
-    const rootResult = await new Promise<{ statusCode: number }>((resolve, reject) => {
-      const req = http.get(`http://localhost:${port}/`, (res) => {
-        res.resume()
-        res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
-      })
-      req.on('error', reject)
-      req.setTimeout(5000, () => {
-        req.destroy()
-        reject(new Error('Root path request timeout'))
-      })
-    })
+    const rootResult = await httpGet(`http://localhost:${port}/`, cookie ? { Cookie: cookie } : {})
 
     console.log(`Web server / responded with status: ${rootResult.statusCode}`)
     assert.strictEqual(
@@ -413,27 +538,20 @@ suite('Webview Test Suite', () => {
       return
     }
 
-    await vscode.commands.executeCommand('claudeSessions.restartWebServer')
+    const handle = await vscode.commands.executeCommand<WebServerHandle | undefined>(
+      'claudeSessions.restartWebServer'
+    )
     console.log('restartWebServer executed, polling for server readiness...')
 
     const port = vscode.workspace.getConfiguration('claudeSessions').get<number>('port', 5174)
 
-    // Wait for /api/version first (server is ready)
+    // Wait for /api/version first (server is ready) — exempt from Layer 3
+    // auth (see hooks.server.ts PUBLIC_PATHS), so no token needed here.
     const maxRetries = 10
     const retryInterval = 1000
     for (let i = 0; i < maxRetries; i++) {
       try {
-        const result = await new Promise<{ statusCode: number }>((resolve, reject) => {
-          const req = http.get(`http://localhost:${port}/api/version`, (res) => {
-            res.resume()
-            res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
-          })
-          req.on('error', reject)
-          req.setTimeout(3000, () => {
-            req.destroy()
-            reject(new Error('timeout'))
-          })
-        })
+        const result = await httpGet(`http://localhost:${port}/api/version`)
         if (result.statusCode === 200) break
       } catch {
         console.log(`Retry ${i + 1}/${maxRetries}: server not ready yet`)
@@ -441,19 +559,16 @@ suite('Webview Test Suite', () => {
       }
     }
 
+    // Every other path requires Layer 3 auth when a token is configured —
+    // exchange it for a session cookie before checking the actual page.
+    const cookie = await exchangeTokenForCookie(port, handle?.authToken ?? null)
+
     // Now fetch the session page that the VSCode webview actually loads
     const sessionPath = `/session/${encodeURIComponent(sessionInfo.projectName)}/${encodeURIComponent(sessionInfo.sessionId)}`
-    const sessionResult = await new Promise<{ statusCode: number }>((resolve, reject) => {
-      const req = http.get(`http://localhost:${port}${sessionPath}`, (res) => {
-        res.resume()
-        res.on('end', () => resolve({ statusCode: res.statusCode ?? 0 }))
-      })
-      req.on('error', reject)
-      req.setTimeout(5000, () => {
-        req.destroy()
-        reject(new Error('Session page request timeout'))
-      })
-    })
+    const sessionResult = await httpGet(
+      `http://localhost:${port}${sessionPath}`,
+      cookie ? { Cookie: cookie } : {}
+    )
 
     console.log(`Web server ${sessionPath} responded with status: ${sessionResult.statusCode}`)
     assert.strictEqual(

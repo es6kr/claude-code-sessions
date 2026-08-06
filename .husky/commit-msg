@@ -1,0 +1,21 @@
+#!/bin/sh
+COMMIT_MSG_FILE=$1
+
+# Read the first line of the commit message
+FIRST_LINE=$(head -n 1 "$COMMIT_MSG_FILE")
+
+# Check if the first line starts with fix(ci) (case-insensitive check)
+CLEANED_LINE=$(echo "$FIRST_LINE" | tr '[:upper:]' '[:lower:]')
+
+case "$CLEANED_LINE" in
+  "fix(ci)"*)
+    echo "================================================================" >&2
+    echo "ERROR: 'fix(ci):' tags are absolutely forbidden!" >&2
+    echo "Reason: This triggers unwanted patch version bumps in CI." >&2
+    echo "Solution: Use 'ci:' (or 'ci(scope):') instead of 'fix(ci):'." >&2
+    echo "================================================================" >&2
+    exit 1
+    ;;
+esac
+
+exit 0
