@@ -4,11 +4,21 @@ import * as session from '@claude-sessions/core'
 import { openExternalTerminal, resumeSession, startClaude } from '@claude-sessions/core/server'
 import { Effect } from 'effect'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
 import { outputChannel } from './output'
 import { SESSION_EDITOR_VIEW_TYPE, SessionEditorProvider } from './sessionEditorProvider'
 import { decideResume, ensureClaudeCodeExtension, type ResumeMode } from './lib/crossWorkspace'
 
 let webServerProcess: ChildProcess | null = null
+// The one-time-exchange token for the currently-running spawned server, or
+// null if no auth is configured for it. Set only when we actually spawn a
+// new process (see ensureWebServer) — reused across calls within the same
+// activation so the URL builders below can append it. Known limitation: if
+// a server was left running by a *previous* activation (extension host
+// reload without killWebServer), this stays null and URLs open without a
+// token even though the orphaned process may still require one — recovery
+// requires a manual "Restart Web Server" (killWebServer + fresh spawn).
+let webServerAuthToken: string | null = null
 
 function shortLabel(text: string, max = 30): string {
   return text.length > max ? text.slice(0, max - 1) + '…' : text
@@ -91,17 +101,62 @@ function killWebServer(): Promise<void> {
   })
 }
 
+interface WebServerHandle {
+  port: number
+  authToken: string | null
+}
+
+function appendAuthToken(url: string, authToken: string | null): string {
+  if (!authToken) return url
+  return `${url}${url.includes('?') ? '&' : '?'}token=${authToken}`
+}
+
+// Version-coupling guard (P2-1): we always pass CLAUDE_SESSIONS_AUTH_TOKEN,
+// but a pinned/older `webServerPath` or `packageTag` may point at a
+// @claude-sessions/web build that predates hooks.server.ts entirely — it
+// would silently ignore the env var and serve unauthenticated. Negotiate via
+// a capability flag (not a semver threshold, which we can't hardcode without
+// knowing this fix's own future release version) and warn once per
+// activation rather than failing closed, matching the plan's "graceful
+// degrade + document" guidance.
+let hasWarnedUnhardenedServer = false
+
+async function warnIfServerUnhardened(response: Response): Promise<void> {
+  if (hasWarnedUnhardenedServer) return
+  try {
+    const body: unknown = await response.json()
+    if (body && typeof body === 'object' && (body as { hardened?: unknown }).hardened === true) {
+      return
+    }
+  } catch (e) {
+    outputChannel.appendLine(`Could not parse /api/version response for hardening check: ${e}`)
+  }
+  hasWarnedUnhardenedServer = true
+  const message =
+    'The running @claude-sessions/web server predates the Host allow-list / token-auth ' +
+    'hardening (webServerPath or packageTag may be pinned to an older build). ' +
+    'The session data it serves is not protected by those layers.'
+  outputChannel.appendLine(`WARNING: ${message}`)
+  vscode.window.showWarningMessage(message)
+}
+
 async function ensureWebServer({
   forceRestart = false,
   skipAutoStartCheck = false,
-} = {}): Promise<number> {
+} = {}): Promise<WebServerHandle> {
   const { port, autoStartServer } = getConfig()
 
   // Check if server is running (skip when force-restarting with new config)
   if (!forceRestart) {
     try {
       const response = await fetch(`http://localhost:${port}/api/version`)
-      if (response.ok) return port
+      if (response.ok) {
+        // Only meaningful if we know we asked this server to require a
+        // token — an unknown (null) token here just means no spawn has
+        // happened yet this activation, not that hardening is absent.
+        if (webServerAuthToken) void warnIfServerUnhardened(response)
+        return { port, authToken: webServerAuthToken }
+      }
     } catch {
       // Server not running
     }
@@ -121,9 +176,22 @@ async function ensureWebServer({
   let spawnCmd: string
   let spawnArgs: string[]
 
+  // Fresh one-time-exchange token for Layer 3 auth (hooks.server.ts). Passed
+  // via env (never argv) to avoid `ps`-visible exposure — see
+  // plan-claude-sessions-security-hardening.md §Q2.
+  const authToken = randomBytes(32).toString('hex')
+  webServerAuthToken = authToken
+
   // SvelteKit adapter-node only reads PORT env var, not --port CLI arg.
   // Always set PORT in spawn env to ensure it works regardless of entry point.
-  const spawnEnv = { ...process.env, PORT: String(port) }
+  // HOST pins the server to loopback — without it, adapter-node defaults to
+  // 0.0.0.0 (all interfaces), exposing the unauthenticated API to the LAN.
+  const spawnEnv = {
+    ...process.env,
+    PORT: String(port),
+    HOST: '127.0.0.1',
+    CLAUDE_SESSIONS_AUTH_TOKEN: authToken,
+  }
 
   if (webServerPath) {
     spawnCmd = 'node'
@@ -168,11 +236,12 @@ async function ensureWebServer({
         try {
           const response = await fetch(`http://localhost:${port}/api/version`)
           if (response.ok) {
+            await warnIfServerUnhardened(response)
             // Wait for SvelteKit to fully initialize
             outputChannel.appendLine(`Health check passed, waiting 1s for SvelteKit...`)
             await new Promise((r) => setTimeout(r, 1000))
             outputChannel.appendLine(`Server ready on port ${port}`)
-            resolve(port)
+            resolve({ port, authToken })
             return
           }
           outputChannel.appendLine(`Health check returned ${response.status}`)
@@ -330,9 +399,12 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('claudeSessions.openSession', async (item: SessionTreeItem) => {
       if (item.type === 'session') {
         try {
-          const port = await ensureWebServer()
+          const { port, authToken } = await ensureWebServer()
           const { openInEditor } = getConfig()
-          const localUrl = `http://localhost:${port}/session/${encodeURIComponent(item.projectName)}/${encodeURIComponent(item.sessionId)}`
+          const localUrl = appendAuthToken(
+            `http://localhost:${port}/session/${encodeURIComponent(item.projectName)}/${encodeURIComponent(item.sessionId)}`,
+            authToken
+          )
           const externalUri = await vscode.env.asExternalUri(vscode.Uri.parse(localUrl))
 
           if (openInEditor) {
@@ -391,9 +463,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     vscode.commands.registerCommand('claudeSessions.openWebUI', async () => {
       try {
-        const port = await ensureWebServer()
+        const { port, authToken } = await ensureWebServer()
         const externalUri = await vscode.env.asExternalUri(
-          vscode.Uri.parse(`http://localhost:${port}`)
+          vscode.Uri.parse(appendAuthToken(`http://localhost:${port}`, authToken))
         )
         vscode.env.openExternal(externalUri)
       } catch (e) {
@@ -864,12 +936,17 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('claudeSessions.restartWebServer', async () => {
       await killWebServer()
       try {
-        await ensureWebServer({ forceRestart: true, skipAutoStartCheck: true })
+        const handle = await ensureWebServer({ forceRestart: true, skipAutoStartCheck: true })
         vscode.window.showInformationMessage('Web server restarted successfully')
+        // Returned for test/tooling consumers that need the auth token to
+        // make direct HTTP requests (the webview flow gets it via
+        // appendAuthToken above) — not used by the info-message path.
+        return handle
       } catch (err) {
         vscode.window.showErrorMessage(
           `Failed to restart web server: ${err instanceof Error ? err.message : String(err)}`
         )
+        return undefined
       }
     }),
 

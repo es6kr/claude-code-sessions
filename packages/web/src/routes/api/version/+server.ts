@@ -20,5 +20,11 @@ export const GET: RequestHandler = async () => {
     version: __APP_VERSION__,
     homeDir: env.CLAUDE_SESSIONS_HOME || homedir(),
     currentProjectName: getCurrentProjectName(),
+    // Capability flag (not a version-number threshold — see
+    // plan-claude-sessions-security-hardening.md §Q4 P2-1): older
+    // @claude-sessions/web builds don't have hooks.server.ts at all and
+    // won't include this field, so its absence is itself the signal that
+    // Host allow-listing / token auth are not enforced by this server.
+    hardened: true,
   })
 }

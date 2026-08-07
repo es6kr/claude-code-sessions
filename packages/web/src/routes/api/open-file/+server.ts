@@ -1,12 +1,12 @@
 import { json, error } from '@sveltejs/kit'
-import { exec } from 'child_process'
+import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { homedir } from 'os'
 import { join } from 'path'
 import { env } from '$env/dynamic/private'
 import type { RequestHandler } from './$types'
 
-const execAsync = promisify(exec)
+const execFileAsync = promisify(execFile)
 
 /**
  * Expand ~ to configured home directory or system homedir
@@ -47,7 +47,13 @@ export const POST: RequestHandler = async ({ request }) => {
 
   try {
     const editorCommand = getEditorCommand()
-    await execAsync(`${editorCommand} "${filePath}"`)
+    // execFile never goes through a shell, so filePath (or an
+    // attacker-supplied payload like `; rm -rf ~ #`) cannot be interpreted
+    // as a command regardless of its contents. CLAUDE_SESSIONS_EDITOR may
+    // itself be a multi-token string (e.g. "code --wait") — split it into
+    // the binary plus its own leading args, then append filePath last.
+    const [editorBin, ...editorArgs] = editorCommand.trim().split(/\s+/)
+    await execFileAsync(editorBin, [...editorArgs, filePath])
     return json({ success: true })
   } catch (e) {
     throw error(500, `Failed to open file: ${e}`)
