@@ -13,6 +13,17 @@ export const POST: RequestHandler = async ({ request }) => {
       return json({ error: 'Missing projectName or sessionId' }, { status: 400 })
     }
 
+    // Defense in depth: sessionId is interpolated into a spawned CLI argv
+    // (resumeSession -> claudeArgs) and ultimately into a shell string on
+    // some platforms (AppleScript do script / bash -c / cmd). The Host
+    // allow-list + one-time-token auth in hooks.server.ts already restrict
+    // who can reach this endpoint, but the value itself is still
+    // unvalidated -- mirror the same allow-list regex the vscode-extension
+    // already applies to its own resume/openTerminalHere handlers.
+    if (typeof sessionId !== 'string' || !/^[A-Za-z0-9_-]+$/.test(sessionId)) {
+      return json({ error: 'Invalid session id' }, { status: 400 })
+    }
+
     // Get project path for cwd
     const folderPath = await folderNameToPath(projectName)
     const homeDir = os.homedir()
