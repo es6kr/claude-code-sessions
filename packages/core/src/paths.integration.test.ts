@@ -18,6 +18,10 @@ describe('getRealPathFromSession (mocked)', () => {
     vi.clearAllMocks()
   })
 
+  // Flaky under load: the dynamic re-import below occasionally exceeds vitest's
+  // default 5000ms test timeout on a cold module cache (observed independent of
+  // this test's own logic, on unmodified main). Raise the timeout rather than
+  // changing behavior.
   it('returns null for non-existent project', async () => {
     vi.mocked(fs.readdirSync).mockImplementation(() => {
       throw new Error('ENOENT')
@@ -27,7 +31,7 @@ describe('getRealPathFromSession (mocked)', () => {
     const { getRealPathFromSession } = await import('./paths.js')
     const result = getRealPathFromSession('-nonexistent-project')
     expect(result).toBeNull()
-  })
+  }, 15000)
 
   it('returns real cwd from session file when cwd matches folder name', async () => {
     const mockCwd = '/home/user/example.com'

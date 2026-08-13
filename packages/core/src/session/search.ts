@@ -5,10 +5,18 @@ import { Effect, pipe } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { getSessionsDir } from '../paths.js'
-import { extractTextContent, extractTitle, tryParseJsonLine } from '../utils.js'
+import {
+  extractTextContent,
+  extractTitle,
+  isMissingFolderError,
+  tryParseJsonLine,
+} from '../utils.js'
+import { createLogger } from '../logger.js'
 import { listProjects } from './projects.js'
 import { listSessions } from './crud.js'
 import type { Message, SearchResult, Project } from '../types.js'
+
+const log = createLogger('search')
 
 // Pure function: extract snippet around match
 export const extractSnippet = (text: string, matchIndex: number, queryLength: number): string => {
@@ -74,7 +82,10 @@ const searchSessionContent = (
 const searchProjectContent = (project: Project, queryLower: string, alreadyFoundIds: Set<string>) =>
   Effect.gen(function* () {
     const projectPath = path.join(getSessionsDir(), project.name)
-    const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+    const files = yield* Effect.tryPromise({
+      try: () => fs.readdir(projectPath),
+      catch: (error) => error as NodeJS.ErrnoException,
+    })
     const sessionFiles = files.filter((f) => f.endsWith('.jsonl') && !f.startsWith('agent-'))
 
     // Filter out already found sessions and create search effects
@@ -90,7 +101,19 @@ const searchProjectContent = (project: Project, queryLower: string, alreadyFound
 
     const results = yield* Effect.all(searchEffects, { concurrency: 10 })
     return results.filter((r): r is NonNullable<typeof r> => r !== null)
-  })
+  }).pipe(
+    // Guard against TOCTOU: a project's folder may vanish between listProjects()
+    // returning it and this per-project readdir (cross-PC sync, manual deletion).
+    // Narrow to ENOENT/ENOTDIR so unrelated I/O failures (EACCES, EIO, etc.) still
+    // propagate. Mirrors listProjects' own guard — see Issue #103.
+    Effect.catchAll((error) => {
+      if (!isMissingFolderError(error)) {
+        return Effect.fail(error)
+      }
+      log.debug(`searchProjectContent: skipping missing project ${project.name}`, error)
+      return Effect.succeed([] as SearchResult[])
+    })
+  )
 
 // Pattern to detect potential session ID queries (hex chars and hyphens, 8+ chars)
 const SESSION_ID_PATTERN = /^[a-f0-9][a-f0-9-]{7,}$/i
@@ -196,7 +219,26 @@ export const searchSessions = (
                   timestamp: session.updatedAt,
                 }) satisfies SearchResult
             )
-        )
+        ),
+        // Guard against TOCTOU: `project` just came from listProjects(), but its
+        // folder may vanish before this per-project listSessions() call (cross-PC
+        // sync, manual deletion). listSessions() itself intentionally throws on a
+        // missing project (callers passing an arbitrary/typo'd name should see an
+        // error — see packages/mcp's "should throw error for non-existent project"
+        // test), so the guard lives here at the call site, scoped to this
+        // already-enumerated aggregation context only. Narrow to ENOENT/ENOTDIR so
+        // unrelated I/O failures (EACCES, EIO, etc.) still propagate. Mirrors
+        // listProjects' own guard — see Issue #103.
+        Effect.catchAll((error) => {
+          if (!isMissingFolderError(error)) {
+            return Effect.fail(error)
+          }
+          log.debug(
+            `searchSessions: skipping missing project ${project.name} in title search`,
+            error
+          )
+          return Effect.succeed([] as SearchResult[])
+        })
       )
     )
 

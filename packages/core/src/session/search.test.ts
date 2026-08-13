@@ -4,6 +4,16 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import { Effect } from 'effect'
 
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+  const readdirMock = vi.fn(actual.readdir)
+  return {
+    ...actual,
+    readdir: readdirMock,
+    default: { ...actual, readdir: readdirMock },
+  }
+})
+
 vi.mock('../paths.js', async () => {
   const actual = await vi.importActual<typeof import('../paths.js')>('../paths.js')
   return {
@@ -135,6 +145,10 @@ describe('searchSessions', () => {
   let tempDir: string
 
   beforeEach(async () => {
+    // Restore readdir to the real implementation; individual tests may override.
+    const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+    vi.mocked(fs.readdir).mockImplementation(actual.readdir as typeof fs.readdir)
+
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'search-test-'))
     vi.mocked(getSessionsDir).mockReturnValue(tempDir)
   })
@@ -259,5 +273,148 @@ describe('searchSessions', () => {
     // tempDir is empty (no project directories)
     const results = await Effect.runPromise(searchSessions('needle'))
     expect(results).toEqual([])
+  })
+
+  // searchProjectContent TOCTOU guard — a project's folder may vanish between
+  // listProjects() returning it and searchProjectContent's own readdir (cross-PC
+  // sync, manual deletion). Mirrors listProjects' own guard, see Issue #103.
+  describe('searchProjectContent TOCTOU safety', () => {
+    function makeEnoent(p: string): NodeJS.ErrnoException {
+      const err = new Error(
+        `ENOENT: no such file or directory, scandir '${p}'`
+      ) as NodeJS.ErrnoException
+      err.code = 'ENOENT'
+      return err
+    }
+
+    it("skips a project whose folder vanishes mid-content-search, keeping other projects' results", async () => {
+      const projGone = '-Users-test-search-gone'
+      const projKeep = '-Users-test-search-keep'
+      await writeSessionWithDistinctTitleAndContent(
+        projGone,
+        'sess-gone',
+        'plain title',
+        'this has NEEDLE inside'
+      )
+      await writeSessionWithDistinctTitleAndContent(
+        projKeep,
+        'sess-keep',
+        'plain title',
+        'this also has NEEDLE inside'
+      )
+
+      // listProjects() also readdirs each project folder (for sessionCount) before
+      // searchProjectContent gets a turn. Succeed on that first call so projGone
+      // survives into targetProjects, then fail with ENOENT on the *next* readdir
+      // for the same path — simulating the folder vanishing between the two reads
+      // (the actual TOCTOU window this guard protects, not a same-instant miss).
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      let goneCallCount = 0
+      vi.mocked(fs.readdir).mockImplementation(((p: unknown, opts: unknown) => {
+        if (typeof p === 'string' && p.endsWith(projGone)) {
+          goneCallCount += 1
+          if (goneCallCount > 1) {
+            return Promise.reject(makeEnoent(p))
+          }
+        }
+        return (actual.readdir as typeof fs.readdir)(
+          p as Parameters<typeof fs.readdir>[0],
+          opts as Parameters<typeof fs.readdir>[1]
+        )
+      }) as typeof fs.readdir)
+
+      // Before fix: the whole searchSessions Effect would die on projGone's ENOENT.
+      // After fix: projGone is skipped, projKeep's content match still returned.
+      const results = await Effect.runPromise(searchSessions('needle', { searchContent: true }))
+      const ids = results.map((r) => r.sessionId)
+      expect(ids).toContain('sess-keep')
+      expect(ids).not.toContain('sess-gone')
+    })
+
+    it('propagates a non-ENOENT readdir error (EACCES) instead of silently skipping', async () => {
+      const projDenied = '-Users-test-search-eacces'
+      await writeSessionWithDistinctTitleAndContent(
+        projDenied,
+        'sess-denied',
+        'plain title',
+        'this has NEEDLE inside'
+      )
+
+      // Same call-count trick as above, but this project sees *three* readdir
+      // calls before searchProjectContent's own turn: (1) listProjects' own
+      // readdir (for sessionCount), (2) Phase 1 title search's listSessions()
+      // readdir, (3) searchProjectContent's own readdir. Let the first two
+      // succeed so projDenied reaches Phase 2, then fail with EACCES
+      // specifically on call 3 — isolating this test to *searchProjectContent's*
+      // non-ENOENT passthrough. (Failing at call 2 instead would have the
+      // title-search phase's own catchAll re-throw the EACCES and abort
+      // Effect.all before Phase 2 is ever entered — see the dedicated
+      // "searchSessions title-search TOCTOU safety" block below, which
+      // exercises exactly that call-2 case.)
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      let deniedCallCount = 0
+      vi.mocked(fs.readdir).mockImplementation(((p: unknown, opts: unknown) => {
+        if (typeof p === 'string' && p.endsWith(projDenied)) {
+          deniedCallCount += 1
+          if (deniedCallCount > 2) {
+            const err = new Error(
+              `EACCES: permission denied, scandir '${p}'`
+            ) as NodeJS.ErrnoException
+            err.code = 'EACCES'
+            return Promise.reject(err)
+          }
+        }
+        return (actual.readdir as typeof fs.readdir)(
+          p as Parameters<typeof fs.readdir>[0],
+          opts as Parameters<typeof fs.readdir>[1]
+        )
+      }) as typeof fs.readdir)
+
+      await expect(
+        Effect.runPromise(searchSessions('needle', { searchContent: true }))
+      ).rejects.toThrow()
+    })
+  })
+
+  // Phase 1 (title search) TOCTOU guard — a project's folder may vanish
+  // between listProjects() returning it and listSessions()'s own readdir.
+  // listSessions() intentionally throws on a missing project (see the guard's
+  // comment at its Effect.catchAll call site in search.ts), so non-ENOENT
+  // errors (EACCES, etc.) must still propagate here too, distinct from the
+  // ENOENT/ENOTDIR skip case. This coverage was previously only accidental
+  // (the searchProjectContent EACCES test above used to fail one readdir call
+  // too early and exercise this path instead of its own) — now isolated into
+  // its own test so it isn't lost if the call-count fix above ever changes.
+  describe('searchSessions title-search TOCTOU safety', () => {
+    it('propagates a non-ENOENT readdir error (EACCES) from the title-search phase', async () => {
+      const projDenied = '-Users-test-search-title-eacces'
+      await writeSessionFile(projDenied, 'sess-denied', 'plain title')
+
+      // listProjects() readdirs each project folder once (for sessionCount);
+      // let that succeed so projDenied reaches Phase 1, then fail with EACCES
+      // specifically on listSessions' own readdir (call 2) — isolating this
+      // test to the title-search guard, before Phase 2 (searchProjectContent)
+      // is ever entered.
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises')
+      let deniedCallCount = 0
+      vi.mocked(fs.readdir).mockImplementation(((p: unknown, opts: unknown) => {
+        if (typeof p === 'string' && p.endsWith(projDenied)) {
+          deniedCallCount += 1
+          if (deniedCallCount > 1) {
+            const err = new Error(
+              `EACCES: permission denied, scandir '${p}'`
+            ) as NodeJS.ErrnoException
+            err.code = 'EACCES'
+            return Promise.reject(err)
+          }
+        }
+        return (actual.readdir as typeof fs.readdir)(
+          p as Parameters<typeof fs.readdir>[0],
+          opts as Parameters<typeof fs.readdir>[1]
+        )
+      }) as typeof fs.readdir)
+
+      await expect(Effect.runPromise(searchSessions('needle'))).rejects.toThrow()
+    })
   })
 })
