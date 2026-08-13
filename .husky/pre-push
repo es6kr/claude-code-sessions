@@ -26,9 +26,15 @@ if [ "$has_code_push" = false ]; then
 fi
 
 # run_quiet: silent on success, full output on failure
+# NOTE: husky runs this script under `sh -e` (errexit). `out=$("$@" 2>&1)` alone
+# inherits the wrapped command's exit code, so a failing command kills the
+# script on that assignment line before `status=$?`/`echo "$out"` ever run —
+# swallowing the diagnostic output entirely. `|| status=$?` keeps the failing
+# command from being the last element of the statement, so errexit does not
+# fire here, while `$?` is still captured accurately.
 run_quiet() {
-  out=$("$@" 2>&1)
-  status=$?
+  status=0
+  out=$("$@" 2>&1) || status=$?
   if [ $status -ne 0 ]; then
     echo "$out"
   fi
