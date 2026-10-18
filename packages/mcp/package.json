@@ -40,9 +40,9 @@
   },
   "dependencies": {
     "@claude-sessions/core": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "effect": "^3.22.2",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^25.9.7",
