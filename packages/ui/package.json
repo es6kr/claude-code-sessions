@@ -19,12 +19,12 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json --threshold error"
   },
   "peerDependencies": {
-    "svelte": "^5.57.0"
+    "svelte": "^5.57.2"
   },
   "devDependencies": {
     "@claude-sessions/core": "workspace:^",
-    "svelte": "^5.57.0",
-    "svelte-check": "^4.7.6",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.7",
     "typescript": "^5.9.3"
   }
 }
