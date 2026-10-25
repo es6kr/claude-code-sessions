@@ -34,9 +34,9 @@
     "@claude-sessions/core": "workspace:^",
     "@claude-sessions/ui": "workspace:^",
     "@floating-ui/dom": "^1.8.0",
-    "carta-md": "^4.11.2",
+    "carta-md": "^4.11.5",
     "commander": "^14.0.3",
-    "effect": "^3.22.2",
+    "effect": "^3.22.3",
     "isomorphic-dompurify": "^3.22.0",
     "marked": "^17.0.6"
   },
