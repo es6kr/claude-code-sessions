@@ -45,10 +45,10 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/node": "^25.9.7",
+    "@types/node": "^25.9.9",
     "tsup": "^8.3.0",
-    "tsx": "^4.23.13",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }
